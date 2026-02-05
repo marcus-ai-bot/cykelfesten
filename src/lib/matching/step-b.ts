@@ -132,12 +132,16 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
         if (isBlocked(guestId, host.coupleId)) continue;
         if (host.assignedGuests.some(g => isBlocked(guestId, g))) continue;
         
-        // Hard constraint: unique meetings
-        if (wouldViolateUniqueness(guestId, host.coupleId, host.assignedGuests)) continue;
+        // Soft constraint: unique meetings (penalize but don't block)
+        const violatesUniqueness = wouldViolateUniqueness(guestId, host.coupleId, host.assignedGuests);
         
-        // Score: prefer less-filled hosts (load balancing)
+        // Score: prefer less-filled hosts, penalize duplicate meetings
         const fillRatio = host.assignedPersons / host.maxGuests;
-        const score = -fillRatio; // Lower fill = higher score
+        let score = -fillRatio; // Lower fill = higher score
+        
+        if (violatesUniqueness) {
+          score -= 100; // Heavy penalty but still possible
+        }
         
         if (score > bestScore) {
           bestScore = score;
