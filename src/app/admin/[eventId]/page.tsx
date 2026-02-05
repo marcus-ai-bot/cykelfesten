@@ -50,6 +50,8 @@ export default function EventAdminPage() {
   const [view, setView] = useState<'overview' | 'starter' | 'main' | 'dessert'>('overview');
   const [delaying, setDelaying] = useState(false);
   const [activating, setActivating] = useState<string | null>(null);
+  const [sendingNotifications, setSendingNotifications] = useState(false);
+  const [runningMatch, setRunningMatch] = useState(false);
   
   const supabase = createClient();
   
@@ -134,6 +136,53 @@ export default function EventAdminPage() {
       }
     } finally {
       setActivating(null);
+    }
+  }
+  
+  async function sendNotifications(type: string, course?: string) {
+    if (!confirm(`Skicka ${type === 'assignment' ? 'uppgiftsnotifieringar' : type === 'reminder' ? 'påminnelser' : 'kuvertnotifieringar'} till alla?`)) return;
+    
+    setSendingNotifications(true);
+    try {
+      const res = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          event_id: eventId, 
+          notification_type: type,
+          course 
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Skickat: ${data.summary.sent}, redan skickade: ${data.summary.already_sent}`);
+      } else {
+        alert('Kunde inte skicka: ' + data.error);
+      }
+    } finally {
+      setSendingNotifications(false);
+    }
+  }
+  
+  async function runMatching() {
+    if (!confirm('Köra ny matchning? (Skapar ny match plan version)')) return;
+    
+    setRunningMatch(true);
+    try {
+      const res = await fetch('/api/matching', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Matchning klar! Version ${data.version}, ${data.stats.couples_matched} par matchade.`);
+        await loadData();
+      } else {
+        alert('Matchning misslyckades: ' + data.error);
+      }
+    } finally {
+      setRunningMatch(false);
     }
   }
   
@@ -246,6 +295,81 @@ export default function EventAdminPage() {
               ⚠️ Tiderna är skjutna fram <strong>{event.time_offset_minutes} minuter</strong>
             </div>
           )}
+        </div>
+        
+        {/* Actions Panel */}
+        <div className="bg-white rounded-xl p-6 shadow mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">🎯 Åtgärder</h2>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Matching */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium text-gray-800 mb-2">🔀 Matchning</h3>
+              <button
+                onClick={runMatching}
+                disabled={runningMatch}
+                className="w-full py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+              >
+                {runningMatch ? 'Kör matchning...' : 'Kör ny matchning'}
+              </button>
+              <p className="text-xs text-gray-500 mt-2">
+                Skapar ny match plan version
+              </p>
+            </div>
+            
+            {/* Notifications */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium text-gray-800 mb-2">📧 Notifieringar</h3>
+              <div className="space-y-2">
+                <button
+                  onClick={() => sendNotifications('assignment')}
+                  disabled={sendingNotifications}
+                  className="w-full py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50"
+                >
+                  Skicka uppgifter
+                </button>
+                <button
+                  onClick={() => sendNotifications('reminder')}
+                  disabled={sendingNotifications}
+                  className="w-full py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 disabled:opacity-50"
+                >
+                  Skicka påminnelse
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Quick Links */}
+          <div className="mt-4 pt-4 border-t flex flex-wrap gap-2">
+            <a 
+              href={`/e/${event.slug}`} 
+              target="_blank"
+              className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+            >
+              🌐 Event-sida
+            </a>
+            <a 
+              href={`/e/${event.slug}/my`} 
+              target="_blank"
+              className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+            >
+              📱 Kuvert-demo
+            </a>
+            <a 
+              href={`/e/${event.slug}/host`} 
+              target="_blank"
+              className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+            >
+              🏠 Värd-vy
+            </a>
+            <a 
+              href={`/e/${event.slug}/afterparty`} 
+              target="_blank"
+              className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+            >
+              🎉 Efterfest
+            </a>
+          </div>
         </div>
         
         {/* View tabs */}
