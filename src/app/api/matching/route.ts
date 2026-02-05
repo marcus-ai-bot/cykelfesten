@@ -89,16 +89,58 @@ export async function POST(request: Request) {
       );
     }
     
-    // Run matching
-    const matchResult = runFullMatch({
-      event: event as Event,
-      couples: couples as Couple[],
-      blocked_pairs: blocked,
-      match_plan_id: matchPlan.id,
-    });
+    // Check if assignments already exist for this event
+    const { data: existingAssignments } = await supabase
+      .from('assignments')
+      .select('*')
+      .eq('event_id', event_id);
     
-    // Save assignments (Step A) - only if this is first match plan
-    if (newVersion === 1) {
+    let matchResult;
+    
+    if (existingAssignments && existingAssignments.length > 0) {
+      // Re-match: Use existing assignments, only run Step B
+      const { assignCourses } = await import('@/lib/matching');
+      const { matchGuestsToHosts } = await import('@/lib/matching');
+      
+      // Create a "fake" Step A result from existing assignments
+      const stepA = {
+        assignments: existingAssignments.map(a => ({
+          event_id: a.event_id,
+          couple_id: a.couple_id,
+          course: a.course,
+          is_host: a.is_host,
+          max_guests: a.max_guests,
+          is_flex_host: a.is_flex_host,
+          flex_extra_capacity: a.flex_extra_capacity,
+          is_emergency_host: a.is_emergency_host,
+        })),
+        stats: {
+          preference_satisfaction: 1,
+          capacity_per_course: { starter: 0, main: 0, dessert: 0 },
+        },
+      };
+      
+      // Run Step B with existing assignments
+      const stepB = matchGuestsToHosts({
+        event_id,
+        match_plan_id: matchPlan.id,
+        assignments: existingAssignments as Assignment[],
+        couples: couples as Couple[],
+        blocked_pairs: blocked,
+        frozen_courses: [],
+      });
+      
+      matchResult = { stepA, stepB, warnings: stepB.warnings };
+    } else {
+      // First match: Run full matching (Step A + B)
+      matchResult = runFullMatch({
+        event: event as Event,
+        couples: couples as Couple[],
+        blocked_pairs: blocked,
+        match_plan_id: matchPlan.id,
+      });
+      
+      // Save assignments (Step A)
       const { error: assignError } = await supabase
         .from('assignments')
         .insert(matchResult.stepA.assignments);
