@@ -47,9 +47,14 @@ export default function RegisterPage() {
       importantYear: '',
     },
     address: '',
+    address_unit: '',
     address_notes: '',
     course_preference: '' as Course | '',
     instagram_handle: '',
+    invited_pet_allergy: 'none',
+    partner_pet_allergy: 'none',
+    accessibility_needs: '',
+    accessibility_ok: true,
   });
   
   const handleFunFactChange = (person: 'invited' | 'partner', field: string, value: string) => {
@@ -125,9 +130,14 @@ export default function RegisterPage() {
           partner_birth_year: hasPartner && form.partner_birth_year ? parseInt(form.partner_birth_year) : null,
           partner_fun_facts: hasPartner ? buildFunFacts(form.partner_fun_facts) : null,
           address: form.address,
+          address_unit: form.address_unit || null,
           address_notes: form.address_notes || null,
           course_preference: form.course_preference || null,
           instagram_handle: form.instagram_handle || null,
+          invited_pet_allergy: form.invited_pet_allergy,
+          partner_pet_allergy: hasPartner ? form.partner_pet_allergy : 'none',
+          accessibility_needs: form.accessibility_needs || null,
+          accessibility_ok: form.accessibility_ok,
           confirmed: true,
         });
       
@@ -241,6 +251,22 @@ export default function RegisterPage() {
                   placeholder="nötter, laktos (separera med komma)"
                 />
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-amber-700 mb-1">
+                  Djurallergi
+                </label>
+                <select
+                  name="invited_pet_allergy"
+                  value={form.invited_pet_allergy}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                >
+                  <option value="none">Ingen djurallergi</option>
+                  <option value="mild">Mild (klarar kortare besök)</option>
+                  <option value="severe">Allvarlig (undvik helt)</option>
+                </select>
+              </div>
             </div>
           </div>
           
@@ -293,6 +319,22 @@ export default function RegisterPage() {
                     className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     placeholder="vegetarian, gluten"
                   />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-amber-700 mb-1">
+                    Djurallergi
+                  </label>
+                  <select
+                    name="partner_pet_allergy"
+                    value={form.partner_pet_allergy}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  >
+                    <option value="none">Ingen djurallergi</option>
+                    <option value="mild">Mild (klarar kortare besök)</option>
+                    <option value="severe">Allvarlig (undvik helt)</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -567,6 +609,20 @@ export default function RegisterPage() {
               
               <div>
                 <label className="block text-sm font-medium text-amber-700 mb-1">
+                  Våning / avdelning / dörr
+                </label>
+                <input
+                  type="text"
+                  name="address_unit"
+                  value={form.address_unit}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  placeholder="Vån 3, lgh 1204, Företag AB..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-amber-700 mb-1">
                   Portkod / instruktioner
                 </label>
                 <textarea
@@ -576,6 +632,33 @@ export default function RegisterPage() {
                   rows={2}
                   className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   placeholder="Portkod 1234. Ring på 'Andersson'."
+                />
+              </div>
+              
+              <div className="border-t pt-4">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="accessibility_ok"
+                    checked={form.accessibility_ok}
+                    onChange={(e) => setForm(prev => ({ ...prev, accessibility_ok: e.target.checked }))}
+                    className="w-5 h-5 rounded border-amber-300 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="text-amber-900">Vårt hem är tillgängligt (hiss/markplan)</span>
+                </label>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-amber-700 mb-1">
+                  Tillgänglighetsbehov
+                </label>
+                <input
+                  type="text"
+                  name="accessibility_needs"
+                  value={form.accessibility_needs}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  placeholder="Rullstol, inga trappor..."
                 />
               </div>
             </div>
