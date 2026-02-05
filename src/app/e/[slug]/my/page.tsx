@@ -394,12 +394,24 @@ export default function MyPage() {
         </div>
         
         {/* Footer */}
-        <div className="mt-4 text-center">
+        <div className="mt-4 flex justify-center gap-4 flex-wrap">
+          <Link 
+            href={`/e/${slug}/profile`}
+            className="text-amber-500 hover:text-amber-600 text-sm"
+          >
+            ✏️ Redigera profil
+          </Link>
+          <Link 
+            href={`/e/${slug}/host`}
+            className="text-amber-500 hover:text-amber-600 text-sm"
+          >
+            🏠 Värdvy
+          </Link>
           <Link 
             href={`/e/${slug}`}
             className="text-amber-500 hover:text-amber-600 text-sm"
           >
-            ← Tillbaka till event
+            ← Tillbaka
           </Link>
         </div>
       </div>
