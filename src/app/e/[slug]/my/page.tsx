@@ -49,6 +49,9 @@ export default function MyPage() {
   const [loading, setLoading] = useState(true);
   const [selectingCouple, setSelectingCouple] = useState(false);
   const [allCouples, setAllCouples] = useState<CoupleData[]>([]);
+  const [showDropoutModal, setShowDropoutModal] = useState(false);
+  const [dropoutLoading, setDropoutLoading] = useState(false);
+  const [dropoutSuccess, setDropoutSuccess] = useState(false);
   
   const supabase = createClient();
   
@@ -150,6 +153,34 @@ export default function MyPage() {
     setEnvelopes(prev => prev.map(e => 
       e.id === envelopeId ? { ...e, opened_at: new Date().toISOString() } : e
     ));
+  }
+  
+  async function handleDropout() {
+    if (!couple) return;
+    
+    setDropoutLoading(true);
+    
+    try {
+      const res = await fetch('/api/dropout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          couple_id: couple.id,
+          reason: 'Användaren hoppade av',
+          is_host_dropout: !!assignment, // If they have an assignment, they're a host
+        }),
+      });
+      
+      if (res.ok) {
+        setDropoutSuccess(true);
+      } else {
+        alert('Något gick fel. Försök igen.');
+      }
+    } catch (err) {
+      alert('Kunde inte registrera avhopp. Försök igen.');
+    } finally {
+      setDropoutLoading(false);
+    }
   }
   
   if (loading) {
@@ -282,8 +313,18 @@ export default function MyPage() {
           )}
         </div>
         
+        {/* Dropout section */}
+        <div className="mt-8 pt-6 border-t border-amber-200">
+          <button
+            onClick={() => setShowDropoutModal(true)}
+            className="w-full py-3 text-red-500 hover:text-red-600 text-sm font-medium"
+          >
+            😢 Vi kan tyvärr inte komma
+          </button>
+        </div>
+        
         {/* Footer */}
-        <div className="mt-8 text-center">
+        <div className="mt-4 text-center">
           <Link 
             href={`/e/${slug}`}
             className="text-amber-500 hover:text-amber-600 text-sm"
@@ -292,6 +333,61 @@ export default function MyPage() {
           </Link>
         </div>
       </div>
+      
+      {/* Dropout Modal */}
+      {showDropoutModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            {dropoutSuccess ? (
+              <>
+                <h3 className="text-xl font-semibold text-amber-900 mb-3">
+                  ✅ Avhopp registrerat
+                </h3>
+                <p className="text-amber-700 mb-6">
+                  Vi har noterat att ni inte kan komma. Arrangören har fått besked.
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+                >
+                  Stäng
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-semibold text-amber-900 mb-3">
+                  😢 Hoppa av?
+                </h3>
+                <p className="text-amber-700 mb-2">
+                  Är ni säkra på att ni vill hoppa av {event?.name}?
+                </p>
+                {assignment && (
+                  <p className="text-red-600 text-sm mb-4 bg-red-50 p-3 rounded-lg">
+                    ⚠️ Ni är värdar för {courseLabels[assignment]}. 
+                    Era gäster kommer att omplaceras.
+                  </p>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDropoutModal(false)}
+                    className="flex-1 py-3 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
+                    disabled={dropoutLoading}
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    onClick={handleDropout}
+                    disabled={dropoutLoading}
+                    className="flex-1 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+                  >
+                    {dropoutLoading ? 'Registrerar...' : 'Ja, hoppa av'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
