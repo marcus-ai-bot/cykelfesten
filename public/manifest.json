@@ -1,0 +1,21 @@
+{
+  "name": "Cykelfesten",
+  "short_name": "Cykelfesten",
+  "description": "Dinner safari platform - rotera mellan hem för förrätt, huvudrätt och efterrätt",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffbeb",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
