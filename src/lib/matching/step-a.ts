@@ -14,7 +14,7 @@
 import type { Couple, Course, StepAInput, StepAOutput } from '@/types/database';
 
 const COURSES: Course[] = ['starter', 'main', 'dessert'];
-const DEFAULT_MAX_GUESTS = 6;
+const DEFAULT_MAX_GUESTS = 10; // Ökat för att hantera ojämna fördelningar
 
 interface CourseStats {
   hosts: number;
