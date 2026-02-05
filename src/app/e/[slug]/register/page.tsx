@@ -19,14 +19,48 @@ export default function RegisterPage() {
     invited_email: '',
     invited_phone: '',
     invited_allergies: '',
+    invited_birth_year: '',
+    invited_fun_facts: {
+      musicDecade: '',
+      pet: '',
+      talent: '',
+      firstJob: '',
+      dreamDestination: '',
+      instruments: '',
+      sport: '',
+      unknownFact: '',
+      importantYear: '',
+    },
     partner_name: '',
     partner_email: '',
     partner_allergies: '',
+    partner_birth_year: '',
+    partner_fun_facts: {
+      musicDecade: '',
+      pet: '',
+      talent: '',
+      firstJob: '',
+      dreamDestination: '',
+      instruments: '',
+      sport: '',
+      unknownFact: '',
+      importantYear: '',
+    },
     address: '',
     address_notes: '',
     course_preference: '' as Course | '',
     instagram_handle: '',
   });
+  
+  const handleFunFactChange = (person: 'invited' | 'partner', field: string, value: string) => {
+    setForm(prev => ({
+      ...prev,
+      [`${person}_fun_facts`]: {
+        ...(prev[`${person}_fun_facts` as keyof typeof prev] as object),
+        [field]: value,
+      },
+    }));
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -59,6 +93,21 @@ export default function RegisterPage() {
       const parseAllergies = (str: string): string[] => 
         str.split(',').map(s => s.trim()).filter(Boolean);
       
+      // Build fun facts JSON (only non-empty values)
+      const buildFunFacts = (facts: typeof form.invited_fun_facts) => {
+        const result: Record<string, unknown> = {};
+        if (facts.musicDecade) result.musicDecade = facts.musicDecade;
+        if (facts.pet) result.pet = { type: facts.pet };
+        if (facts.talent) result.talent = facts.talent;
+        if (facts.firstJob) result.firstJob = facts.firstJob;
+        if (facts.dreamDestination) result.dreamDestination = facts.dreamDestination;
+        if (facts.instruments) result.instruments = facts.instruments.split(',').map(s => s.trim()).filter(Boolean);
+        if (facts.sport) result.sport = facts.sport;
+        if (facts.unknownFact) result.unknownFact = facts.unknownFact;
+        if (facts.importantYear) result.importantYear = { year: parseInt(facts.importantYear) };
+        return Object.keys(result).length > 0 ? result : null;
+      };
+      
       // Insert couple
       const { error: insertError } = await supabase
         .from('couples')
@@ -68,9 +117,13 @@ export default function RegisterPage() {
           invited_email: form.invited_email,
           invited_phone: form.invited_phone || null,
           invited_allergies: parseAllergies(form.invited_allergies),
+          invited_birth_year: form.invited_birth_year ? parseInt(form.invited_birth_year) : null,
+          invited_fun_facts: buildFunFacts(form.invited_fun_facts),
           partner_name: hasPartner ? form.partner_name : null,
           partner_email: hasPartner ? form.partner_email : null,
           partner_allergies: hasPartner ? parseAllergies(form.partner_allergies) : null,
+          partner_birth_year: hasPartner && form.partner_birth_year ? parseInt(form.partner_birth_year) : null,
+          partner_fun_facts: hasPartner ? buildFunFacts(form.partner_fun_facts) : null,
           address: form.address,
           address_notes: form.address_notes || null,
           course_preference: form.course_preference || null,
@@ -239,6 +292,248 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     placeholder="vegetarian, gluten"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Mystery Profile - Invited */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 shadow border border-purple-100">
+            <h2 className="text-lg font-semibold text-purple-900 mb-2">
+              ✨ Mysterieprofilen
+            </h2>
+            <p className="text-purple-600 text-sm mb-1">
+              Hjälp oss skapa "På spåret"-känsla! Dina svar blir kluriga ledtrådar för värdparet.
+            </p>
+            <p className="text-purple-500 text-xs mb-4">
+              🔒 Helt frivilligt • 🗑️ Raderas automatiskt dagen efter festen
+            </p>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Födelseår
+                  </label>
+                  <select
+                    name="invited_birth_year"
+                    value={form.invited_birth_year}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  >
+                    <option value="">Välj...</option>
+                    {Array.from({ length: 70 }, (_, i) => 2010 - i).map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Bästa musikdecenniet
+                  </label>
+                  <select
+                    value={form.invited_fun_facts.musicDecade}
+                    onChange={(e) => handleFunFactChange('invited', 'musicDecade', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  >
+                    <option value="">Välj...</option>
+                    <option value="60">60-talet</option>
+                    <option value="70">70-talet</option>
+                    <option value="80">80-talet</option>
+                    <option value="90">90-talet</option>
+                    <option value="00">00-talet</option>
+                    <option value="10">10-talet</option>
+                    <option value="20">2020+</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Husdjur
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invited_fun_facts.pet}
+                    onChange={(e) => handleFunFactChange('invited', 'pet', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    placeholder="katt, hund..."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Hemligt talent
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invited_fun_facts.talent}
+                    onChange={(e) => handleFunFactChange('invited', 'talent', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    placeholder="jonglera, sjunga..."
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Första jobbet
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invited_fun_facts.firstJob}
+                    onChange={(e) => handleFunFactChange('invited', 'firstJob', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    placeholder="tidningsbud, servitör..."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Drömresmål
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invited_fun_facts.dreamDestination}
+                    onChange={(e) => handleFunFactChange('invited', 'dreamDestination', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    placeholder="Japan, Island..."
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Instrument jag spelar
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invited_fun_facts.instruments}
+                    onChange={(e) => handleFunFactChange('invited', 'instruments', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    placeholder="gitarr, piano..."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Sport/aktivitet
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invited_fun_facts.sport}
+                    onChange={(e) => handleFunFactChange('invited', 'sport', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    placeholder="löpning, yoga..."
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-purple-700 mb-1">
+                  Något okänt om mig
+                </label>
+                <input
+                  type="text"
+                  value={form.invited_fun_facts.unknownFact}
+                  onChange={(e) => handleFunFactChange('invited', 'unknownFact', e.target.value)}
+                  className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  placeholder="Har träffat kungen, kan baklängestalfabet..."
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Mystery Profile - Partner */}
+          {hasPartner && (
+            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 shadow border border-purple-100">
+              <h2 className="text-lg font-semibold text-purple-900 mb-4">
+                ✨ Partners mysterieprofil
+              </h2>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-purple-700 mb-1">
+                      Födelseår
+                    </label>
+                    <select
+                      name="partner_birth_year"
+                      value={form.partner_birth_year}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    >
+                      <option value="">Välj...</option>
+                      {Array.from({ length: 70 }, (_, i) => 2010 - i).map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-purple-700 mb-1">
+                      Bästa musikdecenniet
+                    </label>
+                    <select
+                      value={form.partner_fun_facts.musicDecade}
+                      onChange={(e) => handleFunFactChange('partner', 'musicDecade', e.target.value)}
+                      className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    >
+                      <option value="">Välj...</option>
+                      <option value="60">60-talet</option>
+                      <option value="70">70-talet</option>
+                      <option value="80">80-talet</option>
+                      <option value="90">90-talet</option>
+                      <option value="00">00-talet</option>
+                      <option value="10">10-talet</option>
+                      <option value="20">2020+</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-purple-700 mb-1">
+                      Husdjur
+                    </label>
+                    <input
+                      type="text"
+                      value={form.partner_fun_facts.pet}
+                      onChange={(e) => handleFunFactChange('partner', 'pet', e.target.value)}
+                      className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm"
+                      placeholder="katt, hund..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-purple-700 mb-1">
+                      Hemligt talent
+                    </label>
+                    <input
+                      type="text"
+                      value={form.partner_fun_facts.talent}
+                      onChange={(e) => handleFunFactChange('partner', 'talent', e.target.value)}
+                      className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm"
+                      placeholder="jonglera, sjunga..."
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">
+                    Något okänt
+                  </label>
+                  <input
+                    type="text"
+                    value={form.partner_fun_facts.unknownFact}
+                    onChange={(e) => handleFunFactChange('partner', 'unknownFact', e.target.value)}
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm"
+                    placeholder="Har simmat med delfiner..."
                   />
                 </div>
               </div>
