@@ -10,6 +10,8 @@ interface CoupleData {
   id: string;
   invited_name: string;
   partner_name: string | null;
+  partner_email: string | null;
+  partner_invite_sent_at: string | null;
   address: string;
 }
 
@@ -52,6 +54,8 @@ export default function MyPage() {
   const [showDropoutModal, setShowDropoutModal] = useState(false);
   const [dropoutLoading, setDropoutLoading] = useState(false);
   const [dropoutSuccess, setDropoutSuccess] = useState(false);
+  const [invitingPartner, setInvitingPartner] = useState(false);
+  const [partnerInviteUrl, setPartnerInviteUrl] = useState<string | null>(null);
   
   const supabase = createClient();
   
@@ -76,7 +80,7 @@ export default function MyPage() {
     // Get all couples for selection (demo mode)
     const { data: couplesData } = await supabase
       .from('couples')
-      .select('id, invited_name, partner_name, address, invited_email')
+      .select('id, invited_name, partner_name, partner_email, partner_invite_sent_at, address, invited_email')
       .eq('event_id', eventData.id)
       .eq('cancelled', false)
       .order('invited_name');
@@ -153,6 +157,30 @@ export default function MyPage() {
     setEnvelopes(prev => prev.map(e => 
       e.id === envelopeId ? { ...e, opened_at: new Date().toISOString() } : e
     ));
+  }
+  
+  async function invitePartner() {
+    if (!couple) return;
+    
+    setInvitingPartner(true);
+    try {
+      const res = await fetch('/api/partner/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ couple_id: couple.id }),
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.invite_url) {
+        setPartnerInviteUrl(data.invite_url);
+      } else {
+        alert(data.error || 'Kunde inte skapa inbjudan');
+      }
+    } catch (err) {
+      alert('Något gick fel');
+    } finally {
+      setInvitingPartner(false);
+    }
   }
   
   async function handleDropout() {
@@ -284,6 +312,48 @@ export default function MyPage() {
           >
             Byt deltagare (demo)
           </button>
+          
+          {/* Partner invite section */}
+          {couple.partner_name && couple.partner_email && (
+            <div className="mt-4 pt-4 border-t border-amber-100">
+              {partnerInviteUrl ? (
+                <div className="bg-green-50 rounded-lg p-4">
+                  <p className="text-green-800 text-sm mb-2">
+                    ✅ Länk skapad! Skicka till {couple.partner_name}:
+                  </p>
+                  <input
+                    type="text"
+                    value={partnerInviteUrl}
+                    readOnly
+                    className="w-full px-3 py-2 text-xs bg-white border rounded"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(partnerInviteUrl);
+                      alert('Kopierat!');
+                    }}
+                    className="mt-2 text-sm text-green-600 hover:text-green-700"
+                  >
+                    📋 Kopiera länk
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={invitePartner}
+                  disabled={invitingPartner}
+                  className="text-sm text-purple-500 hover:text-purple-600 disabled:opacity-50"
+                >
+                  {invitingPartner ? 'Skapar...' : `💌 Bjud in ${couple.partner_name} att fylla i sin profil`}
+                </button>
+              )}
+              {couple.partner_invite_sent_at && !partnerInviteUrl && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Senast bjuden: {new Date(couple.partner_invite_sent_at).toLocaleDateString('sv-SE')}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         
         {/* Envelopes */}
