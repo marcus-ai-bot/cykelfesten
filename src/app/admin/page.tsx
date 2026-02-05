@@ -166,6 +166,21 @@ function EventCard({ event, onUpdate }: { event: Event; onUpdate: () => void }) 
           Visa event →
         </a>
         
+        <a
+          href={`/admin/${event.id}`}
+          className="text-blue-500 hover:text-blue-600 text-sm font-medium ml-4"
+        >
+          📊 Matchnings-vy
+        </a>
+        
+        <a
+          href={`/e/${event.slug}/my`}
+          target="_blank"
+          className="text-purple-500 hover:text-purple-600 text-sm font-medium ml-4"
+        >
+          ✉️ Kuvert-demo
+        </a>
+        
         {event.status === 'draft' && (
           <button
             onClick={() => updateStatus('open')}
