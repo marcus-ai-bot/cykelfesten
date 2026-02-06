@@ -191,3 +191,112 @@ export interface MatchingWarning {
   message: string;
   couple_ids?: string[];
 }
+
+// ============================================
+// Living Envelope Types
+// ============================================
+
+export type EnvelopeState = 'LOCKED' | 'TEASING' | 'CLUE_1' | 'CLUE_2' | 'STREET' | 'NUMBER' | 'OPEN';
+
+export interface EventTiming {
+  id: string;
+  event_id: string;
+  teasing_minutes_before: number;
+  clue_1_minutes_before: number;
+  clue_2_minutes_before: number;
+  street_minutes_before: number;
+  number_minutes_before: number;
+  during_meal_clue_interval_minutes: number;
+  distance_adjustment_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CourseClues {
+  id: string;
+  couple_id: string;
+  course_type: Course;
+  clue_indices: number[];
+  allocated_at: string;
+}
+
+export interface StreetInfo {
+  id: string;
+  couple_id: string;
+  street_name: string | null;
+  street_number: number | null;
+  apartment: string | null;
+  postal_code: string | null;
+  city: string | null;
+  number_range_low: number | null;
+  number_range_high: number | null;
+  door_code: string | null;
+  created_at: string;
+}
+
+// Extended Envelope with Living Envelope fields
+export interface LiveEnvelope extends Envelope {
+  current_state: EnvelopeState;
+  teasing_at: string | null;
+  clue_1_at: string | null;
+  clue_2_at: string | null;
+  street_at: string | null;
+  number_at: string | null;
+  cycling_minutes: number | null;
+}
+
+// API Response Types for /api/envelope/status
+
+export interface RevealedClue {
+  text: string;
+  revealed_at: string;
+}
+
+export interface StreetReveal {
+  name: string;
+  range: string;  // "10-20"
+  cycling_minutes: number;
+}
+
+export interface FullAddressReveal {
+  street: string;
+  number: number;
+  apartment: string | null;
+  door_code: string | null;
+  city: string;
+  coordinates: { lat: number; lng: number } | null;
+}
+
+export interface NextReveal {
+  type: EnvelopeState;
+  at: string;  // ISO timestamp
+  in_seconds: number;
+}
+
+export interface CourseEnvelopeStatus {
+  type: Course;
+  state: EnvelopeState;
+  clues: RevealedClue[];
+  street: StreetReveal | null;
+  number: number | null;
+  full_address: FullAddressReveal | null;
+  next_reveal: NextReveal | null;
+  starts_at: string;
+  host_names: string[] | null;  // Only revealed at OPEN
+  allergies_summary: string[] | null;  // Only revealed at OPEN
+}
+
+export interface AfterpartyStatus {
+  state: 'LOCKED' | 'OPEN';
+  reveals_at: string;
+  location: string | null;
+  description: string | null;
+}
+
+export interface EnvelopeStatusResponse {
+  server_time: string;
+  event_id: string;
+  couple_id: string;
+  courses: CourseEnvelopeStatus[];
+  afterparty: AfterpartyStatus;
+}
