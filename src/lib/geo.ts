@@ -111,24 +111,93 @@ export async function getCyclingDistance(
 }
 
 /**
- * Batch get cycling distances for multiple coordinate pairs
- * Rate limited to avoid API throttling
+ * Get cycling distance matrix for multiple locations in ONE request
+ * Much more efficient than individual requests!
+ * Returns a 2D array of distances and durations
  */
-export async function batchCyclingDistances(
-  pairs: { from: Coordinates; to: Coordinates; id: string }[],
+export async function getCyclingDistanceMatrix(
+  locations: Coordinates[],
   apiKey?: string
-): Promise<Map<string, CyclingDistance>> {
-  const results = new Map<string, CyclingDistance>();
+): Promise<{
+  distances: number[][];  // km
+  durations: number[][];  // minutes
+  source: 'cycling' | 'haversine';
+} | null> {
+  const key = apiKey || process.env.OPENROUTESERVICE_API_KEY;
   
-  for (const pair of pairs) {
-    const distance = await getCyclingDistance(pair.from, pair.to, apiKey);
-    results.set(pair.id, distance);
+  if (!key || locations.length > 50) {
+    // Fallback to Haversine matrix
+    const distances: number[][] = [];
+    const durations: number[][] = [];
     
-    // Rate limit: max 40 requests/minute for free tier
-    await new Promise(resolve => setTimeout(resolve, 1600));
+    for (let i = 0; i < locations.length; i++) {
+      distances[i] = [];
+      durations[i] = [];
+      for (let j = 0; j < locations.length; j++) {
+        const dist = calculateHaversineDistance(locations[i], locations[j]);
+        distances[i][j] = Math.round(dist * 10) / 10;
+        durations[i][j] = Math.round(dist * 4); // ~15 km/h estimate
+      }
+    }
+    
+    return { distances, durations, source: 'haversine' };
   }
   
-  return results;
+  try {
+    const response = await fetch(
+      'https://api.openrouteservice.org/v2/matrix/cycling-regular',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': key,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          locations: locations.map(l => [l.lng, l.lat]),
+          metrics: ['distance', 'duration'],
+          units: 'km',
+        }),
+      }
+    );
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('OpenRouteService matrix error:', response.status, error);
+      // Fallback to Haversine
+      return getCyclingDistanceMatrix(locations, undefined);
+    }
+    
+    const data = await response.json();
+    
+    // Convert durations from seconds to minutes
+    const durations = data.durations.map((row: number[]) => 
+      row.map((d: number) => Math.round(d / 60))
+    );
+    
+    // Round distances
+    const distances = data.distances.map((row: number[]) =>
+      row.map((d: number) => Math.round(d * 10) / 10)
+    );
+    
+    return { distances, durations, source: 'cycling' };
+  } catch (error) {
+    console.error('Cycling matrix error:', error);
+    // Fallback to Haversine
+    const distances: number[][] = [];
+    const durations: number[][] = [];
+    
+    for (let i = 0; i < locations.length; i++) {
+      distances[i] = [];
+      durations[i] = [];
+      for (let j = 0; j < locations.length; j++) {
+        const dist = calculateHaversineDistance(locations[i], locations[j]);
+        distances[i][j] = Math.round(dist * 10) / 10;
+        durations[i][j] = Math.round(dist * 4);
+      }
+    }
+    
+    return { distances, durations, source: 'haversine' };
+  }
 }
 
 /**
