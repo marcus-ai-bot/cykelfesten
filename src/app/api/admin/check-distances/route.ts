@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { geocodeAddress, calculateDistance, type Coordinates } from '@/lib/geo';
+import { geocodeAddress, calculateHaversineDistance, getCyclingDistance, type Coordinates } from '@/lib/geo';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,6 +23,8 @@ interface PairwiseDistance {
   to_name: string;
   to_address: string;
   distance_km: number;
+  duration_min?: number;
+  source: 'cycling' | 'haversine';
 }
 
 export async function POST(request: NextRequest) {
@@ -84,22 +86,47 @@ export async function POST(request: NextRequest) {
     
     // Calculate ALL pairwise distances between hosts
     const pairwiseDistances: PairwiseDistance[] = [];
+    const apiKey = process.env.OPENROUTESERVICE_API_KEY;
+    
+    // Check if we should use cycling distances (API key available and not too many pairs)
+    const useCycling = !!apiKey && withCoords.length <= 15; // Max ~105 pairs
     
     for (let i = 0; i < withCoords.length; i++) {
       for (let j = i + 1; j < withCoords.length; j++) {
         const a = withCoords[i];
         const b = withCoords[j];
-        const distance = calculateDistance(a.coordinates!, b.coordinates!);
         
-        pairwiseDistances.push({
-          from_id: a.id,
-          from_name: a.invited_name + (a.partner_name ? ` & ${a.partner_name}` : ''),
-          from_address: a.address,
-          to_id: b.id,
-          to_name: b.invited_name + (b.partner_name ? ` & ${b.partner_name}` : ''),
-          to_address: b.address,
-          distance_km: Math.round(distance * 10) / 10,
-        });
+        if (useCycling) {
+          // Use actual cycling distance
+          const cycling = await getCyclingDistance(a.coordinates!, b.coordinates!, apiKey);
+          pairwiseDistances.push({
+            from_id: a.id,
+            from_name: a.invited_name + (a.partner_name ? ` & ${a.partner_name}` : ''),
+            from_address: a.address,
+            to_id: b.id,
+            to_name: b.invited_name + (b.partner_name ? ` & ${b.partner_name}` : ''),
+            to_address: b.address,
+            distance_km: cycling.distance_km,
+            duration_min: cycling.duration_min,
+            source: cycling.source,
+          });
+          
+          // Rate limit for OpenRouteService (40 req/min free tier)
+          await new Promise(resolve => setTimeout(resolve, 1600));
+        } else {
+          // Fallback to Haversine (fågelvägen)
+          const distance = calculateHaversineDistance(a.coordinates!, b.coordinates!);
+          pairwiseDistances.push({
+            from_id: a.id,
+            from_name: a.invited_name + (a.partner_name ? ` & ${a.partner_name}` : ''),
+            from_address: a.address,
+            to_id: b.id,
+            to_name: b.invited_name + (b.partner_name ? ` & ${b.partner_name}` : ''),
+            to_address: b.address,
+            distance_km: Math.round(distance * 10) / 10,
+            source: 'haversine',
+          });
+        }
       }
     }
     
@@ -115,6 +142,9 @@ export async function POST(request: NextRequest) {
     const minDistance = Math.min(...allDistances);
     const avgDistance = Math.round((allDistances.reduce((a, b) => a + b, 0) / allDistances.length) * 10) / 10;
     
+    // Determine source used
+    const distanceSource = pairwiseDistances[0]?.source || 'haversine';
+    
     return NextResponse.json({
       warnings,
       pairwise_distances: pairwiseDistances,
@@ -124,6 +154,8 @@ export async function POST(request: NextRequest) {
         avg_km: avgDistance,
         total_pairs: pairwiseDistances.length,
       },
+      distance_source: distanceSource,
+      distance_source_label: distanceSource === 'cycling' ? '🚴 Cykelväg' : '🐦 Fågelvägen',
       max_distance_km,
       geocoded: withCoords.length,
       total: couples.length,

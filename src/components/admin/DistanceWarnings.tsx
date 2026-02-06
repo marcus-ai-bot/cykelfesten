@@ -10,6 +10,8 @@ interface PairwiseDistance {
   to_name: string;
   to_address: string;
   distance_km: number;
+  duration_min?: number;
+  source: 'cycling' | 'haversine';
 }
 
 interface DistanceCheckResult {
@@ -21,6 +23,8 @@ interface DistanceCheckResult {
     avg_km: number;
     total_pairs: number;
   };
+  distance_source: 'cycling' | 'haversine';
+  distance_source_label: string;
   geocoded: number;
   total: number;
   not_geocoded: { id: string; name: string; address: string }[];
@@ -84,6 +88,11 @@ export function DistanceWarnings({ eventId }: Props) {
         <div className="space-y-4">
           {/* Summary Stats */}
           <div className="flex flex-wrap gap-3 text-sm">
+            <div className={`px-3 py-2 rounded-lg ${
+              result.distance_source === 'cycling' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {result.distance_source_label}
+            </div>
             <div className="px-3 py-2 bg-gray-100 rounded-lg">
               📍 <strong>{result.geocoded}</strong>/{result.total} geocodade
             </div>
@@ -97,6 +106,13 @@ export function DistanceWarnings({ eventId }: Props) {
               📊 Snitt: <strong>{result.stats.avg_km} km</strong>
             </div>
           </div>
+          
+          {result.distance_source === 'haversine' && (
+            <div className="text-sm text-yellow-700 bg-yellow-50 p-3 rounded-lg">
+              💡 För cykelvägsavstånd: lägg till <code className="bg-yellow-100 px-1 rounded">OPENROUTESERVICE_API_KEY</code> i .env.local 
+              <a href="https://openrouteservice.org/dev/#/signup" target="_blank" className="text-amber-600 underline ml-1">(gratis)</a>
+            </div>
+          )}
           
           {/* Warnings */}
           {result.warnings.length > 0 && (
@@ -166,6 +182,9 @@ export function DistanceWarnings({ eventId }: Props) {
                     <th className="px-4 py-2 text-left">Värd 1</th>
                     <th className="px-4 py-2 text-left">Värd 2</th>
                     <th className="px-4 py-2 text-right">Avstånd</th>
+                    {result.distance_source === 'cycling' && (
+                      <th className="px-4 py-2 text-right">Cykeltid</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -188,6 +207,11 @@ export function DistanceWarnings({ eventId }: Props) {
                       }`}>
                         {d.distance_km} km
                       </td>
+                      {result.distance_source === 'cycling' && (
+                        <td className="px-4 py-2 text-right text-gray-600">
+                          {d.duration_min} min
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

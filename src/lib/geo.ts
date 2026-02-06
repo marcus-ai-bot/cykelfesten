@@ -7,11 +7,17 @@ export interface Coordinates {
   lng: number;
 }
 
+export interface CyclingDistance {
+  distance_km: number;
+  duration_min: number;
+  source: 'cycling' | 'haversine';
+}
+
 /**
- * Calculate distance between two coordinates using Haversine formula
+ * Calculate distance between two coordinates using Haversine formula (fågelvägen)
  * Returns distance in kilometers
  */
-export function calculateDistance(from: Coordinates, to: Coordinates): number {
+export function calculateHaversineDistance(from: Coordinates, to: Coordinates): number {
   const R = 6371; // Earth's radius in km
   const dLat = toRad(to.lat - from.lat);
   const dLng = toRad(to.lng - from.lng);
@@ -23,8 +29,106 @@ export function calculateDistance(from: Coordinates, to: Coordinates): number {
   return R * c;
 }
 
+// Alias for backwards compatibility
+export const calculateDistance = calculateHaversineDistance;
+
 function toRad(deg: number): number {
   return deg * (Math.PI / 180);
+}
+
+/**
+ * Get cycling distance and duration using OpenRouteService API
+ * Falls back to Haversine if API key not configured or request fails
+ */
+export async function getCyclingDistance(
+  from: Coordinates, 
+  to: Coordinates,
+  apiKey?: string
+): Promise<CyclingDistance> {
+  const key = apiKey || process.env.OPENROUTESERVICE_API_KEY;
+  
+  if (!key) {
+    // Fallback to Haversine
+    const distance = calculateHaversineDistance(from, to);
+    return {
+      distance_km: Math.round(distance * 10) / 10,
+      duration_min: Math.round(distance * 4), // Rough estimate: 15 km/h cycling
+      source: 'haversine',
+    };
+  }
+  
+  try {
+    const response = await fetch(
+      'https://api.openrouteservice.org/v2/directions/cycling-regular',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': key,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          coordinates: [
+            [from.lng, from.lat],
+            [to.lng, to.lat],
+          ],
+        }),
+      }
+    );
+    
+    if (!response.ok) {
+      console.error('OpenRouteService error:', response.status);
+      // Fallback to Haversine
+      const distance = calculateHaversineDistance(from, to);
+      return {
+        distance_km: Math.round(distance * 10) / 10,
+        duration_min: Math.round(distance * 4),
+        source: 'haversine',
+      };
+    }
+    
+    const data = await response.json();
+    const route = data.routes?.[0];
+    
+    if (!route) {
+      throw new Error('No route found');
+    }
+    
+    return {
+      distance_km: Math.round((route.summary.distance / 1000) * 10) / 10,
+      duration_min: Math.round(route.summary.duration / 60),
+      source: 'cycling',
+    };
+  } catch (error) {
+    console.error('Cycling distance error:', error);
+    // Fallback to Haversine
+    const distance = calculateHaversineDistance(from, to);
+    return {
+      distance_km: Math.round(distance * 10) / 10,
+      duration_min: Math.round(distance * 4),
+      source: 'haversine',
+    };
+  }
+}
+
+/**
+ * Batch get cycling distances for multiple coordinate pairs
+ * Rate limited to avoid API throttling
+ */
+export async function batchCyclingDistances(
+  pairs: { from: Coordinates; to: Coordinates; id: string }[],
+  apiKey?: string
+): Promise<Map<string, CyclingDistance>> {
+  const results = new Map<string, CyclingDistance>();
+  
+  for (const pair of pairs) {
+    const distance = await getCyclingDistance(pair.from, pair.to, apiKey);
+    results.set(pair.id, distance);
+    
+    // Rate limit: max 40 requests/minute for free tier
+    await new Promise(resolve => setTimeout(resolve, 1600));
+  }
+  
+  return results;
 }
 
 /**
