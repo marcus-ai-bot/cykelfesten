@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { DistanceWarnings } from '@/components/admin/DistanceWarnings';
 
 interface Couple {
   id: string;
@@ -247,6 +248,9 @@ export default function EventAdminPage() {
             </div>
           </div>
         )}
+        
+        {/* Distance Warnings */}
+        <DistanceWarnings eventId={eventId} />
         
         {/* Envelope Controls */}
         <div className="bg-white rounded-xl p-6 shadow mb-6">
