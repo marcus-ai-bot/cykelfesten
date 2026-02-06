@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { runFullMatch, setEnvelopeTimes } from '@/lib/matching';
-import type { Couple, Event, Assignment } from '@/types/database';
+import { populateLivingEnvelopeData } from '@/lib/envelope';
+import type { Couple, Event, Assignment, EventTiming } from '@/types/database';
 
 export async function POST(request: Request) {
   try {
@@ -173,6 +174,74 @@ export async function POST(request: Request) {
       console.error('Envelope error:', envError);
     }
     
+    // === LIVING ENVELOPE: Populate clues, street info, and timing ===
+    
+    // Fetch event timing (or use defaults)
+    const { data: eventTiming } = await supabase
+      .from('event_timing')
+      .select('*')
+      .eq('event_id', event_id)
+      .single();
+    
+    // Populate living envelope data
+    const populateResult = populateLivingEnvelopeData({
+      event: event as Event,
+      couples: couples as Couple[],
+      pairings: matchResult.stepB.course_pairings,
+      envelopes: matchResult.stepB.envelopes,
+      timing: eventTiming as EventTiming | undefined,
+      // cyclingDistances could be fetched from OpenRouteService here
+    });
+    
+    // Save course_clues
+    if (populateResult.courseClues.length > 0) {
+      const { error: cluesError } = await supabase
+        .from('course_clues')
+        .upsert(populateResult.courseClues, { 
+          onConflict: 'couple_id,course_type' 
+        });
+      
+      if (cluesError) {
+        console.error('Course clues error:', cluesError);
+      }
+    }
+    
+    // Save street_info
+    if (populateResult.streetInfos.length > 0) {
+      const { error: streetError } = await supabase
+        .from('street_info')
+        .upsert(populateResult.streetInfos, { 
+          onConflict: 'couple_id' 
+        });
+      
+      if (streetError) {
+        console.error('Street info error:', streetError);
+      }
+    }
+    
+    // Update envelopes with living envelope times
+    for (const update of populateResult.envelopeUpdates) {
+      const { error: updateError } = await supabase
+        .from('envelopes')
+        .update({
+          teasing_at: update.teasing_at,
+          clue_1_at: update.clue_1_at,
+          clue_2_at: update.clue_2_at,
+          street_at: update.street_at,
+          number_at: update.number_at,
+          opened_at: update.opened_at,
+          cycling_minutes: update.cycling_minutes,
+          current_state: 'LOCKED',
+        })
+        .eq('match_plan_id', matchPlan.id)
+        .eq('couple_id', update.couple_id)
+        .eq('course', update.course);
+      
+      if (updateError) {
+        console.error('Envelope update error:', updateError);
+      }
+    }
+    
     // Update match plan stats
     await supabase
       .from('match_plans')
@@ -207,6 +276,9 @@ export async function POST(request: Request) {
         capacity_utilization: matchResult.stepB.stats.capacity_utilization,
         pairings_created: matchResult.stepB.course_pairings.length,
         envelopes_created: envelopesWithTimes.length,
+        // Living Envelope stats
+        clues_allocated: populateResult.courseClues.length,
+        street_infos_created: populateResult.streetInfos.length,
       },
       warnings: matchResult.warnings,
     });

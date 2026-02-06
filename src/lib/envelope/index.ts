@@ -7,3 +7,4 @@
 
 export * from './timing';
 export * from './clues';
+export * from './populate';
