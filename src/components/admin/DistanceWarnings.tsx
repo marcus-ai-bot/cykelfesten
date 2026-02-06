@@ -2,17 +2,25 @@
 
 import { useState } from 'react';
 
-interface DistanceWarning {
-  id: string;
-  name: string;
-  address: string;
+interface PairwiseDistance {
+  from_id: string;
+  from_name: string;
+  from_address: string;
+  to_id: string;
+  to_name: string;
+  to_address: string;
   distance_km: number;
 }
 
 interface DistanceCheckResult {
-  warnings: DistanceWarning[];
-  all_distances: DistanceWarning[];
-  median_distance_km: number;
+  warnings: PairwiseDistance[];
+  pairwise_distances: PairwiseDistance[];
+  stats: {
+    max_km: number;
+    min_km: number;
+    avg_km: number;
+    total_pairs: number;
+  };
   geocoded: number;
   total: number;
   not_geocoded: { id: string; name: string; address: string }[];
@@ -74,13 +82,19 @@ export function DistanceWarnings({ eventId }: Props) {
       
       {result && (
         <div className="space-y-4">
-          {/* Summary */}
-          <div className="flex gap-4 text-sm">
-            <div className="px-3 py-1 bg-gray-100 rounded-lg">
-              📍 {result.geocoded}/{result.total} geocodade
+          {/* Summary Stats */}
+          <div className="flex flex-wrap gap-3 text-sm">
+            <div className="px-3 py-2 bg-gray-100 rounded-lg">
+              📍 <strong>{result.geocoded}</strong>/{result.total} geocodade
             </div>
-            <div className="px-3 py-1 bg-gray-100 rounded-lg">
-              📏 Median: {result.median_distance_km} km
+            <div className="px-3 py-2 bg-gray-100 rounded-lg">
+              📏 Max: <strong>{result.stats.max_km} km</strong>
+            </div>
+            <div className="px-3 py-2 bg-gray-100 rounded-lg">
+              📐 Min: <strong>{result.stats.min_km} km</strong>
+            </div>
+            <div className="px-3 py-2 bg-gray-100 rounded-lg">
+              📊 Snitt: <strong>{result.stats.avg_km} km</strong>
             </div>
           </div>
           
@@ -88,27 +102,37 @@ export function DistanceWarnings({ eventId }: Props) {
           {result.warnings.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <h3 className="font-medium text-red-800 mb-3">
-                🚨 {result.warnings.length} adress{result.warnings.length > 1 ? 'er' : ''} för långt bort (&gt;5 km)
+                🚨 {result.warnings.length} par med &gt;5 km avstånd
               </h3>
               <div className="space-y-2">
-                {result.warnings.map(w => (
-                  <div key={w.id} className="flex justify-between items-center bg-white p-3 rounded-lg">
-                    <div>
-                      <div className="font-medium text-gray-900">{w.name}</div>
-                      <div className="text-sm text-gray-500">{w.address}</div>
+                {result.warnings.slice(0, 5).map((w, i) => (
+                  <div key={i} className="flex justify-between items-center bg-white p-3 rounded-lg">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{w.from_name}</div>
+                      <div className="text-xs text-gray-400">{w.from_address}</div>
                     </div>
-                    <div className="text-red-600 font-bold">
+                    <div className="px-3 text-gray-400">↔</div>
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{w.to_name}</div>
+                      <div className="text-xs text-gray-400">{w.to_address}</div>
+                    </div>
+                    <div className="text-red-600 font-bold ml-4">
                       {w.distance_km} km
                     </div>
                   </div>
                 ))}
+                {result.warnings.length > 5 && (
+                  <div className="text-sm text-red-600 text-center">
+                    ... och {result.warnings.length - 5} fler
+                  </div>
+                )}
               </div>
             </div>
           )}
           
           {result.warnings.length === 0 && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <span className="text-green-700">✅ Alla adresser är inom 5 km från centrum!</span>
+              <span className="text-green-700">✅ Alla värdar är inom 5 km från varandra!</span>
             </div>
           )}
           
@@ -131,7 +155,7 @@ export function DistanceWarnings({ eventId }: Props) {
             onClick={() => setShowAll(!showAll)}
             className="text-sm text-amber-600 hover:text-amber-700"
           >
-            {showAll ? '▲ Dölj alla avstånd' : '▼ Visa alla avstånd'}
+            {showAll ? '▲ Dölj avståndstabell' : '▼ Visa alla avstånd mellan värdar'}
           </button>
           
           {showAll && (
@@ -139,21 +163,28 @@ export function DistanceWarnings({ eventId }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-left">Namn</th>
-                    <th className="px-4 py-2 text-left">Adress</th>
+                    <th className="px-4 py-2 text-left">Värd 1</th>
+                    <th className="px-4 py-2 text-left">Värd 2</th>
                     <th className="px-4 py-2 text-right">Avstånd</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {result.all_distances.map(d => (
+                  {result.pairwise_distances.map((d, i) => (
                     <tr 
-                      key={d.id}
+                      key={i}
                       className={d.distance_km > 5 ? 'bg-red-50' : ''}
                     >
-                      <td className="px-4 py-2">{d.name}</td>
-                      <td className="px-4 py-2 text-gray-500">{d.address}</td>
-                      <td className={`px-4 py-2 text-right font-medium ${
-                        d.distance_km > 5 ? 'text-red-600' : 'text-gray-600'
+                      <td className="px-4 py-2">
+                        <div className="font-medium">{d.from_name}</div>
+                        <div className="text-xs text-gray-400">{d.from_address}</div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="font-medium">{d.to_name}</div>
+                        <div className="text-xs text-gray-400">{d.to_address}</div>
+                      </td>
+                      <td className={`px-4 py-2 text-right font-bold ${
+                        d.distance_km > 5 ? 'text-red-600' : 
+                        d.distance_km > 3 ? 'text-amber-600' : 'text-green-600'
                       }`}>
                         {d.distance_km} km
                       </td>
@@ -168,7 +199,7 @@ export function DistanceWarnings({ eventId }: Props) {
       
       {!result && !checking && (
         <p className="text-sm text-gray-500">
-          Klicka för att kontrollera att alla adresser är inom rimligt cykelavstånd.
+          Klicka för att kontrollera avstånd mellan alla värdar. Visar tabell sorterad från längst till kortast avstånd.
         </p>
       )}
     </div>

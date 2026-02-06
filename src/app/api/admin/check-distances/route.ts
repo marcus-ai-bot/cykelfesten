@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { geocodeAddress, calculateDistance, calculateCentroid, type Coordinates } from '@/lib/geo';
+import { geocodeAddress, calculateDistance, type Coordinates } from '@/lib/geo';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +13,16 @@ interface CoupleWithCoords {
   partner_name: string | null;
   address: string;
   coordinates: Coordinates | null;
+}
+
+interface PairwiseDistance {
+  from_id: string;
+  from_name: string;
+  from_address: string;
+  to_id: string;
+  to_name: string;
+  to_address: string;
+  distance_km: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -65,42 +75,55 @@ export async function POST(request: NextRequest) {
     if (withCoords.length < 2) {
       return NextResponse.json({ 
         warnings: [],
+        pairwise_distances: [],
         message: 'Not enough geocoded addresses to check distances',
         geocoded: withCoords.length,
         total: couples.length,
       });
     }
     
-    // Calculate centroid
-    const centroid = calculateCentroid(withCoords.map(c => c.coordinates!));
+    // Calculate ALL pairwise distances between hosts
+    const pairwiseDistances: PairwiseDistance[] = [];
     
-    // Calculate distances and find warnings
-    const distances = withCoords.map(c => {
-      const distance = calculateDistance(centroid, c.coordinates!);
-      return {
-        id: c.id,
-        name: c.invited_name + (c.partner_name ? ` & ${c.partner_name}` : ''),
-        address: c.address,
-        distance_km: Math.round(distance * 10) / 10,
-        coordinates: c.coordinates,
-      };
-    });
+    for (let i = 0; i < withCoords.length; i++) {
+      for (let j = i + 1; j < withCoords.length; j++) {
+        const a = withCoords[i];
+        const b = withCoords[j];
+        const distance = calculateDistance(a.coordinates!, b.coordinates!);
+        
+        pairwiseDistances.push({
+          from_id: a.id,
+          from_name: a.invited_name + (a.partner_name ? ` & ${a.partner_name}` : ''),
+          from_address: a.address,
+          to_id: b.id,
+          to_name: b.invited_name + (b.partner_name ? ` & ${b.partner_name}` : ''),
+          to_address: b.address,
+          distance_km: Math.round(distance * 10) / 10,
+        });
+      }
+    }
     
-    // Sort by distance descending
-    distances.sort((a, b) => b.distance_km - a.distance_km);
+    // Sort by distance descending (longest first)
+    pairwiseDistances.sort((a, b) => b.distance_km - a.distance_km);
     
-    // Find warnings (> max_distance_km from center)
-    const warnings = distances.filter(d => d.distance_km > max_distance_km);
+    // Find warnings (pairs > max_distance_km apart)
+    const warnings = pairwiseDistances.filter(d => d.distance_km > max_distance_km);
     
-    // Calculate median distance for reference
-    const sortedDistances = distances.map(d => d.distance_km).sort((a, b) => a - b);
-    const medianDistance = sortedDistances[Math.floor(sortedDistances.length / 2)];
+    // Calculate stats
+    const allDistances = pairwiseDistances.map(d => d.distance_km);
+    const maxDistance = Math.max(...allDistances);
+    const minDistance = Math.min(...allDistances);
+    const avgDistance = Math.round((allDistances.reduce((a, b) => a + b, 0) / allDistances.length) * 10) / 10;
     
     return NextResponse.json({
       warnings,
-      all_distances: distances,
-      centroid,
-      median_distance_km: Math.round(medianDistance * 10) / 10,
+      pairwise_distances: pairwiseDistances,
+      stats: {
+        max_km: maxDistance,
+        min_km: minDistance,
+        avg_km: avgDistance,
+        total_pairs: pairwiseDistances.length,
+      },
       max_distance_km,
       geocoded: withCoords.length,
       total: couples.length,
