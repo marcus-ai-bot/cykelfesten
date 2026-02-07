@@ -76,7 +76,7 @@ const DEFAULT_TIMING: Omit<TimingSettings, 'id' | 'event_id'> = {
   clue_2_minutes_before: 30,
   street_minutes_before: 15,
   number_minutes_before: 5,
-  during_meal_clue_interval_minutes: 15,
+  during_meal_clue_interval_minutes: 2, // Now means "max clues during meal"
   distance_adjustment_enabled: true,
 };
 
