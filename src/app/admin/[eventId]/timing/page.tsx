@@ -6,10 +6,48 @@
  * Allows event organizers to configure when envelope reveals happen.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+
+// Info tooltip component
+function InfoTooltip({ text }: { text: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  
+  // Close on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+  
+  return (
+    <div className="relative inline-block" ref={tooltipRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="ml-2 w-5 h-5 rounded-full border-2 border-amber-400 text-amber-500 text-xs font-bold hover:bg-amber-100 transition-colors inline-flex items-center justify-center"
+        aria-label="Mer information"
+      >
+        ?
+      </button>
+      {isOpen && (
+        <div className="absolute z-50 left-0 top-7 w-64 p-3 bg-gray-800 text-white text-sm rounded-lg shadow-lg">
+          <div className="absolute -top-1.5 left-2 w-3 h-3 bg-gray-800 rotate-45"></div>
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface TimingSettings {
   id: string;
@@ -179,8 +217,9 @@ export default function TimingEditorPage() {
           <div className="space-y-6">
             {/* Reveal timing */}
             <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center flex-wrap">
                 📬 Kuvert-reveals (innan rätt startar)
+                <InfoTooltip text="Tiderna anger hur långt innan varje rätt startar som respektive reveal sker. T.ex. '6h' för teasing = gästerna ser 'Nyfiken?' 6 timmar innan förrätten." />
               </h2>
               
               <div className="space-y-4">
@@ -223,8 +262,9 @@ export default function TimingEditorPage() {
             
             {/* During meal */}
             <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center flex-wrap">
                 🍽️ Under måltiden
+                <InfoTooltip text="Medan gästerna äter hos värden kan de få extra ledtrådar om nästa destination. Detta intervall styr hur ofta nya ledtrådar visas under måltiden." />
               </h2>
               
               <TimingRow
@@ -238,8 +278,9 @@ export default function TimingEditorPage() {
             
             {/* Distance adjustment */}
             <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center flex-wrap">
                 🚴 Avståndsanpassning
+                <InfoTooltip text="Par med längre cykelavstånd till sin destination får tidigare reveals (gatunamn och husnummer) så de hinner cykla dit i tid. Systemet beräknar avstånd automatiskt." />
               </h2>
               
               <label className="flex items-center gap-3 cursor-pointer">
