@@ -34,16 +34,25 @@ function InfoTooltip({ text }: { text: string }) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="ml-2 w-5 h-5 rounded-full border-2 border-amber-400 text-amber-500 text-xs font-bold hover:bg-amber-100 transition-colors inline-flex items-center justify-center"
+        className="ml-2 w-5 h-5 rounded-full border-2 border-amber-400 text-amber-500 text-xs font-bold hover:bg-amber-100 transition-colors inline-flex items-center justify-center flex-shrink-0"
         aria-label="Mer information"
       >
         ?
       </button>
       {isOpen && (
-        <div className="absolute z-50 left-0 top-7 w-64 p-3 bg-gray-800 text-white text-sm rounded-lg shadow-lg">
-          <div className="absolute -top-1.5 left-2 w-3 h-3 bg-gray-800 rotate-45"></div>
+        <div className="fixed inset-x-4 top-1/3 z-50 p-4 bg-gray-100 text-gray-800 text-sm rounded-xl shadow-xl border border-gray-200 md:absolute md:inset-auto md:left-0 md:top-8 md:w-72">
           {text}
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="mt-3 w-full py-2 bg-amber-500 text-white rounded-lg font-medium md:hidden"
+          >
+            Stäng
+          </button>
         </div>
+      )}
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/20 z-40 md:hidden" onClick={() => setIsOpen(false)} />
       )}
     </div>
   );
