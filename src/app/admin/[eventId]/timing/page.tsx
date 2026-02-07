@@ -273,16 +273,16 @@ export default function TimingEditorPage() {
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center flex-wrap">
                 🍽️ Under måltiden
-                <InfoTooltip text="Medan gästerna äter hos värden kan de få extra ledtrådar om nästa destination. Detta intervall styr hur ofta nya ledtrådar visas under måltiden." />
+                <InfoTooltip text="Medan gästerna äter får de 2 ledtrådar om nästa destination — en vid 1/3 och en vid 2/3 av måltiden. Lagom för att bygga spänning utan att störa samtalet." />
               </h2>
               
-              <TimingRow
-                label="Ny ledtråd var"
-                value={timing.during_meal_clue_interval_minutes}
-                onChange={(v) => handleChange('during_meal_clue_interval_minutes', v)}
-                options={[10, 15, 20, 30]}
-                suffix="min"
-              />
+              <div className="flex items-center gap-3 text-gray-700">
+                <span className="text-2xl">2</span>
+                <span>ledtrådar per måltid (vid 1/3 och 2/3)</span>
+              </div>
+              <p className="text-gray-500 text-sm mt-2">
+                Exempel: 90 min måltid → ledtrådar efter 30 och 60 min
+              </p>
             </div>
             
             {/* Distance adjustment */}
@@ -313,16 +313,26 @@ export default function TimingEditorPage() {
             {/* Timeline preview */}
             <div className="bg-amber-50 rounded-xl p-6 border border-amber-200">
               <h2 className="text-lg font-semibold text-amber-800 mb-4">
-                📅 Förhandsvisning (exempel: Förrätt 18:00)
+                📅 Förhandsvisning
               </h2>
               
-              <div className="space-y-2 text-sm">
+              <p className="text-amber-700 text-sm mb-3 font-medium">Innan förrätt (18:00):</p>
+              <div className="space-y-2 text-sm mb-4">
                 <TimelineItem time={`${formatTimeFromMinutes(18*60 - timing.teasing_minutes_before)}`} label="Nyfiken? 🤫" />
                 <TimelineItem time={`${formatTimeFromMinutes(18*60 - timing.clue_1_minutes_before)}`} label="Ledtråd 1" />
                 <TimelineItem time={`${formatTimeFromMinutes(18*60 - timing.clue_2_minutes_before)}`} label="Ledtråd 2" />
                 <TimelineItem time={`${formatTimeFromMinutes(18*60 - timing.street_minutes_before)}`} label="Gatunamn" />
                 <TimelineItem time={`${formatTimeFromMinutes(18*60 - timing.number_minutes_before)}`} label="Husnummer" />
                 <TimelineItem time="18:00" label="🎉 Full reveal!" highlight />
+              </div>
+              
+              <p className="text-amber-700 text-sm mb-3 font-medium">Under förrätt (18:00-19:30) → mot huvudrätt:</p>
+              <div className="space-y-2 text-sm">
+                <TimelineItem time="18:30" label="🔮 Ledtråd om huvudrätt (1/3)" />
+                <TimelineItem time="19:00" label="🔮 Ledtråd om huvudrätt (2/3)" />
+                <TimelineItem time={`${formatTimeFromMinutes(20*60 - timing.street_minutes_before)}`} label="📍 Gatunamn till huvudrätt" />
+                <TimelineItem time={`${formatTimeFromMinutes(20*60 - timing.number_minutes_before)}`} label="🔢 Husnummer till huvudrätt" />
+                <TimelineItem time="20:00" label="🎉 Full reveal — dags att cykla!" highlight />
               </div>
             </div>
             
