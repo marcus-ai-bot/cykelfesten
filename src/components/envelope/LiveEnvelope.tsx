@@ -233,8 +233,8 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
         </motion.div>
       )}
 
-      {/* Street info */}
-      {course.street && (
+      {/* Street info (only show before OPEN - after that we show full address) */}
+      {course.street && state !== 'OPEN' && (
         <motion.div variants={itemVariants} className="bg-blue-50 rounded-lg p-3">
           <h4 className="text-sm font-medium text-blue-700 flex items-center gap-1">
             📍 Adress
