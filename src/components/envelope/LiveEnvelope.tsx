@@ -265,7 +265,7 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
           )}
           {course.host_names && course.host_names.length > 0 && (
             <p className="text-sm text-green-600">
-              👋 Värdar:{' '}
+              👋 {course.host_names.length === 1 ? 'Värd' : 'Värdar'}:{' '}
               {course.host_names.map((name, i) => (
                 <span key={i}>
                   {i > 0 && ' & '}
