@@ -288,6 +288,9 @@ export interface CourseEnvelopeStatus {
   starts_at: string;
   host_names: string[] | null;  // Only revealed at OPEN
   allergies_summary: string[] | null;  // Only revealed at OPEN
+  is_self_host: boolean;  // True if the guest IS the host for this course
+  host_has_fun_facts: boolean;  // True if host has any fun facts
+  cycling_meters: number | null;  // Distance to destination
 }
 
 export interface AfterpartyStatus {

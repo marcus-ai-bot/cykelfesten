@@ -151,6 +151,9 @@ export async function GET(request: NextRequest) {
           starts_at: getCourseStartTime(event, courseType),
           host_names: null,
           allergies_summary: null,
+          is_self_host: false,
+          host_has_fun_facts: false,
+          cycling_meters: null,
         });
         continue;
       }
@@ -176,6 +179,15 @@ export async function GET(request: NextRequest) {
         state,
         now
       );
+      
+      // Check if host has fun facts
+      const hostInvitedFacts = Array.isArray(envelope.host_couple?.invited_fun_facts) 
+        ? envelope.host_couple.invited_fun_facts 
+        : [];
+      const hostPartnerFacts = Array.isArray(envelope.host_couple?.partner_fun_facts)
+        ? envelope.host_couple.partner_fun_facts
+        : [];
+      const hostHasFunFacts = hostInvitedFacts.length > 0 || hostPartnerFacts.length > 0;
       
       // Build course status
       const courseStatus: CourseEnvelopeStatus = {
@@ -207,6 +219,9 @@ export async function GET(request: NextRequest) {
         allergies_summary: state === 'OPEN' 
           ? getAllergiesSummary(envelope.host_couple_id, coupleId) 
           : null,
+        is_self_host: envelope.host_couple_id === coupleId,
+        host_has_fun_facts: hostHasFunFacts,
+        cycling_meters: envelope.cycling_minutes ? envelope.cycling_minutes * 250 : null, // ~250m per minute cycling
       };
       
       courses.push(courseStatus);

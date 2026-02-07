@@ -155,7 +155,7 @@ function getStateMessage(state: EnvelopeState, clueCount: number = 0): string {
   }
 }
 
-// "Lips sealed" messages when no clue available
+// "Lips sealed" messages when no clue available (host HAS fun facts but we can't reveal more)
 const LIPS_SEALED_MESSAGES = [
   { emoji: '🤫', text: 'Our lips are sealed — avslöjar vi en ledtråd kan ni gissa vem!' },
   { emoji: '🤐', text: 'Tyst som en mus — vi kan inte säga mer utan att avslöja!' },
@@ -163,8 +163,50 @@ const LIPS_SEALED_MESSAGES = [
   { emoji: '🤐', text: 'Inga fler ledtrådar — nu får ni gissa!' },
 ];
 
+// Mystery messages when host has NO fun facts at all
+const MYSTERY_HOST_MESSAGES = [
+  { emoji: '🎭', text: 'Dina värdar är ett mysterium! Vem kan det vara?' },
+  { emoji: '✨', text: 'Överraskning väntar — vi avslöjar inget!' },
+  { emoji: '🔮', text: 'Ödet har talat. Mer får ni inte veta.' },
+  { emoji: '🎪', text: 'Vem döljer sig bakom dörren? Spännande!' },
+  { emoji: '🌟', text: 'Stjärnorna är tysta ikväll...' },
+];
+
+// Fun messages when YOU are the host (about yourself!)
+const HOST_SELF_MESSAGES = [
+  { emoji: '👑', text: 'Psst... värden är faktiskt ganska fantastisk. (Det är du!)' },
+  { emoji: '🪞', text: 'Ledtråd: Värden tittar på dig i spegeln varje morgon.' },
+  { emoji: '🦸', text: 'Breaking news: Kvällens värd är en hjälte i förklädnad!' },
+  { emoji: '🎭', text: 'Mystisk värd sökes... Hittad! (Kolla i spegeln)' },
+  { emoji: '🌟', text: 'Fun fact: Din värd är extremt bra på att vara du.' },
+  { emoji: '🏆', text: 'Grattis! Du har vunnit världens bästa värd. Spoiler: det är du.' },
+  { emoji: '🎪', text: 'Cirkusen är i stan! Och du är ringmastern ikväll.' },
+  { emoji: '🦄', text: 'Ledtråd: Värden är lika unik som en enhörning. Titta ner.' },
+  { emoji: '🎬', text: 'I huvudrollen ikväll: DU! Applåder tack.' },
+  { emoji: '🌈', text: 'Värden? Åh, bara den mest underbara personen du känner. Dig själv!' },
+];
+
+// "All revealed" message when we've shown everything we have
+const ALL_REVEALED_MESSAGES = [
+  { emoji: '🤷', text: 'Det var allt vi visste! Resten får ni upptäcka själva.' },
+  { emoji: '📭', text: 'Tomt på ledtrådar! Men snart får ni veta gatan...' },
+  { emoji: '🎁', text: 'Inga fler ledtrådar — men överraskningen väntar!' },
+];
+
 function getLipsSealedMessage(index: number) {
   return LIPS_SEALED_MESSAGES[index % LIPS_SEALED_MESSAGES.length];
+}
+
+function getMysteryHostMessage(index: number) {
+  return MYSTERY_HOST_MESSAGES[index % MYSTERY_HOST_MESSAGES.length];
+}
+
+function getHostSelfMessage(index: number) {
+  return HOST_SELF_MESSAGES[index % HOST_SELF_MESSAGES.length];
+}
+
+function getAllRevealedMessage(index: number) {
+  return ALL_REVEALED_MESSAGES[index % ALL_REVEALED_MESSAGES.length];
 }
 
 function formatTime(isoString: string): string {
@@ -245,18 +287,48 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
         </motion.div>
       )}
 
-      {/* "Lips sealed" message when we're in a clue state but have no/insufficient clues */}
-      {(state === 'CLUE_1' && course.clues.length === 0) && (
+      {/* EDGE CASE: You ARE the host - show fun self-referential messages */}
+      {course.is_self_host && ['CLUE_1', 'CLUE_2'].includes(state) && (
+        <motion.div variants={itemVariants} className="bg-amber-50 rounded-lg p-4 text-center border border-amber-200">
+          <p className="text-3xl mb-2">{getHostSelfMessage(state === 'CLUE_1' ? 0 : 1).emoji}</p>
+          <p className="text-sm text-amber-700 font-medium">{getHostSelfMessage(state === 'CLUE_1' ? 0 : 1).text}</p>
+        </motion.div>
+      )}
+
+      {/* EDGE CASE: Host has NO fun facts at all - mystery message */}
+      {!course.is_self_host && !course.host_has_fun_facts && ['CLUE_1', 'CLUE_2'].includes(state) && (
+        <motion.div variants={itemVariants} className="bg-indigo-50 rounded-lg p-4 text-center">
+          <p className="text-3xl mb-2">{getMysteryHostMessage(state === 'CLUE_1' ? 0 : 1).emoji}</p>
+          <p className="text-sm text-indigo-700">{getMysteryHostMessage(state === 'CLUE_1' ? 0 : 1).text}</p>
+        </motion.div>
+      )}
+
+      {/* EDGE CASE: CLUE_1 but no clues available (host HAS fun facts but privacy) */}
+      {!course.is_self_host && course.host_has_fun_facts && state === 'CLUE_1' && course.clues.length === 0 && (
         <motion.div variants={itemVariants} className="bg-purple-50 rounded-lg p-4 text-center">
           <p className="text-3xl mb-2">{getLipsSealedMessage(0).emoji}</p>
           <p className="text-sm text-purple-700">{getLipsSealedMessage(0).text}</p>
         </motion.div>
       )}
       
-      {(state === 'CLUE_2' && course.clues.length < 2) && (
+      {/* EDGE CASE: CLUE_2 but only had 1 clue - "that's all we knew" + street hint */}
+      {!course.is_self_host && course.host_has_fun_facts && state === 'CLUE_2' && course.clues.length === 1 && (
+        <motion.div variants={itemVariants} className="bg-blue-50 rounded-lg p-4 text-center space-y-2">
+          <p className="text-3xl mb-1">🗺️</p>
+          <p className="text-sm text-blue-700">
+            Ni ska till någon som just nu är på <span className="font-bold">{course.street?.name || 'en hemlig gata'}</span>.
+          </p>
+          {course.cycling_meters && (
+            <p className="text-xs text-blue-600">🚴 Ca {course.cycling_meters} meter att cykla</p>
+          )}
+        </motion.div>
+      )}
+
+      {/* EDGE CASE: CLUE_2 but NO clues at all - lips sealed */}
+      {!course.is_self_host && course.host_has_fun_facts && state === 'CLUE_2' && course.clues.length === 0 && (
         <motion.div variants={itemVariants} className="bg-purple-50 rounded-lg p-4 text-center">
-          <p className="text-3xl mb-2">{getLipsSealedMessage(course.clues.length).emoji}</p>
-          <p className="text-sm text-purple-700">{getLipsSealedMessage(course.clues.length).text}</p>
+          <p className="text-3xl mb-2">{getLipsSealedMessage(1).emoji}</p>
+          <p className="text-sm text-purple-700">{getLipsSealedMessage(1).text}</p>
         </motion.div>
       )}
 
