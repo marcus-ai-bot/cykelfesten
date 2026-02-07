@@ -292,6 +292,10 @@ export interface CourseEnvelopeStatus {
   is_self_host: boolean;  // True if the guest IS the host for this course
   host_has_fun_facts: boolean;  // True if host has any fun facts
   cycling_meters: number | null;  // Distance to destination
+  // Dessert special: afterparty reveals
+  dessert_stats: DessertStats | null;  // CLUE_1 for dessert
+  afterparty_practical: AfterpartyPractical | null;  // CLUE_2 for dessert
+  afterparty_location: AfterpartyLocation | null;  // STREET/NUMBER for dessert
 }
 
 // Dessert special reveals (afterparty info)
@@ -300,18 +304,21 @@ export interface DessertStats {
   total_distance_km: number;
   total_dishes: number;
   vegetarian_dishes: number;
-  longest_cycle_km: number;
 }
 
-export interface AfterpartyReveal {
+export interface AfterpartyPractical {
   time: string;
-  location: string;
-  host_names: string[];
   door_code: string | null;
   bring_own_drinks: boolean;
   notes: string | null;
+}
+
+export interface AfterpartyLocation {
+  address: string;
+  host_names: string[];
   cycling_minutes_sober: number;
   cycling_minutes_tipsy: number;
+  cycling_minutes_drunk: number;
   coordinates: { lat: number; lng: number } | null;
 }
 

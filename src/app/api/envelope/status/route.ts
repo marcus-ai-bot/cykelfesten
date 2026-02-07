@@ -173,6 +173,9 @@ export async function GET(request: NextRequest) {
           is_self_host: false,
           host_has_fun_facts: false,
           cycling_meters: null,
+          dessert_stats: null,
+          afterparty_practical: null,
+          afterparty_location: null,
         });
         continue;
       }
@@ -212,6 +215,17 @@ export async function GET(request: NextRequest) {
       const isSelfHost = envelope.host_couple_id === coupleId;
       const showCluePool = state === 'CLUE_1' && courseType !== 'dessert' && !isSelfHost;
       
+      // Dessert-specific: calculate stats and afterparty info
+      const isDessert = courseType === 'dessert';
+      const totalCouples = allCouples?.length ?? 0;
+      
+      // Calculate total cycling distance (rough estimate: sum all envelopes)
+      const totalCyclingMinutes = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes ?? 0), 0) ?? 0;
+      const totalDistanceKm = Math.round(totalCyclingMinutes * 0.25 * 10) / 10; // ~250m/min = 0.25km/min
+      
+      // Afterparty cycling time from this couple's location
+      const afterpartyCyclingMin = envelope.cycling_minutes ?? 10;
+      
       // Build course status
       const courseStatus: CourseEnvelopeStatus = {
         type: courseType,
@@ -245,7 +259,28 @@ export async function GET(request: NextRequest) {
           : null,
         is_self_host: isSelfHost,
         host_has_fun_facts: hostHasFunFacts,
-        cycling_meters: envelope.cycling_minutes ? envelope.cycling_minutes * 250 : null, // ~250m per minute cycling
+        cycling_meters: envelope.cycling_minutes ? envelope.cycling_minutes * 250 : null,
+        // Dessert-specific reveals
+        dessert_stats: isDessert && ['CLUE_1', 'CLUE_2', 'STREET', 'NUMBER', 'OPEN'].includes(state) ? {
+          total_couples: totalCouples,
+          total_distance_km: totalDistanceKm,
+          total_dishes: totalCouples * 3, // 3 courses
+          vegetarian_dishes: Math.floor(totalCouples * 0.3), // rough estimate
+        } : null,
+        afterparty_practical: isDessert && ['CLUE_2', 'STREET', 'NUMBER', 'OPEN'].includes(state) ? {
+          time: event.afterparty_time ?? '21:00',
+          door_code: event.afterparty_door_code ?? null,
+          bring_own_drinks: event.afterparty_byob ?? true,
+          notes: event.afterparty_notes ?? null,
+        } : null,
+        afterparty_location: isDessert && ['STREET', 'NUMBER', 'OPEN'].includes(state) ? {
+          address: event.afterparty_location ?? 'TBA',
+          host_names: event.afterparty_hosts?.split(',').map((n: string) => n.trim()) ?? [],
+          cycling_minutes_sober: afterpartyCyclingMin,
+          cycling_minutes_tipsy: Math.round(afterpartyCyclingMin * 1.5),
+          cycling_minutes_drunk: Math.round(afterpartyCyclingMin * 2.5),
+          coordinates: null, // TODO: add afterparty coordinates
+        } : null,
       };
       
       courses.push(courseStatus);

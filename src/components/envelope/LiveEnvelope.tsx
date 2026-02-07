@@ -435,6 +435,104 @@ function EnvelopeContent({ course, isOpen, hostSelfMessages, lipsSealedMessages,
         </motion.div>
       )}
 
+      {/* DESSERT SPECIAL: Stats reveal (CLUE_1) */}
+      {course.type === 'dessert' && course.dessert_stats && (
+        <motion.div variants={itemVariants} className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-4 space-y-2">
+          <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-1">
+            📊 Kvällens statistik
+          </h4>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="bg-white/60 rounded-lg p-2 text-center">
+              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.total_couples}</p>
+              <p className="text-xs text-gray-600">par deltog</p>
+            </div>
+            <div className="bg-white/60 rounded-lg p-2 text-center">
+              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.total_distance_km}</p>
+              <p className="text-xs text-gray-600">km cyklades</p>
+            </div>
+            <div className="bg-white/60 rounded-lg p-2 text-center">
+              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.total_dishes}</p>
+              <p className="text-xs text-gray-600">rätter serverades</p>
+            </div>
+            <div className="bg-white/60 rounded-lg p-2 text-center">
+              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.vegetarian_dishes}</p>
+              <p className="text-xs text-gray-600">vegetariska</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* DESSERT SPECIAL: Practical info (CLUE_2) */}
+      {course.type === 'dessert' && course.afterparty_practical && (
+        <motion.div variants={itemVariants} className="bg-blue-50 rounded-lg p-4 space-y-2">
+          <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
+            ⏰ Snart dags att röra på sig
+          </h4>
+          <p className="text-blue-700">
+            Efterfesten börjar <span className="font-bold">{course.afterparty_practical.time}</span>
+          </p>
+          {course.afterparty_practical.door_code && (
+            <p className="text-sm text-blue-600">
+              🔑 Portkod: <span className="font-mono font-bold">{course.afterparty_practical.door_code}</span>
+            </p>
+          )}
+          {course.afterparty_practical.bring_own_drinks && (
+            <p className="text-sm text-blue-600">🍷 Ta med egen dryck</p>
+          )}
+          {course.afterparty_practical.notes && (
+            <p className="text-sm text-blue-600 italic">{course.afterparty_practical.notes}</p>
+          )}
+          <p className="text-xs text-blue-500 mt-2">Avsluta kaffet i lugn och ro...</p>
+        </motion.div>
+      )}
+
+      {/* DESSERT SPECIAL: Location push (STREET/NUMBER) */}
+      {course.type === 'dessert' && course.afterparty_location && (
+        <motion.div variants={itemVariants} className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 space-y-3 border-2 border-green-200">
+          <h4 className="text-lg font-bold text-green-800 flex items-center gap-2">
+            🎉 Nu är det dags!
+          </h4>
+          <div className="bg-white/70 rounded-lg p-3">
+            <p className="text-green-900 font-bold text-lg">📍 {course.afterparty_location.address}</p>
+            {course.afterparty_location.host_names.length > 0 && (
+              <p className="text-green-700 text-sm">
+                👋 Värd: {course.afterparty_location.host_names.join(' & ')}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-green-700">🚴 Cykeltid härifrån:</p>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="bg-white/60 rounded p-2 text-center">
+                <p className="text-lg">🏅</p>
+                <p className="font-bold">{course.afterparty_location.cycling_minutes_sober} min</p>
+                <p className="text-gray-500">Nykter</p>
+              </div>
+              <div className="bg-white/60 rounded p-2 text-center">
+                <p className="text-lg">🍷</p>
+                <p className="font-bold">{course.afterparty_location.cycling_minutes_tipsy} min</p>
+                <p className="text-gray-500">Lagom</p>
+              </div>
+              <div className="bg-white/60 rounded p-2 text-center">
+                <p className="text-lg">🥴</p>
+                <p className="font-bold">{course.afterparty_location.cycling_minutes_drunk} min</p>
+                <p className="text-gray-500">Efterfest-läge</p>
+              </div>
+            </div>
+          </div>
+          {course.afterparty_location.coordinates && (
+            <a
+              href={`https://maps.google.com/?q=${course.afterparty_location.coordinates.lat},${course.afterparty_location.coordinates.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+            >
+              🗺️ Öppna i kartan
+            </a>
+          )}
+        </motion.div>
+      )}
+
       {/* TEASING message */}
       {state === 'TEASING' && course.clues.length === 0 && (
         <motion.div variants={itemVariants} className="text-center py-4">
