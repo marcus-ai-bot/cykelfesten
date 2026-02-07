@@ -142,17 +142,29 @@ function getCourseName(course: Course): string {
   }
 }
 
-function getStateMessage(state: EnvelopeState): string {
+function getStateMessage(state: EnvelopeState, clueCount: number = 0): string {
   switch (state) {
     case 'LOCKED': return 'Kommer snart...';
     case 'TEASING': return 'Nyfiken? 🤫';
-    case 'CLUE_1': return 'En ledtråd!';
-    case 'CLUE_2': return 'Ännu en ledtråd!';
+    case 'CLUE_1': return clueCount > 0 ? 'En ledtråd!' : 'Hemligt... 🤫';
+    case 'CLUE_2': return clueCount > 1 ? 'Ännu en ledtråd!' : 'Hemligt... 🤐';
     case 'STREET': return 'Nu vet du gatan!';
     case 'NUMBER': return 'Snart framme!';
     case 'OPEN': return 'Välkommen!';
     default: return '';
   }
+}
+
+// "Lips sealed" messages when no clue available
+const LIPS_SEALED_MESSAGES = [
+  { emoji: '🤫', text: 'Our lips are sealed — avslöjar vi en ledtråd kan ni gissa vem!' },
+  { emoji: '🤐', text: 'Tyst som en mus — vi kan inte säga mer utan att avslöja!' },
+  { emoji: '🤫', text: 'Vi håller tyst den här gången... annars blir det för lätt!' },
+  { emoji: '🤐', text: 'Inga fler ledtrådar — nu får ni gissa!' },
+];
+
+function getLipsSealedMessage(index: number) {
+  return LIPS_SEALED_MESSAGES[index % LIPS_SEALED_MESSAGES.length];
 }
 
 function formatTime(isoString: string): string {
@@ -230,6 +242,21 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
               </li>
             ))}
           </ul>
+        </motion.div>
+      )}
+
+      {/* "Lips sealed" message when we're in a clue state but have no/insufficient clues */}
+      {(state === 'CLUE_1' && course.clues.length === 0) && (
+        <motion.div variants={itemVariants} className="bg-purple-50 rounded-lg p-4 text-center">
+          <p className="text-3xl mb-2">{getLipsSealedMessage(0).emoji}</p>
+          <p className="text-sm text-purple-700">{getLipsSealedMessage(0).text}</p>
+        </motion.div>
+      )}
+      
+      {(state === 'CLUE_2' && course.clues.length < 2) && (
+        <motion.div variants={itemVariants} className="bg-purple-50 rounded-lg p-4 text-center">
+          <p className="text-3xl mb-2">{getLipsSealedMessage(course.clues.length).emoji}</p>
+          <p className="text-sm text-purple-700">{getLipsSealedMessage(course.clues.length).text}</p>
         </motion.div>
       )}
 
@@ -419,7 +446,7 @@ export function LiveEnvelope({ course, onOpen, className = '' }: LiveEnvelopePro
             <span className="text-2xl">{getCourseEmoji(course.type)}</span>
             <div>
               <h3 className="font-semibold text-gray-800">{getCourseName(course.type)}</h3>
-              <p className="text-xs text-gray-500">{getStateMessage(state)}</p>
+              <p className="text-xs text-gray-500">{getStateMessage(state, course.clues.length)}</p>
             </div>
           </div>
           
