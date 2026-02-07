@@ -273,15 +273,30 @@ export default function TimingEditorPage() {
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center flex-wrap">
                 🍽️ Under måltiden
-                <InfoTooltip text="Medan gästerna äter får de 2 ledtrådar om nästa destination — en vid 1/3 och en vid 2/3 av måltiden. Lagom för att bygga spänning utan att störa samtalet." />
+                <InfoTooltip text="Max antal ledtrådar om nästa värd som visas medan gästerna äter. Fördelas jämnt över måltiden. Om färre ledtrådar finns tillgängliga visas färre." />
               </h2>
               
-              <div className="flex items-center gap-3 text-gray-700">
-                <span className="text-2xl">2</span>
-                <span>ledtrådar per måltid (vid 1/3 och 2/3)</span>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-gray-700">Max ledtrådar per måltid</span>
+                <select
+                  value={timing.during_meal_clue_interval_minutes}
+                  onChange={(e) => handleChange('during_meal_clue_interval_minutes', parseInt(e.target.value))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                >
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                  <option value={4}>4</option>
+                </select>
               </div>
-              <p className="text-gray-500 text-sm mt-2">
-                Exempel: 90 min måltid → ledtrådar efter 30 och 60 min
+              <p className="text-gray-500 text-sm mt-3">
+                {timing.during_meal_clue_interval_minutes === 1 && "→ Visas mitt i måltiden"}
+                {timing.during_meal_clue_interval_minutes === 2 && "→ Visas vid 1/3 och 2/3 av måltiden"}
+                {timing.during_meal_clue_interval_minutes === 3 && "→ Visas vid 1/4, 2/4 och 3/4 av måltiden"}
+                {timing.during_meal_clue_interval_minutes === 4 && "→ Visas vid 1/5, 2/5, 3/5 och 4/5 av måltiden"}
+              </p>
+              <p className="text-amber-600 text-xs mt-1">
+                ⚠️ Om värden har färre ledtrådar visas färre. Inga ledtrådar = inget visas.
               </p>
             </div>
             
@@ -328,8 +343,20 @@ export default function TimingEditorPage() {
               
               <p className="text-amber-700 text-sm mb-3 font-medium">Under förrätt (18:00-19:30) → mot huvudrätt:</p>
               <div className="space-y-2 text-sm">
-                <TimelineItem time="18:30" label="🔮 Ledtråd om huvudrätt (1/3)" />
-                <TimelineItem time="19:00" label="🔮 Ledtråd om huvudrätt (2/3)" />
+                {/* Dynamic clue times based on max count */}
+                {Array.from({ length: timing.during_meal_clue_interval_minutes }, (_, i) => {
+                  const fraction = (i + 1) / (timing.during_meal_clue_interval_minutes + 1);
+                  const mealDuration = 90; // example: 90 min meal
+                  const minutesIn = Math.round(mealDuration * fraction);
+                  const time = formatTimeFromMinutes(18*60 + minutesIn);
+                  return (
+                    <TimelineItem 
+                      key={i} 
+                      time={time} 
+                      label={`🔮 Ledtråd om huvudrätt (${i + 1}/${timing.during_meal_clue_interval_minutes})`} 
+                    />
+                  );
+                })}
                 <TimelineItem time={`${formatTimeFromMinutes(20*60 - timing.street_minutes_before)}`} label="📍 Gatunamn till huvudrätt" />
                 <TimelineItem time={`${formatTimeFromMinutes(20*60 - timing.number_minutes_before)}`} label="🔢 Husnummer till huvudrätt" />
                 <TimelineItem time="20:00" label="🎉 Full reveal — dags att cykla!" highlight />
