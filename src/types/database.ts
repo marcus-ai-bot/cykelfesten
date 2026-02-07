@@ -300,10 +300,20 @@ export interface AfterpartyStatus {
   description: string | null;
 }
 
+export interface CustomMessage {
+  emoji: string;
+  text: string;
+}
+
 export interface EnvelopeStatusResponse {
   server_time: string;
   event_id: string;
   couple_id: string;
   courses: CourseEnvelopeStatus[];
   afterparty: AfterpartyStatus;
+  messages: {
+    host_self: CustomMessage[];
+    lips_sealed: CustomMessage[];
+    mystery_host: CustomMessage[];
+  };
 }

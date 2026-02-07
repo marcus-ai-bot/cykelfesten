@@ -68,10 +68,10 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // 2. Get event info
+    // 2. Get event info (including custom messages)
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('*')
+      .select('*, host_self_messages, lips_sealed_messages, mystery_host_messages')
       .eq('id', eventId)
       .single();
     
@@ -233,6 +233,20 @@ export async function GET(request: NextRequest) {
       ? 'OPEN' as const 
       : 'LOCKED' as const;
     
+    // Default messages if not set
+    const defaultHostSelf = [
+      { emoji: '👑', text: 'Psst... värden är faktiskt ganska fantastisk. (Det är du!)' },
+      { emoji: '🪞', text: 'Ledtråd: Värden tittar på dig i spegeln varje morgon.' },
+    ];
+    const defaultLipsSealed = [
+      { emoji: '🤫', text: 'Our lips are sealed — avslöjar vi en ledtråd kan ni gissa vem!' },
+      { emoji: '🤐', text: 'Tyst som en mus — vi kan inte säga mer utan att avslöja!' },
+    ];
+    const defaultMysteryHost = [
+      { emoji: '🎭', text: 'Dina värdar är ett mysterium! Vem kan det vara?' },
+      { emoji: '✨', text: 'Överraskning väntar — vi avslöjar inget!' },
+    ];
+    
     const response: EnvelopeStatusResponse = {
       server_time: now.toISOString(),
       event_id: eventId,
@@ -243,6 +257,11 @@ export async function GET(request: NextRequest) {
         reveals_at: `${event.event_date}T${event.afterparty_time ?? event.dessert_time}`,
         location: afterpartyState === 'OPEN' ? event.afterparty_location : null,
         description: afterpartyState === 'OPEN' ? event.afterparty_description : null,
+      },
+      messages: {
+        host_self: event.host_self_messages?.length ? event.host_self_messages : defaultHostSelf,
+        lips_sealed: event.lips_sealed_messages?.length ? event.lips_sealed_messages : defaultLipsSealed,
+        mystery_host: event.mystery_host_messages?.length ? event.mystery_host_messages : defaultMysteryHost,
       },
     };
     

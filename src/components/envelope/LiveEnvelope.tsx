@@ -21,15 +21,28 @@ import type { EnvelopeState, CourseEnvelopeStatus, Course } from '@/types/databa
 // Props & Types
 // ============================================
 
+interface CustomMessage {
+  emoji: string;
+  text: string;
+}
+
 interface LiveEnvelopeProps {
   course: CourseEnvelopeStatus;
   onOpen?: () => void;
   className?: string;
+  messages?: {
+    host_self: CustomMessage[];
+    lips_sealed: CustomMessage[];
+    mystery_host: CustomMessage[];
+  };
 }
 
 interface EnvelopeContentProps {
   course: CourseEnvelopeStatus;
   isOpen: boolean;
+  hostSelfMessages: CustomMessage[];
+  lipsSealedMessages: CustomMessage[];
+  mysteryHostMessages: CustomMessage[];
 }
 
 // ============================================
@@ -250,8 +263,13 @@ function fireConfetti() {
 // Envelope Content Component
 // ============================================
 
-function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
+function EnvelopeContent({ course, isOpen, hostSelfMessages, lipsSealedMessages, mysteryHostMessages }: EnvelopeContentProps) {
   const state = course.state;
+  
+  // Helper to get message by index
+  const getHostSelfMsg = (i: number) => hostSelfMessages[i % hostSelfMessages.length];
+  const getLipsSealedMsg = (i: number) => lipsSealedMessages[i % lipsSealedMessages.length];
+  const getMysteryHostMsg = (i: number) => mysteryHostMessages[i % mysteryHostMessages.length];
   
   return (
     <motion.div
@@ -290,24 +308,24 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
       {/* EDGE CASE: You ARE the host - show fun self-referential messages */}
       {course.is_self_host && ['CLUE_1', 'CLUE_2'].includes(state) && (
         <motion.div variants={itemVariants} className="bg-amber-50 rounded-lg p-4 text-center border border-amber-200">
-          <p className="text-3xl mb-2">{getHostSelfMessage(state === 'CLUE_1' ? 0 : 1).emoji}</p>
-          <p className="text-sm text-amber-700 font-medium">{getHostSelfMessage(state === 'CLUE_1' ? 0 : 1).text}</p>
+          <p className="text-3xl mb-2">{getHostSelfMsg(state === 'CLUE_1' ? 0 : 1).emoji}</p>
+          <p className="text-sm text-amber-700 font-medium">{getHostSelfMsg(state === 'CLUE_1' ? 0 : 1).text}</p>
         </motion.div>
       )}
 
       {/* EDGE CASE: Host has NO fun facts at all - mystery message */}
       {!course.is_self_host && !course.host_has_fun_facts && ['CLUE_1', 'CLUE_2'].includes(state) && (
         <motion.div variants={itemVariants} className="bg-indigo-50 rounded-lg p-4 text-center">
-          <p className="text-3xl mb-2">{getMysteryHostMessage(state === 'CLUE_1' ? 0 : 1).emoji}</p>
-          <p className="text-sm text-indigo-700">{getMysteryHostMessage(state === 'CLUE_1' ? 0 : 1).text}</p>
+          <p className="text-3xl mb-2">{getMysteryHostMsg(state === 'CLUE_1' ? 0 : 1).emoji}</p>
+          <p className="text-sm text-indigo-700">{getMysteryHostMsg(state === 'CLUE_1' ? 0 : 1).text}</p>
         </motion.div>
       )}
 
       {/* EDGE CASE: CLUE_1 but no clues available (host HAS fun facts but privacy) */}
       {!course.is_self_host && course.host_has_fun_facts && state === 'CLUE_1' && course.clues.length === 0 && (
         <motion.div variants={itemVariants} className="bg-purple-50 rounded-lg p-4 text-center">
-          <p className="text-3xl mb-2">{getLipsSealedMessage(0).emoji}</p>
-          <p className="text-sm text-purple-700">{getLipsSealedMessage(0).text}</p>
+          <p className="text-3xl mb-2">{getLipsSealedMsg(0).emoji}</p>
+          <p className="text-sm text-purple-700">{getLipsSealedMsg(0).text}</p>
         </motion.div>
       )}
       
@@ -327,8 +345,8 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
       {/* EDGE CASE: CLUE_2 but NO clues at all - lips sealed */}
       {!course.is_self_host && course.host_has_fun_facts && state === 'CLUE_2' && course.clues.length === 0 && (
         <motion.div variants={itemVariants} className="bg-purple-50 rounded-lg p-4 text-center">
-          <p className="text-3xl mb-2">{getLipsSealedMessage(1).emoji}</p>
-          <p className="text-sm text-purple-700">{getLipsSealedMessage(1).text}</p>
+          <p className="text-3xl mb-2">{getLipsSealedMsg(1).emoji}</p>
+          <p className="text-sm text-purple-700">{getLipsSealedMsg(1).text}</p>
         </motion.div>
       )}
 
@@ -419,7 +437,11 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
 // Main Component
 // ============================================
 
-export function LiveEnvelope({ course, onOpen, className = '' }: LiveEnvelopeProps) {
+export function LiveEnvelope({ course, onOpen, className = '', messages }: LiveEnvelopeProps) {
+  // Use custom messages or fall back to defaults
+  const hostSelfMessages = messages?.host_self ?? HOST_SELF_MESSAGES;
+  const lipsSealedMessages = messages?.lips_sealed ?? LIPS_SEALED_MESSAGES;
+  const mysteryHostMessages = messages?.mystery_host ?? MYSTERY_HOST_MESSAGES;
   const [isOpen, setIsOpen] = useState(false);
   const [hasAnimated, setHasAnimated] = useState(false);
   const [animationState, setAnimationState] = useState<'idle' | 'curious' | 'vibrate' | 'glow'>('idle');
@@ -543,7 +565,13 @@ export function LiveEnvelope({ course, onOpen, className = '' }: LiveEnvelopePro
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <EnvelopeContent course={course} isOpen={isOpen} />
+              <EnvelopeContent 
+                course={course} 
+                isOpen={isOpen}
+                hostSelfMessages={hostSelfMessages}
+                lipsSealedMessages={lipsSealedMessages}
+                mysteryHostMessages={mysteryHostMessages}
+              />
             </motion.div>
           )}
         </AnimatePresence>
