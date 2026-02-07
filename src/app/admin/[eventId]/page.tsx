@@ -254,7 +254,15 @@ export default function EventAdminPage() {
         
         {/* Envelope Controls */}
         <div className="bg-white rounded-xl p-6 shadow mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">⏰ Kuvertkontroller</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">⏰ Kuvertkontroller</h2>
+            <Link 
+              href={`/admin/${eventId}/timing`}
+              className="text-sm bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-200 transition-colors"
+            >
+              ⚙️ Timing-inställningar
+            </Link>
+          </div>
           
           <div className="flex flex-wrap gap-4 mb-4">
             <div>
