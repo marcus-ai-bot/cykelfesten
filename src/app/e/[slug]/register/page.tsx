@@ -98,19 +98,19 @@ export default function RegisterPage() {
       const parseAllergies = (str: string): string[] => 
         str.split(',').map(s => s.trim()).filter(Boolean);
       
-      // Build fun facts JSON (only non-empty values)
-      const buildFunFacts = (facts: typeof form.invited_fun_facts) => {
-        const result: Record<string, unknown> = {};
-        if (facts.musicDecade) result.musicDecade = facts.musicDecade;
-        if (facts.pet) result.pet = { type: facts.pet };
-        if (facts.talent) result.talent = facts.talent;
-        if (facts.firstJob) result.firstJob = facts.firstJob;
-        if (facts.dreamDestination) result.dreamDestination = facts.dreamDestination;
-        if (facts.instruments) result.instruments = facts.instruments.split(',').map(s => s.trim()).filter(Boolean);
-        if (facts.sport) result.sport = facts.sport;
-        if (facts.unknownFact) result.unknownFact = facts.unknownFact;
-        if (facts.importantYear) result.importantYear = { year: parseInt(facts.importantYear) };
-        return Object.keys(result).length > 0 ? result : null;
+      // Build fun facts as array of readable strings (for clue system)
+      const buildFunFacts = (facts: typeof form.invited_fun_facts): string[] => {
+        const result: string[] = [];
+        if (facts.musicDecade) result.push(`Tycker att ${facts.musicDecade}-talets musik var bäst`);
+        if (facts.pet) result.push(`Har husdjur: ${facts.pet}`);
+        if (facts.talent) result.push(`Hemligt talent: ${facts.talent}`);
+        if (facts.firstJob) result.push(`Första jobbet var ${facts.firstJob}`);
+        if (facts.dreamDestination) result.push(`Drömresmål: ${facts.dreamDestination}`);
+        if (facts.instruments) result.push(`Spelar ${facts.instruments}`);
+        if (facts.sport) result.push(`Sportar: ${facts.sport}`);
+        if (facts.unknownFact) result.push(facts.unknownFact);
+        if (facts.importantYear) result.push(`Viktigt år: ${facts.importantYear}`);
+        return result;
       };
       
       // Insert couple
@@ -348,9 +348,23 @@ export default function RegisterPage() {
             <p className="text-purple-600 text-sm mb-1">
               Hjälp oss skapa "På spåret"-känsla! Dina svar blir kluriga ledtrådar för värdparet.
             </p>
-            <p className="text-purple-500 text-xs mb-4">
+            <p className="text-purple-500 text-xs mb-2">
               🔒 Helt frivilligt • 🗑️ Raderas automatiskt dagen efter festen
             </p>
+            {/* Fun facts counter */}
+            {(() => {
+              const invitedCount = Object.values(form.invited_fun_facts).filter(v => v).length;
+              const partnerCount = hasPartner ? Object.values(form.partner_fun_facts).filter(v => v).length : 0;
+              const total = invitedCount + partnerCount;
+              const needed = 6;
+              const isGood = total >= needed;
+              return (
+                <div className={`text-xs px-3 py-2 rounded-lg mb-4 ${isGood ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                  🔮 Ledtrådar ifyllda: <span className="font-bold">{total}</span>/{needed}
+                  {isGood ? ' ✅ Perfekt!' : ` — Fyll i ${needed - total} till för unika ledtrådar per rätt`}
+                </div>
+              );
+            })()}
             
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
