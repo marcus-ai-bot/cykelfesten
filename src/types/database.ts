@@ -281,6 +281,7 @@ export interface CourseEnvelopeStatus {
   type: Course;
   state: EnvelopeState;
   clues: RevealedClue[];
+  clue_pool: string[] | null;  // All participants' clues shuffled (for CLUE_1)
   street: StreetReveal | null;
   number: number | null;
   full_address: FullAddressReveal | null;
@@ -291,6 +292,27 @@ export interface CourseEnvelopeStatus {
   is_self_host: boolean;  // True if the guest IS the host for this course
   host_has_fun_facts: boolean;  // True if host has any fun facts
   cycling_meters: number | null;  // Distance to destination
+}
+
+// Dessert special reveals (afterparty info)
+export interface DessertStats {
+  total_couples: number;
+  total_distance_km: number;
+  total_dishes: number;
+  vegetarian_dishes: number;
+  longest_cycle_km: number;
+}
+
+export interface AfterpartyReveal {
+  time: string;
+  location: string;
+  host_names: string[];
+  door_code: string | null;
+  bring_own_drinks: boolean;
+  notes: string | null;
+  cycling_minutes_sober: number;
+  cycling_minutes_tipsy: number;
+  coordinates: { lat: number; lng: number } | null;
 }
 
 export interface AfterpartyStatus {

@@ -132,6 +132,24 @@ export async function GET(request: NextRequest) {
       .eq('event_id', eventId)
       .single();
     
+    // 6b. Get ALL participants' fun facts for the clue pool (CLUE_1)
+    const { data: allCouples } = await supabase
+      .from('couples')
+      .select('id, invited_fun_facts, partner_fun_facts')
+      .eq('event_id', eventId)
+      .eq('confirmed', true);
+    
+    // Build shuffled clue pool from all participants
+    const allFunFacts: string[] = [];
+    for (const c of allCouples ?? []) {
+      const invited = Array.isArray(c.invited_fun_facts) ? c.invited_fun_facts : [];
+      const partner = Array.isArray(c.partner_fun_facts) ? c.partner_fun_facts : [];
+      allFunFacts.push(...invited.filter((f): f is string => typeof f === 'string'));
+      allFunFacts.push(...partner.filter((f): f is string => typeof f === 'string'));
+    }
+    // Shuffle the pool
+    const shuffledCluePool = allFunFacts.sort(() => Math.random() - 0.5);
+    
     // 7. Build response for each course
     const courses: CourseEnvelopeStatus[] = [];
     
@@ -144,6 +162,7 @@ export async function GET(request: NextRequest) {
           type: courseType,
           state: 'LOCKED',
           clues: [],
+          clue_pool: null,
           street: null,
           number: null,
           full_address: null,
@@ -189,11 +208,16 @@ export async function GET(request: NextRequest) {
         : [];
       const hostHasFunFacts = hostInvitedFacts.length > 0 || hostPartnerFacts.length > 0;
       
+      // Clue pool: show all participants' clues at CLUE_1 for starter/main (not dessert, not self-host)
+      const isSelfHost = envelope.host_couple_id === coupleId;
+      const showCluePool = state === 'CLUE_1' && courseType !== 'dessert' && !isSelfHost;
+      
       // Build course status
       const courseStatus: CourseEnvelopeStatus = {
         type: courseType,
         state,
         clues: revealedClues,
+        clue_pool: showCluePool ? shuffledCluePool : null,
         street: shouldShowStreet(state) && hostStreetInfo ? {
           name: hostStreetInfo.street_name ?? '',
           range: `${hostStreetInfo.number_range_low}-${hostStreetInfo.number_range_high}`,
@@ -219,7 +243,7 @@ export async function GET(request: NextRequest) {
         allergies_summary: state === 'OPEN' 
           ? getAllergiesSummary(envelope.host_couple_id, coupleId) 
           : null,
-        is_self_host: envelope.host_couple_id === coupleId,
+        is_self_host: isSelfHost,
         host_has_fun_facts: hostHasFunFacts,
         cycling_meters: envelope.cycling_minutes ? envelope.cycling_minutes * 250 : null, // ~250m per minute cycling
       };

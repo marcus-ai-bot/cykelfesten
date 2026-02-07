@@ -305,6 +305,28 @@ function EnvelopeContent({ course, isOpen, hostSelfMessages, lipsSealedMessages,
         </motion.div>
       )}
 
+      {/* CLUE_1 with clue pool: Show all participants' clues shuffled */}
+      {state === 'CLUE_1' && course.clue_pool && course.clue_pool.length > 0 && (
+        <motion.div variants={itemVariants} className="space-y-3">
+          <h4 className="text-sm font-medium text-amber-700 flex items-center gap-1">
+            🎭 Kvällens deltagare — vem är vem?
+          </h4>
+          <p className="text-xs text-gray-500 mb-2">
+            Någon av dessa är era värdar ikväll...
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {course.clue_pool.map((clue, i) => (
+              <span 
+                key={i} 
+                className="inline-block bg-amber-100 text-amber-800 text-xs px-3 py-1.5 rounded-full"
+              >
+                {clue}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* EDGE CASE: You ARE the host - show fun self-referential messages */}
       {course.is_self_host && ['CLUE_1', 'CLUE_2'].includes(state) && (
         <motion.div variants={itemVariants} className="bg-amber-50 rounded-lg p-4 text-center border border-amber-200">
