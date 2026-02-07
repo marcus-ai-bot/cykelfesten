@@ -274,16 +274,17 @@ function EnvelopeContent({ course, isOpen }: EnvelopeContentProps) {
               ))}
             </p>
           )}
-          {course.full_address.coordinates && (
-            <a
-              href={`https://maps.google.com/?q=${course.full_address.coordinates.lat},${course.full_address.coordinates.lng}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-green-700 hover:text-green-800 underline"
-            >
-              🗺️ Öppna i kartan
-            </a>
-          )}
+          <a
+            href={course.full_address.coordinates 
+              ? `https://maps.google.com/?q=${course.full_address.coordinates.lat},${course.full_address.coordinates.lng}`
+              : `https://maps.google.com/?q=${encodeURIComponent(`${course.full_address.street} ${course.full_address.number}, ${course.full_address.city}`)}`
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            🗺️ Öppna i kartan
+          </a>
         </motion.div>
       )}
 
