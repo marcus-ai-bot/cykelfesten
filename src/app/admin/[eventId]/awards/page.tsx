@@ -159,14 +159,32 @@ export default function AdminAwardsPage() {
   }
   
   async function recalculateAwards() {
-    if (!confirm('Detta kommer att beräkna om alla awards baserat på deltagardata. Fortsätt?')) {
+    if (!confirm('Detta kommer att beräkna om alla awards baserat på deltagardata och ersätta befintliga tilldelningar. Fortsätt?')) {
       return;
     }
     
     setSaving(true);
     
-    // TODO: Implement award recalculation API
-    alert('🚧 Automatisk beräkning kommer snart!\n\nJust nu: Tilldela awards manuellt i fliken "Tilldelning".');
+    try {
+      const response = await fetch('/api/admin/calculate-awards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        alert('❌ Fel: ' + (result.error || 'Okänt fel'));
+      } else {
+        alert(`✅ ${result.message}\n\nKlicka OK för att ladda om listan.`);
+        // Reload assignments
+        await loadData();
+        setActiveTab('assignments');
+      }
+    } catch (error) {
+      alert('❌ Nätverksfel: ' + (error as Error).message);
+    }
     
     setSaving(false);
   }
