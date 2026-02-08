@@ -817,9 +817,30 @@ export default function WrapPage() {
     }
   }
   
-  function handleSlideClick() {
-    if (currentSlide < slides.length - 1) {
-      setCurrentSlide(prev => prev + 1);
+  function handleSlideClick(e: React.MouseEvent) {
+    // Ignore clicks on buttons or interactive elements
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'BUTTON' || target.closest('button')) {
+      return;
+    }
+    
+    // Get click position relative to viewport
+    const clickX = e.clientX;
+    const screenWidth = window.innerWidth;
+    
+    // Left 30% = back, Right 70% = forward (like Facebook/Instagram stories)
+    if (clickX < screenWidth * 0.3) {
+      // Go back
+      if (currentSlide > 0) {
+        setCurrentSlide(prev => prev - 1);
+        setIsPlaying(false); // Pause auto-advance when manually navigating
+      }
+    } else {
+      // Go forward
+      if (currentSlide < slides.length - 1) {
+        setCurrentSlide(prev => prev + 1);
+        setIsPlaying(false); // Pause auto-advance when manually navigating
+      }
     }
   }
   
@@ -957,7 +978,7 @@ export default function WrapPage() {
         {slides[currentSlide]}
       </AnimatePresence>
       
-      {/* Tap hint */}
+      {/* Tap hint - shows back/forward zones */}
       {currentSlide < slides.length - 1 && (
         <motion.p
           initial={{ opacity: 0 }}
@@ -965,7 +986,7 @@ export default function WrapPage() {
           transition={{ delay: 2 }}
           className="absolute bottom-8 left-0 right-0 text-center text-white/50 text-sm"
         >
-          Tryck för nästa →
+          {currentSlide > 0 ? '← Vänster: bakåt | Höger: framåt →' : 'Tryck för nästa →'}
         </motion.p>
       )}
       

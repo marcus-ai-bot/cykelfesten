@@ -236,20 +236,44 @@ export default function AwardPage() {
       // Dynamic import html2canvas
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(badgeRef.current, {
-        backgroundColor: null,
+        backgroundColor: '#1e1b4b', // Fallback bg color
         scale: 2,
+        useCORS: true,
+        logging: false,
       });
       
-      const url = canvas.toDataURL('image/png');
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/png');
+      });
+      
+      const fileName = `cykelfesten-${data.award.id}-${data.person_name.replace(/\s/g, '-')}.png`;
+      
+      // Try native share with file (works on mobile)
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], fileName, { type: 'image/png' });
+        const shareData = { files: [file] };
+        
+        if (navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          return;
+        }
+      }
+      
+      // Fallback: Download link
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `cykelfesten-${data.award.id}-${data.person_name.replace(/\s/g, '-')}.png`;
+      link.download = fileName;
       link.href = url;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
       alert('Diplom nedladdat! 🎉');
     } catch (e) {
       console.error('Badge download failed:', e);
-      alert('Kunde inte ladda ner diplom. Prova att ta en screenshot istället!');
+      // Mobile fallback: Show instructions
+      alert('Tips: Håll fingret på diplomet ovan och välj "Spara bild" eller ta en screenshot! 📱');
     }
   }
   
