@@ -1,13 +1,20 @@
 'use client';
 
 /**
- * Award Wrap - Personal award reveal
+ * Award Wrap v2 - Individual person-based award reveal
  * 
- * Each person gets ONE unique award.
- * Animated reveal with confetti!
+ * URL: /award?coupleId=xxx&person=invited OR /award?coupleId=xxx&person=partner
+ * 
+ * 6-step flow:
+ * 1. Intro: "{Name}, du har fått en utmärkelse!"
+ * 2. Drumroll: 🥁 with sound
+ * 3. Reveal: Award with confetti + celebration sound
+ * 4. Context: Explanation of what the award means
+ * 5. Badge: Downloadable diploma/PNG
+ * 6. Share: Social sharing with "Vilken utmärkelse fick DU?"
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,10 +22,12 @@ import confetti from 'canvas-confetti';
 import { AWARDS, type Award } from '@/lib/awards/calculate';
 
 interface AwardData {
-  couple_name: string;
+  person_name: string;              // Individual name, not couple
   event_name: string;
+  event_date: string;
   award: Award;
   value: string | null;
+  explanation: string;              // Personalized explanation
 }
 
 export default function AwardPage() {
@@ -26,16 +35,20 @@ export default function AwardPage() {
   const searchParams = useSearchParams();
   const slug = params.slug as string;
   const coupleId = searchParams.get('coupleId');
+  const personType = searchParams.get('person') || 'invited'; // 'invited' or 'partner'
   
   const [data, setData] = useState<AwardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<'intro' | 'drumroll' | 'reveal'>('intro');
+  const [step, setStep] = useState<'intro' | 'drumroll' | 'reveal' | 'context' | 'badge' | 'share'>('intro');
+  
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const badgeRef = useRef<HTMLDivElement | null>(null);
   
   const supabase = createClient();
   
   useEffect(() => {
     loadData();
-  }, [slug, coupleId]);
+  }, [slug, coupleId, personType]);
   
   async function loadData() {
     if (!coupleId) {
@@ -55,35 +68,86 @@ export default function AwardPage() {
       return;
     }
     
-    // Get award assignment
+    const event = couple.events as any;
+    
+    // Determine which person we're showing
+    const isPartner = personType === 'partner' && couple.partner_name;
+    const personName = isPartner ? couple.partner_name : couple.invited_name;
+    
+    // Get THIS person's award assignment
     const { data: assignment } = await supabase
       .from('award_assignments')
       .select('*')
       .eq('couple_id', coupleId)
-      .single();
+      .eq('person_type', personType)
+      .maybeSingle();
     
     if (!assignment) {
       // No award assigned yet - show default
+      const defaultAward = AWARDS.find(a => a.id === 'wildcard') || AWARDS[0];
       setData({
-        couple_name: `${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`,
-        event_name: (couple.events as any)?.name || '',
-        award: AWARDS.find(a => a.id === 'wildcard') || AWARDS[0],
+        person_name: personName || 'Deltagare',
+        event_name: event?.name || '',
+        event_date: event?.event_date || '',
+        award: defaultAward,
         value: null,
+        explanation: getExplanation(defaultAward, null, personName),
       });
       setLoading(false);
       return;
     }
     
-    const award = AWARDS.find(a => a.id === assignment.award_id);
+    const award = AWARDS.find(a => a.id === assignment.award_id) || AWARDS[0];
     
     setData({
-      couple_name: `${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`,
-      event_name: (couple.events as any)?.name || '',
-      award: award || AWARDS[0],
+      person_name: personName || 'Deltagare',
+      event_name: event?.name || '',
+      event_date: event?.event_date || '',
+      award,
       value: assignment.value,
+      explanation: getExplanation(award, assignment.value, personName),
     });
     
     setLoading(false);
+  }
+  
+  function getExplanation(award: Award, value: string | null, name: string | null): string {
+    const displayName = name || 'Du';
+    
+    switch (award.id) {
+      case 'longest_distance':
+        return `${displayName} cyklade längst av alla deltagare! ${value ? `Hela ${value} — det är en sann prestation!` : 'Imponerande!'}`;
+      
+      case 'shortest_distance':
+        return `${displayName} hade tur med placeringen och fick njuta av en kort cykeltur. ${value ? `Bara ${value}!` : 'Praktiskt!'}`;
+      
+      case 'oldest':
+        return `${displayName} representerar erfarenhet och visdom på festen. Ålder är bara en siffra, men din energi är tidlös!`;
+      
+      case 'youngest':
+        return `${displayName} är kvällens nya stjärna! Frisk energi och nya perspektiv är alltid välkomna.`;
+      
+      case 'first_signup':
+        return `${displayName} var först att anmäla sig — det visar verklig entusiasm!`;
+      
+      case 'last_signup':
+        return `${displayName} väntade in det rätta ögonblicket. Fashionably late till anmälan, men på plats när det gäller!`;
+      
+      case 'most_fun_facts':
+        return `${displayName} delade flest fun facts — en riktig berättare som gör kvällen levande!`;
+      
+      case 'least_fun_facts':
+        return `${displayName} behöll mystiken. Ibland säger tystnaden mer än tusen ord...`;
+      
+      case 'only_vegetarian':
+        return `${displayName} representerar det gröna på bordet! Tack för att du visar att god mat kan vara hållbar.`;
+      
+      case 'wildcard':
+        return `${displayName} drog wildcarden! Slumpen valde dig till något alldeles speciellt.`;
+      
+      default:
+        return `Grattis ${displayName}! Du har gjort kvällen minnesvärd.`;
+    }
   }
   
   function startReveal() {
@@ -197,7 +261,7 @@ export default function AwardPage() {
           >
             🏆
           </motion.div>
-          <h1 className="text-3xl font-bold mb-2">{data.couple_name}</h1>
+          <h1 className="text-3xl font-bold mb-2">{data.person_name}</h1>
           <p className="text-purple-300 mb-2">Du har fått en utmärkelse!</p>
           <p className="text-gray-400 text-sm mb-8">{data.event_name}</p>
           
@@ -320,7 +384,7 @@ export default function AwardPage() {
           transition={{ delay: 1 }}
           className="text-white/70 mb-8"
         >
-          {data.couple_name}
+          {data.person_name}
         </motion.p>
         
         {/* Share button */}
