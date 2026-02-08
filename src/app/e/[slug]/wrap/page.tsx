@@ -904,7 +904,7 @@ export default function WrapPage() {
           >
             ✨
           </motion.div>
-          <h1 className="text-3xl font-bold mb-2">{data.couple_name}</h1>
+          <h1 className="text-3xl font-bold mb-2">{data.person_name}</h1>
           <p className="text-purple-200 mb-2">Din Cykelfest Wrapped</p>
           <p className="text-purple-300 text-sm mb-8">🎵 Musik: {data.music_decade}</p>
           <motion.button
