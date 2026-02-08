@@ -25,7 +25,6 @@ interface Person {
   fun_facts_count: number;
   distance_km: number;
   registered_at: string;
-  is_vegetarian: boolean;
   allergies_count: number;
 }
 
@@ -73,8 +72,6 @@ export async function POST(request: NextRequest) {
         partner_fun_facts,
         invited_allergies,
         partner_allergies,
-        invited_dietary,
-        partner_dietary,
         created_at
       `)
       .eq('event_id', eventId)
@@ -125,7 +122,6 @@ export async function POST(request: NextRequest) {
         fun_facts_count: (couple.invited_fun_facts as string[] | null)?.length || 0,
         distance_km: Math.round(personDistance * 10) / 10,
         registered_at: couple.created_at,
-        is_vegetarian: couple.invited_dietary === 'vegetarian',
         allergies_count: (couple.invited_allergies as string[] | null)?.length || 0,
       });
       
@@ -139,7 +135,6 @@ export async function POST(request: NextRequest) {
           fun_facts_count: (couple.partner_fun_facts as string[] | null)?.length || 0,
           distance_km: Math.round(personDistance * 10) / 10,
           registered_at: couple.created_at,
-          is_vegetarian: couple.partner_dietary === 'vegetarian',
           allergies_count: (couple.partner_allergies as string[] | null)?.length || 0,
         });
       }
@@ -254,11 +249,8 @@ export async function POST(request: NextRequest) {
       tryAssign(winner, 'least_fun_facts', null);
     }
     
-    // 11. Only vegetarian
-    const vegetarians = persons.filter(p => p.is_vegetarian);
-    if (vegetarians.length === 1) {
-      tryAssign(vegetarians[0], 'only_vegetarian', null);
-    }
+    // 11. Only vegetarian - SKIPPED (no dietary column in database)
+    // Would need to add dietary preferences to couples table
     
     // 12. Most allergies
     if (byAllergies.length > 0 && byAllergies[0].allergies_count > 0) {
