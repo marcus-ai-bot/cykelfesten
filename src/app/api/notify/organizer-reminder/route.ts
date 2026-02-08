@@ -57,18 +57,28 @@ export async function POST(request: NextRequest) {
     });
     
     // Send email via Resend
+    const adminUrl = `${BASE_URL}/admin/${eventId}`;
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: FROM_EMAIL,
       to: event.organizer_email,
       subject: `🎉 ${event.name} är klart – dags att skicka wraps!`,
-      react: OrganizerReminderEmail({
-        eventName: event.name,
-        eventDate,
-        adminUrl: `${BASE_URL}/admin/${eventId}`,
-        funFactsUrl: `${BASE_URL}/admin/${eventId}/fun-facts`,
-        missingFunFacts,
-        totalCouples,
-      }),
+      html: `
+        <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #4f46e5;">🎉 Dags att avsluta ${event.name}!</h1>
+          <p>Hej arrangör!</p>
+          <p>Eventet <strong>${event.name}</strong> (${eventDate}) är nu avslutat.</p>
+          <p>Innan vi skickar ut wrap-sammanfattningar till gästerna behöver du:</p>
+          <ul>
+            <li><strong>Fyll i fun facts</strong> - ${missingFunFacts} av ${totalCouples} par saknar fun facts</li>
+            <li><strong>Granska wraps</strong> - Kolla att allt ser bra ut</li>
+            <li><strong>Godkänn & skicka</strong> - Klicka på knappen i admin</li>
+          </ul>
+          <p style="text-align: center; margin: 30px 0;">
+            <a href="${adminUrl}" style="display: inline-block; background: #4f46e5; color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; font-weight: bold;">Öppna Admin →</a>
+          </p>
+          <p style="color: #6b7280; font-size: 14px;">Detta mail skickades automatiskt från Cykelfesten.</p>
+        </div>
+      `,
     });
     
     if (emailError) {
@@ -92,6 +102,9 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('Error sending organizer reminder:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 }
