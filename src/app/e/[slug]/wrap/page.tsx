@@ -124,7 +124,7 @@ export default function WrapPage() {
     // Get couple with fun_facts and event
     const { data: couple } = await supabase
       .from('couples')
-      .select('*, events(*)')
+      .select('*, invited_fun_facts, partner_fun_facts, events(*)')
       .eq('id', coupleId)
       .single();
     
@@ -154,12 +154,16 @@ export default function WrapPage() {
     const distanceKm = Math.round(totalCyclingMin * 0.25 * 10) / 10;
     const peopleMet = Math.max(0, ((allCouples?.length || 1) - 1) * 2);
     
-    // Get music based on fun facts
-    const music = getMusicFile(couple.fun_facts);
+    // Get music based on fun facts (combine invited + partner)
+    const allFunFacts = [
+      ...(couple.invited_fun_facts || []),
+      ...(couple.partner_fun_facts || [])
+    ];
+    const music = getMusicFile(allFunFacts.length > 0 ? allFunFacts : null);
     setMusicSrc(music);
     
-    // Check if couple has an award
-    const hasAward = !!couple.award_type;
+    // Check if couple has an award (column might not exist yet)
+    const hasAward = !!(couple as any).award_type;
     
     setData({
       couple_name: `${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`,
@@ -172,7 +176,7 @@ export default function WrapPage() {
                     music.includes('2000s') ? '2000-tal' :
                     music.includes('2010s') ? '2010-tal' :
                     music.includes('2020s') ? '2020-tal' : 'festlig',
-      wrap_stats: event.wrap_stats || null,
+      wrap_stats: (event as any).wrap_stats || null,
       has_award: hasAward,
     });
     
