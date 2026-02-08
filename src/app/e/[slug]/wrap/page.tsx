@@ -3,11 +3,17 @@
 /**
  * Personal Wrap - Animated story like Spotify Wrapped
  * 
- * 4 slides with animations and optional music:
+ * 10 slides with animations and decade-based music:
  * 1. "Din kväll" intro
- * 2. Distance cycled
- * 3. People met
- * 4. Thank you + share CTA
+ * 2. Collective distance (all participants)
+ * 3. Your distance
+ * 4. People met
+ * 5. Fun fact: shortest ride
+ * 6. Fun fact: longest ride
+ * 7. Dishes served
+ * 8. Last guest departed (if available)
+ * 9. Award teaser
+ * 10. Thank you + share CTA
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -15,17 +21,55 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface WrapStats {
+  total_distance_km: number;
+  total_couples: number;
+  total_people: number;
+  total_portions: number;
+  shortest_ride_meters: number;
+  shortest_ride_couple: string;
+  longest_ride_meters: number;
+  longest_ride_couple: string;
+  districts_count: number;
+  fun_facts_count: number;
+  last_guest_departure: string | null;
+}
+
 interface WrapData {
   couple_name: string;
   event_name: string;
   event_date: string;
   distance_km: number;
   people_met: number;
-  dishes_eaten: number;
-  hosts_visited: string[];
+  music_decade: string;
+  wrap_stats: WrapStats | null;
+  has_award: boolean;
 }
 
 const SLIDE_DURATION = 4000; // 4 seconds per slide
+
+// Map decade preferences to music files
+function getMusicFile(funFacts: string[] | null): string {
+  if (!funFacts) return '/music/default.mp3';
+  
+  const decadeKeywords: Record<string, string[]> = {
+    '80s': ['80-tal', '80s', 'eighties', '1980'],
+    '90s': ['90-tal', '90s', 'nineties', '1990'],
+    '2000s': ['2000-tal', '2000s', 'nollnoll', '00-tal'],
+    '2010s': ['2010-tal', '2010s', 'tio-tal'],
+    '2020s': ['2020-tal', '2020s', 'tjugo-tal', 'nu', 'modern'],
+  };
+  
+  const allFacts = funFacts.join(' ').toLowerCase();
+  
+  for (const [decade, keywords] of Object.entries(decadeKeywords)) {
+    if (keywords.some(kw => allFacts.includes(kw))) {
+      return `/music/${decade}.mp3`;
+    }
+  }
+  
+  return '/music/default.mp3';
+}
 
 export default function WrapPage() {
   const params = useParams();
@@ -38,22 +82,30 @@ export default function WrapPage() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [musicSrc, setMusicSrc] = useState('/music/default.mp3');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const supabase = createClient();
   
-  const TOTAL_SLIDES = 4;
+  // Dynamic slides based on available data
+  const [slides, setSlides] = useState<React.ReactNode[]>([]);
   
   useEffect(() => {
     loadData();
   }, [slug, coupleId]);
   
+  useEffect(() => {
+    if (data) {
+      buildSlides();
+    }
+  }, [data]);
+  
   // Auto-advance slides
   useEffect(() => {
-    if (!isPlaying || !hasStarted) return;
+    if (!isPlaying || !hasStarted || slides.length === 0) return;
     
     const timer = setTimeout(() => {
-      if (currentSlide < TOTAL_SLIDES - 1) {
+      if (currentSlide < slides.length - 1) {
         setCurrentSlide(prev => prev + 1);
       } else {
         setIsPlaying(false);
@@ -61,7 +113,7 @@ export default function WrapPage() {
     }, SLIDE_DURATION);
     
     return () => clearTimeout(timer);
-  }, [currentSlide, isPlaying, hasStarted]);
+  }, [currentSlide, isPlaying, hasStarted, slides.length]);
   
   async function loadData() {
     if (!coupleId) {
@@ -69,7 +121,7 @@ export default function WrapPage() {
       return;
     }
     
-    // Get couple and event
+    // Get couple with fun_facts and event
     const { data: couple } = await supabase
       .from('couples')
       .select('*, events(*)')
@@ -86,7 +138,7 @@ export default function WrapPage() {
     // Get envelopes for this couple
     const { data: envelopes } = await supabase
       .from('envelopes')
-      .select('*, host_couple:couples!envelopes_host_couple_id_fkey(invited_name, partner_name)')
+      .select('*')
       .eq('couple_id', coupleId)
       .eq('match_plan_id', event.active_match_plan_id);
     
@@ -97,17 +149,17 @@ export default function WrapPage() {
       .eq('event_id', event.id)
       .eq('confirmed', true);
     
-    // Calculate stats
+    // Calculate personal stats
     const totalCyclingMin = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes || 0), 0) || 0;
     const distanceKm = Math.round(totalCyclingMin * 0.25 * 10) / 10;
     const peopleMet = Math.max(0, ((allCouples?.length || 1) - 1) * 2);
     
-    const hostNames = envelopes
-      ?.filter(e => e.host_couple && e.couple_id !== e.host_couple_id)
-      .map(e => {
-        const host = e.host_couple as any;
-        return `${host.invited_name}${host.partner_name ? ` & ${host.partner_name}` : ''}`;
-      }) || [];
+    // Get music based on fun facts
+    const music = getMusicFile(couple.fun_facts);
+    setMusicSrc(music);
+    
+    // Check if couple has an award
+    const hasAward = !!couple.award_type;
     
     setData({
       couple_name: `${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`,
@@ -115,11 +167,475 @@ export default function WrapPage() {
       event_date: event.event_date,
       distance_km: distanceKm,
       people_met: peopleMet,
-      dishes_eaten: 3,
-      hosts_visited: hostNames,
+      music_decade: music.includes('80s') ? '80-tal' : 
+                    music.includes('90s') ? '90-tal' :
+                    music.includes('2000s') ? '2000-tal' :
+                    music.includes('2010s') ? '2010-tal' :
+                    music.includes('2020s') ? '2020-tal' : 'festlig',
+      wrap_stats: event.wrap_stats || null,
+      has_award: hasAward,
     });
     
     setLoading(false);
+  }
+  
+  function buildSlides() {
+    if (!data) return;
+    
+    const newSlides: React.ReactNode[] = [];
+    const ws = data.wrap_stats;
+    
+    // Slide 1: Intro
+    newSlides.push(
+      <Slide key="intro" bg="from-violet-600 via-purple-600 to-fuchsia-600">
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="text-purple-200 text-lg mb-4"
+          >
+            {new Date(data.event_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' })}
+          </motion.p>
+          <motion.h1 
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.5, type: 'spring' }}
+            className="text-5xl font-bold mb-6"
+          >
+            Din kväll
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+            className="text-xl text-purple-100"
+          >
+            {data.event_name}
+          </motion.p>
+        </motion.div>
+      </Slide>
+    );
+    
+    // Slide 2: Collective distance (if available)
+    if (ws?.total_distance_km) {
+      newSlides.push(
+        <Slide key="collective" bg="from-emerald-500 via-teal-600 to-cyan-700">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', bounce: 0.5 }}
+              className="text-7xl mb-6"
+            >
+              🌍
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-teal-200 text-lg mb-2"
+            >
+              Tillsammans cyklade vi
+            </motion.p>
+            <motion.p 
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, type: 'spring' }}
+              className="text-7xl font-black mb-2"
+            >
+              {ws.total_distance_km}
+            </motion.p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className="text-3xl font-bold"
+            >
+              kilometer
+            </motion.p>
+          </motion.div>
+        </Slide>
+      );
+    }
+    
+    // Slide 3: Your distance
+    newSlides.push(
+      <Slide key="distance" bg="from-cyan-500 via-blue-600 to-indigo-700">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', bounce: 0.5 }}
+            className="text-8xl mb-6"
+          >
+            🚴
+          </motion.div>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="text-blue-200 text-lg mb-2"
+          >
+            Du stod för
+          </motion.p>
+          <motion.p 
+            initial={{ scale: 0.5 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.5, type: 'spring' }}
+            className="text-7xl font-black mb-2"
+          >
+            {data.distance_km}
+          </motion.p>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            className="text-3xl font-bold"
+          >
+            kilometer
+          </motion.p>
+        </motion.div>
+      </Slide>
+    );
+    
+    // Slide 4: People met
+    newSlides.push(
+      <Slide key="people" bg="from-rose-500 via-pink-600 to-fuchsia-700">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', bounce: 0.5 }}
+            className="text-8xl mb-6"
+          >
+            👥
+          </motion.div>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="text-pink-200 text-lg mb-2"
+          >
+            Du träffade
+          </motion.p>
+          <motion.p 
+            initial={{ scale: 0.5 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.5, type: 'spring' }}
+            className="text-7xl font-black mb-2"
+          >
+            {data.people_met}
+          </motion.p>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            className="text-3xl font-bold"
+          >
+            nya vänner
+          </motion.p>
+        </motion.div>
+      </Slide>
+    );
+    
+    // Slide 5: Shortest ride (fun fact)
+    if (ws?.shortest_ride_meters && ws.shortest_ride_meters < 200) {
+      newSlides.push(
+        <Slide key="shortest" bg="from-yellow-400 via-amber-500 to-orange-600">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', bounce: 0.5 }}
+              className="text-7xl mb-6"
+            >
+              ⚡
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-amber-100 text-lg mb-2"
+            >
+              Kortaste cyklingen ikväll?
+            </motion.p>
+            <motion.p 
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, type: 'spring' }}
+              className="text-6xl font-black mb-2"
+            >
+              {ws.shortest_ride_meters} meter
+            </motion.p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="text-xl text-amber-100"
+            >
+              {ws.shortest_ride_meters < 100 ? '(Över tomtgränsen! 😂)' : `av ${ws.shortest_ride_couple}`}
+            </motion.p>
+          </motion.div>
+        </Slide>
+      );
+    }
+    
+    // Slide 6: Longest ride
+    if (ws?.longest_ride_meters && ws.longest_ride_meters > 1000) {
+      newSlides.push(
+        <Slide key="longest" bg="from-indigo-500 via-purple-600 to-violet-700">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', bounce: 0.5 }}
+              className="text-7xl mb-6"
+            >
+              🏆
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-violet-200 text-lg mb-2"
+            >
+              Längsta sträckan?
+            </motion.p>
+            <motion.p 
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, type: 'spring' }}
+              className="text-6xl font-black mb-2"
+            >
+              {(ws.longest_ride_meters / 1000).toFixed(1)} km
+            </motion.p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="text-xl text-violet-100"
+            >
+              av {ws.longest_ride_couple}
+            </motion.p>
+          </motion.div>
+        </Slide>
+      );
+    }
+    
+    // Slide 7: Portions served
+    if (ws?.total_portions) {
+      newSlides.push(
+        <Slide key="food" bg="from-lime-500 via-green-600 to-emerald-700">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', bounce: 0.5 }}
+              className="text-8xl mb-6"
+            >
+              🍽️
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-green-200 text-lg mb-2"
+            >
+              Totalt serverades
+            </motion.p>
+            <motion.p 
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, type: 'spring' }}
+              className="text-7xl font-black mb-2"
+            >
+              {ws.total_portions}
+            </motion.p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className="text-3xl font-bold"
+            >
+              portioner
+            </motion.p>
+          </motion.div>
+        </Slide>
+      );
+    }
+    
+    // Slide 8: Last guest departure
+    if (ws?.last_guest_departure) {
+      newSlides.push(
+        <Slide key="lastguest" bg="from-slate-600 via-slate-700 to-slate-900">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', bounce: 0.5 }}
+              className="text-7xl mb-6"
+            >
+              🌙
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-slate-300 text-lg mb-2"
+            >
+              Sista gästen lämnade efterfesten
+            </motion.p>
+            <motion.p 
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, type: 'spring' }}
+              className="text-6xl font-black mb-2"
+            >
+              {ws.last_guest_departure}
+            </motion.p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="text-xl text-slate-300"
+            >
+              (Det var en lyckad kväll! 🎉)
+            </motion.p>
+          </motion.div>
+        </Slide>
+      );
+    }
+    
+    // Slide 9: Award teaser
+    if (data.has_award) {
+      newSlides.push(
+        <Slide key="teaser" bg="from-yellow-500 via-amber-500 to-yellow-600">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: [0, 1.2, 1], rotate: [0, 10, 0] }}
+              transition={{ duration: 0.8, type: 'spring' }}
+              className="text-8xl mb-6"
+            >
+              🎁
+            </motion.div>
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="text-3xl font-bold mb-4"
+            >
+              Du har en utmärkelse
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="text-amber-100 text-lg"
+            >
+              som väntar på dig...
+            </motion.p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.2 }}
+              className="text-amber-200 text-sm mt-4"
+            >
+              🏆 Avslöjas kl 14:00
+            </motion.p>
+          </motion.div>
+        </Slide>
+      );
+    }
+    
+    // Slide 10: Thank you + Share (always last)
+    newSlides.push(
+      <Slide key="thanks" bg="from-amber-500 via-orange-500 to-red-600">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', bounce: 0.5 }}
+            className="text-7xl mb-6"
+          >
+            ✨
+          </motion.div>
+          <motion.h2 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="text-4xl font-bold mb-4"
+          >
+            Tack för en magisk kväll!
+          </motion.h2>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="text-orange-100 text-lg mb-8"
+          >
+            {data.couple_name}
+          </motion.p>
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              shareToInstagram();
+            }}
+            className="bg-white text-orange-600 font-bold py-4 px-8 rounded-full text-lg shadow-xl"
+          >
+            📲 Dela på Instagram
+          </motion.button>
+        </motion.div>
+      </Slide>
+    );
+    
+    setSlides(newSlides);
   }
   
   function startWrap() {
@@ -133,18 +649,21 @@ export default function WrapPage() {
   }
   
   function handleSlideClick() {
-    if (currentSlide < TOTAL_SLIDES - 1) {
+    if (currentSlide < slides.length - 1) {
       setCurrentSlide(prev => prev + 1);
     }
   }
   
   async function shareToInstagram() {
+    const ws = data?.wrap_stats;
+    
     // Create share text
     const text = `🚴 Min Cykelfest-kväll:\n\n` +
-      `📍 ${data?.distance_km} km cyklat\n` +
-      `👥 ${data?.people_met} nya vänner\n` +
-      `🍽️ ${data?.dishes_eaten} fantastiska rätter\n\n` +
-      `Tack ${data?.event_name}! ✨\n\n` +
+      (ws?.total_distance_km ? `🌍 Vi cyklade totalt ${ws.total_distance_km} km\n` : '') +
+      `📍 Jag stod för ${data?.distance_km} km\n` +
+      `👥 Träffade ${data?.people_met} nya vänner\n` +
+      (ws?.total_portions ? `🍽️ ${ws.total_portions} portioner serverades\n` : '') +
+      `\nTack ${data?.event_name}! ✨\n\n` +
       `#Cykelfesten #DinnerSafari`;
     
     // Try native share
@@ -201,7 +720,8 @@ export default function WrapPage() {
             ✨
           </motion.div>
           <h1 className="text-3xl font-bold mb-2">{data.couple_name}</h1>
-          <p className="text-purple-200 mb-8">Din Cykelfest Wrapped</p>
+          <p className="text-purple-200 mb-2">Din Cykelfest Wrapped</p>
+          <p className="text-purple-300 text-sm mb-8">🎵 Musik: {data.music_decade}</p>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -215,7 +735,7 @@ export default function WrapPage() {
         {/* Preload audio */}
         <audio 
           ref={audioRef} 
-          src="/wrap-music.mp3" 
+          src={musicSrc}
           loop 
           preload="auto"
         />
@@ -231,7 +751,7 @@ export default function WrapPage() {
     >
       {/* Progress bar */}
       <div className="absolute top-4 left-4 right-4 z-50 flex gap-1">
-        {Array.from({ length: TOTAL_SLIDES }).map((_, i) => (
+        {slides.map((_, i) => (
           <div key={i} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-white"
@@ -249,187 +769,11 @@ export default function WrapPage() {
       </div>
       
       <AnimatePresence mode="wait">
-        {/* Slide 1: Intro */}
-        {currentSlide === 0 && (
-          <Slide key="slide-0" bg="from-violet-600 via-purple-600 to-fuchsia-600">
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -50 }}
-              className="text-center"
-            >
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="text-purple-200 text-lg mb-4"
-              >
-                {new Date(data.event_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' })}
-              </motion.p>
-              <motion.h1 
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.5, type: 'spring' }}
-                className="text-5xl font-bold mb-6"
-              >
-                Din kväll
-              </motion.h1>
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1 }}
-                className="text-xl text-purple-100"
-              >
-                {data.event_name}
-              </motion.p>
-            </motion.div>
-          </Slide>
-        )}
-        
-        {/* Slide 2: Distance */}
-        {currentSlide === 1 && (
-          <Slide key="slide-1" bg="from-cyan-500 via-blue-600 to-indigo-700">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className="text-8xl mb-6"
-              >
-                🚴
-              </motion.div>
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="text-blue-200 text-lg mb-2"
-              >
-                Du cyklade
-              </motion.p>
-              <motion.p 
-                initial={{ scale: 0.5 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.5, type: 'spring' }}
-                className="text-7xl font-black mb-2"
-              >
-                {data.distance_km}
-              </motion.p>
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.7 }}
-                className="text-3xl font-bold"
-              >
-                kilometer
-              </motion.p>
-            </motion.div>
-          </Slide>
-        )}
-        
-        {/* Slide 3: People */}
-        {currentSlide === 2 && (
-          <Slide key="slide-2" bg="from-rose-500 via-pink-600 to-fuchsia-700">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className="text-8xl mb-6"
-              >
-                👥
-              </motion.div>
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="text-pink-200 text-lg mb-2"
-              >
-                Du träffade
-              </motion.p>
-              <motion.p 
-                initial={{ scale: 0.5 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.5, type: 'spring' }}
-                className="text-7xl font-black mb-2"
-              >
-                {data.people_met}
-              </motion.p>
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.7 }}
-                className="text-3xl font-bold"
-              >
-                nya vänner
-              </motion.p>
-            </motion.div>
-          </Slide>
-        )}
-        
-        {/* Slide 4: Thank you + Share */}
-        {currentSlide === 3 && (
-          <Slide key="slide-3" bg="from-amber-500 via-orange-500 to-red-600">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center"
-            >
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', bounce: 0.5 }}
-                className="text-7xl mb-6"
-              >
-                ✨
-              </motion.div>
-              <motion.h2 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="text-4xl font-bold mb-4"
-              >
-                Tack för en magisk kväll!
-              </motion.h2>
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                className="text-orange-100 text-lg mb-8"
-              >
-                {data.couple_name}
-              </motion.p>
-              <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  shareToInstagram();
-                }}
-                className="bg-white text-orange-600 font-bold py-4 px-8 rounded-full text-lg shadow-xl"
-              >
-                📲 Dela på Instagram
-              </motion.button>
-            </motion.div>
-          </Slide>
-        )}
+        {slides[currentSlide]}
       </AnimatePresence>
       
       {/* Tap hint */}
-      {currentSlide < TOTAL_SLIDES - 1 && (
+      {currentSlide < slides.length - 1 && (
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -440,8 +784,8 @@ export default function WrapPage() {
         </motion.p>
       )}
       
-      {/* Audio element */}
-      <audio ref={audioRef} src="/wrap-music.mp3" loop />
+      {/* Audio element with decade-based music */}
+      <audio ref={audioRef} src={musicSrc} loop />
     </div>
   );
 }

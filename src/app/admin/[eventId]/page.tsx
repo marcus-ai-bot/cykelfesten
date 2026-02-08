@@ -269,6 +269,12 @@ export default function EventAdminPage() {
               >
                 💬 Meddelanden
               </Link>
+              <Link 
+                href={`/admin/${eventId}/wrap`}
+                className="text-sm bg-pink-100 text-pink-700 px-3 py-1.5 rounded-lg hover:bg-pink-200 transition-colors"
+              >
+                🎬 Wrap
+              </Link>
             </div>
           </div>
           
