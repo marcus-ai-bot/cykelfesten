@@ -69,6 +69,9 @@ export async function POST(request: NextRequest) {
       errors: [] as string[],
     };
     
+    // Helper to add delay between emails (Resend rate limit: 2/sec)
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    
     // Send email to each participant
     for (const couple of couples) {
       // Send to invited person
@@ -112,6 +115,8 @@ export async function POST(request: NextRequest) {
               resend_id: emailData?.id,
             });
           }
+          // Rate limit: wait 600ms between emails
+          await delay(600);
         } catch (err) {
           results.failed++;
           results.errors.push(`${couple.invited_email}: ${err}`);
@@ -159,6 +164,8 @@ export async function POST(request: NextRequest) {
               resend_id: emailData?.id,
             });
           }
+          // Rate limit: wait 600ms between emails
+          await delay(600);
         } catch (err) {
           results.failed++;
           results.errors.push(`${couple.partner_email}: ${err}`);
