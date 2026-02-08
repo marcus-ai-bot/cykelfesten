@@ -111,6 +111,22 @@ export default function WrapPage() {
     loadData();
   }, [slug, coupleId, personType]);
   
+  // Track wrap link open (once per session)
+  useEffect(() => {
+    if (!coupleId || !personType) return;
+    const trackKey = `wrap_tracked_${coupleId}_${personType}`;
+    if (sessionStorage.getItem(trackKey)) return;
+    
+    // Log the open
+    fetch('/api/track/wrap-open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coupleId, personType }),
+    }).catch(() => {}); // Fire and forget
+    
+    sessionStorage.setItem(trackKey, 'true');
+  }, [coupleId, personType]);
+  
   useEffect(() => {
     if (data) {
       buildSlides();
