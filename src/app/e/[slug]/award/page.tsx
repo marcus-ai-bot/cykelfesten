@@ -272,7 +272,30 @@ export default function AwardPage() {
       alert('Diplom nedladdat! 🎉');
     } catch (e) {
       console.error('Badge download failed:', e);
-      // Mobile fallback: Show instructions
+      // iOS Safari fallback: Open image in new tab
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+        const canvas = await html2canvas(badgeRef.current!, {
+          backgroundColor: '#1e1b4b',
+          scale: 2,
+        });
+        const dataUrl = canvas.toDataURL('image/png');
+        const newTab = window.open('about:blank');
+        if (newTab) {
+          newTab.document.write(`
+            <html>
+              <head><title>Ditt Cykelfest-diplom</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+              <body style="margin:0;padding:20px;display:flex;flex-direction:column;align-items:center;background:#1a1a2e;min-height:100vh;">
+                <p style="color:white;font-family:system-ui;margin-bottom:20px;">📱 Håll inne på bilden → "Lägg till i Bilder"</p>
+                <img src="${dataUrl}" style="max-width:100%;border-radius:16px;" />
+              </body>
+            </html>
+          `);
+          return;
+        }
+      } catch (e2) {
+        console.error('Fallback also failed:', e2);
+      }
       alert('Tips: Håll fingret på diplomet ovan och välj "Spara bild" eller ta en screenshot! 📱');
     }
   }
