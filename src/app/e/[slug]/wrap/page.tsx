@@ -83,6 +83,7 @@ export default function WrapPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [musicSrc, setMusicSrc] = useState('/music/default.mp3');
+  const [audioPlaying, setAudioPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const supabase = createClient();
@@ -646,9 +647,31 @@ export default function WrapPage() {
     setHasStarted(true);
     setIsPlaying(true);
     setCurrentSlide(0);
-    // Try to play audio
+    // Try to play audio with better error handling
     if (audioRef.current) {
-      audioRef.current.play().catch(() => {});
+      audioRef.current.volume = 0.7;
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setAudioPlaying(true))
+          .catch((err) => {
+            console.log('Audio autoplay blocked:', err);
+            setAudioPlaying(false);
+          });
+      }
+    }
+  }
+  
+  function toggleAudio() {
+    if (!audioRef.current) return;
+    if (audioRef.current.paused) {
+      audioRef.current.volume = 0.7;
+      audioRef.current.play()
+        .then(() => setAudioPlaying(true))
+        .catch(console.error);
+    } else {
+      audioRef.current.pause();
+      setAudioPlaying(false);
     }
   }
   
@@ -788,8 +811,20 @@ export default function WrapPage() {
         </motion.p>
       )}
       
+      {/* Audio control button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleAudio();
+        }}
+        className="absolute bottom-8 right-4 z-50 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white p-3 rounded-full transition-colors text-xl"
+        aria-label="Toggle music"
+      >
+        {audioPlaying ? '🔊' : '🔇'}
+      </button>
+      
       {/* Audio element with decade-based music */}
-      <audio ref={audioRef} src={musicSrc} loop />
+      <audio ref={audioRef} src={musicSrc} loop preload="auto" />
     </div>
   );
 }
