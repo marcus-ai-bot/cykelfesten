@@ -1,19 +1,21 @@
 'use client';
 
 /**
- * Personal Wrap - Animated story like Spotify Wrapped
+ * Personal Wrap v2 - Individual person-based animated story
+ * 
+ * URL: /wrap?coupleId=xxx&person=invited OR /wrap?coupleId=xxx&person=partner
  * 
  * 10 slides with animations and decade-based music:
- * 1. "Din kväll" intro
+ * 1. "[Name], din kväll" intro (personalized)
  * 2. Collective distance (all participants)
- * 3. Your distance
- * 4. People met
- * 5. Fun fact: shortest ride
- * 6. Fun fact: longest ride
- * 7. Dishes served
- * 8. Last guest departed (if available)
+ * 3. Your distance (% of total + fun comparison)
+ * 4. People met (with storytelling)
+ * 5. Fun fact: shortest ride (ALWAYS show, even <200m)
+ * 6. Fun fact: longest ride (highlight if you)
+ * 7. Dishes served (with comparison)
+ * 8. Last guest departed
  * 9. Award teaser
- * 10. Thank you + share CTA
+ * 10. Thank you + share CTA (#Cykelfesten)
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -36,21 +38,23 @@ interface WrapStats {
 }
 
 interface WrapData {
-  couple_name: string;
+  person_name: string;              // Individual name, not couple
   event_name: string;
   event_date: string;
-  distance_km: number;
-  people_met: number;
-  music_decade: string;
-  wrap_stats: WrapStats | null;
+  distance_km: number;              // Individual distance
+  distance_percent: number;         // % of total event distance
+  people_met: number;               // Individual count
+  music_decade: string;             // From individual fun_facts
+  wrap_stats: WrapStats | null;     // Event-level aggregate
   has_award: boolean;
+  is_longest_rider: boolean;        // Did THIS person cycle most?
 }
 
 const SLIDE_DURATION = 4000; // 4 seconds per slide
 
 // Map decade preferences to music files
 function getMusicFile(funFacts: string[] | null): string {
-  if (!funFacts) return '/music/default.mp3';
+  if (!funFacts || funFacts.length === 0) return '/music/default.mp3';
   
   const decadeKeywords: Record<string, string[]> = {
     '80s': ['80-tal', '80s', 'eighties', '1980'],
@@ -71,11 +75,23 @@ function getMusicFile(funFacts: string[] | null): string {
   return '/music/default.mp3';
 }
 
+// Fun comparisons for distances
+function getDistanceComparison(km: number): string {
+  if (km < 0.2) return `${Math.round(km * 1000)} meter — nästan en kvällspromenad!`;
+  if (km < 1) return `${Math.round(km * 1000)} meter — perfekt distans för en middag!`;
+  if (km < 2) return `${km.toFixed(1)} km — som en tur runt kvarteret!`;
+  if (km < 5) return `${km.toFixed(1)} km — som från centrum till Norrstrand!`;
+  if (km < 10) return `${km.toFixed(1)} km — som från Piteå till Hortlax!`;
+  if (km < 20) return `${km.toFixed(1)} km — som från Piteå till Rosvik!`;
+  return `${km.toFixed(1)} km — du är en sann cyklist! 🚴`;
+}
+
 export default function WrapPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
   const coupleId = searchParams.get('coupleId');
+  const personType = searchParams.get('person') || 'invited'; // 'invited' or 'partner'
   
   const [data, setData] = useState<WrapData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +109,7 @@ export default function WrapPage() {
   
   useEffect(() => {
     loadData();
-  }, [slug, coupleId]);
+  }, [slug, coupleId, personType]);
   
   useEffect(() => {
     if (data) {
@@ -136,6 +152,11 @@ export default function WrapPage() {
     
     const event = couple.events as any;
     
+    // Determine which person we're showing
+    const isPartner = personType === 'partner' && couple.partner_name;
+    const personName = isPartner ? couple.partner_name : couple.invited_name;
+    const personFunFacts = isPartner ? couple.partner_fun_facts : couple.invited_fun_facts;
+    
     // Get envelopes for this couple
     const { data: envelopes } = await supabase
       .from('envelopes')
@@ -150,35 +171,60 @@ export default function WrapPage() {
       .eq('event_id', event.id)
       .eq('confirmed', true);
     
-    // Calculate personal stats
+    // Calculate THIS person's stats
+    // Note: We're dividing couple's distance by 2 if partner exists
     const totalCyclingMin = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes || 0), 0) || 0;
-    const distanceKm = Math.round(totalCyclingMin * 0.25 * 10) / 10;
+    const coupleDistanceKm = Math.round(totalCyclingMin * 0.25 * 10) / 10;
+    
+    // Individual distance: if partner exists, assume 50/50 split
+    const distanceKm = isPartner || couple.partner_name 
+      ? Math.round(coupleDistanceKm / 2 * 10) / 10
+      : coupleDistanceKm;
+    
     const peopleMet = Math.max(0, ((allCouples?.length || 1) - 1) * 2);
     
-    // Get music based on fun facts (combine invited + partner)
-    const allFunFacts = [
-      ...(couple.invited_fun_facts || []),
-      ...(couple.partner_fun_facts || [])
-    ];
-    const music = getMusicFile(allFunFacts.length > 0 ? allFunFacts : null);
+    // Get wrap_stats from event (or use defaults)
+    const wrapStats = (event as any).wrap_stats as WrapStats | null;
+    
+    // Calculate distance percent
+    const distancePercent = wrapStats?.total_distance_km 
+      ? Math.round((distanceKm / wrapStats.total_distance_km) * 100 * 10) / 10
+      : 0;
+    
+    // Check if THIS person is the longest rider
+    const isLongestRider = wrapStats 
+      ? distanceKm >= (wrapStats.longest_ride_meters / 1000)
+      : false;
+    
+    // Get music based on THIS person's fun facts
+    const music = getMusicFile(personFunFacts || null);
     setMusicSrc(music);
     
-    // Check if couple has an award (column might not exist yet)
-    const hasAward = !!(couple as any).award_type;
+    // Check if this person has an award
+    const { data: award } = await supabase
+      .from('award_assignments')
+      .select('id')
+      .eq('couple_id', coupleId)
+      .eq('person_type', personType)
+      .maybeSingle();
+    
+    const hasAward = !!award;
     
     setData({
-      couple_name: `${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`,
+      person_name: personName || 'Deltagare',
       event_name: event.name,
       event_date: event.event_date,
       distance_km: distanceKm,
+      distance_percent: distancePercent,
       people_met: peopleMet,
       music_decade: music.includes('80s') ? '80-tal' : 
                     music.includes('90s') ? '90-tal' :
                     music.includes('2000s') ? '2000-tal' :
                     music.includes('2010s') ? '2010-tal' :
                     music.includes('2020s') ? '2020-tal' : 'festlig',
-      wrap_stats: (event as any).wrap_stats || null,
+      wrap_stats: wrapStats,
       has_award: hasAward,
+      is_longest_rider: isLongestRider,
     });
     
     setLoading(false);
@@ -190,7 +236,7 @@ export default function WrapPage() {
     const newSlides: React.ReactNode[] = [];
     const ws = data.wrap_stats;
     
-    // Slide 1: Intro
+    // Slide 1: Intro (personalized)
     newSlides.push(
       <Slide key="intro" bg="from-violet-600 via-purple-600 to-fuchsia-600">
         <motion.div
@@ -210,10 +256,18 @@ export default function WrapPage() {
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.5, type: 'spring' }}
-            className="text-5xl font-bold mb-6"
+            className="text-6xl font-bold mb-2"
           >
-            Din kväll
+            {data.person_name},
           </motion.h1>
+          <motion.h2
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="text-4xl font-bold mb-6"
+          >
+            din kväll
+          </motion.h2>
           <motion.p 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -272,7 +326,7 @@ export default function WrapPage() {
       );
     }
     
-    // Slide 3: Your distance
+    // Slide 3: Your distance (with % and comparison)
     newSlides.push(
       <Slide key="distance" bg="from-cyan-500 via-blue-600 to-indigo-700">
         <motion.div
@@ -294,29 +348,39 @@ export default function WrapPage() {
             transition={{ delay: 0.3 }}
             className="text-blue-200 text-lg mb-2"
           >
-            Du stod för
+            Du cyklade
           </motion.p>
           <motion.p 
             initial={{ scale: 0.5 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.5, type: 'spring' }}
-            className="text-7xl font-black mb-2"
+            className="text-7xl font-black mb-4"
           >
-            {data.distance_km}
+            {data.distance_km} km
           </motion.p>
+          {data.distance_percent > 0 && (
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="text-2xl font-bold mb-4"
+            >
+              Du stod för {data.distance_percent}% av totalen!
+            </motion.p>
+          )}
           <motion.p 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.7 }}
-            className="text-3xl font-bold"
+            transition={{ delay: 1.1 }}
+            className="text-xl text-blue-200"
           >
-            kilometer
+            {getDistanceComparison(data.distance_km)}
           </motion.p>
         </motion.div>
       </Slide>
     );
     
-    // Slide 4: People met
+    // Slide 4: People met (with storytelling)
     newSlides.push(
       <Slide key="people" bg="from-rose-500 via-pink-600 to-fuchsia-700">
         <motion.div
@@ -344,24 +408,48 @@ export default function WrapPage() {
             initial={{ scale: 0.5 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.5, type: 'spring' }}
-            className="text-7xl font-black mb-2"
+            className="text-7xl font-black mb-4"
           >
             {data.people_met}
           </motion.p>
           <motion.p 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.7 }}
-            className="text-3xl font-bold"
+            transition={{ delay: 0.8 }}
+            className="text-2xl font-bold mb-4"
           >
-            nya vänner
+            nya ansikten, nya historier
           </motion.p>
+          {data.people_met >= 20 && (
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.1 }}
+              className="text-xl text-pink-200"
+            >
+              Det är som ett helt klassrum!
+            </motion.p>
+          )}
+          {data.people_met >= 30 && (
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.4 }}
+              className="text-xl text-pink-200"
+            >
+              Du är en social superstjärna! 🌟
+            </motion.p>
+          )}
         </motion.div>
       </Slide>
     );
     
-    // Slide 5: Shortest ride (fun fact)
-    if (ws?.shortest_ride_meters && ws.shortest_ride_meters < 200) {
+    // Slide 5: Shortest ride (ALWAYS show, even tiny - storytelling!)
+    if (ws?.shortest_ride_meters) {
+      const metersStr = ws.shortest_ride_meters < 1000 
+        ? `${ws.shortest_ride_meters}m`
+        : `${(ws.shortest_ride_meters / 1000).toFixed(1)} km`;
+      
       newSlides.push(
         <Slide key="shortest" bg="from-yellow-400 via-amber-500 to-orange-600">
           <motion.div
@@ -383,31 +471,51 @@ export default function WrapPage() {
               transition={{ delay: 0.3 }}
               className="text-amber-100 text-lg mb-2"
             >
-              Kortaste cyklingen ikväll?
+              Kortaste cykelturen:
             </motion.p>
             <motion.p 
               initial={{ scale: 0.5 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.5, type: 'spring' }}
-              className="text-6xl font-black mb-2"
+              className="text-6xl font-black mb-4"
             >
-              {ws.shortest_ride_meters} meter
+              {metersStr}
             </motion.p>
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
-              className="text-xl text-amber-100"
+              className="text-xl font-bold"
             >
-              {ws.shortest_ride_meters < 100 ? '(Över tomtgränsen! 😂)' : `av ${ws.shortest_ride_couple}`}
+              {ws.shortest_ride_couple}
             </motion.p>
+            {ws.shortest_ride_meters < 200 && (
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.1 }}
+                className="text-lg text-yellow-200 mt-4"
+              >
+                Turligt placerade! 🍀
+              </motion.p>
+            )}
+            {ws.shortest_ride_meters < 50 && (
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.4 }}
+                className="text-lg text-yellow-200"
+              >
+                Praktiskt taget grannbesök! 😄
+              </motion.p>
+            )}
           </motion.div>
         </Slide>
       );
     }
     
-    // Slide 6: Longest ride
-    if (ws?.longest_ride_meters && ws.longest_ride_meters > 1000) {
+    // Slide 6: Longest ride (highlight if you)
+    if (ws?.longest_ride_meters) {
       newSlides.push(
         <Slide key="longest" bg="from-indigo-500 via-purple-600 to-violet-700">
           <motion.div
@@ -429,13 +537,13 @@ export default function WrapPage() {
               transition={{ delay: 0.3 }}
               className="text-violet-200 text-lg mb-2"
             >
-              Längsta sträckan?
+              Längsta cykelturen:
             </motion.p>
             <motion.p 
               initial={{ scale: 0.5 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.5, type: 'spring' }}
-              className="text-6xl font-black mb-2"
+              className="text-6xl font-black mb-4"
             >
               {(ws.longest_ride_meters / 1000).toFixed(1)} km
             </motion.p>
@@ -443,10 +551,20 @@ export default function WrapPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
-              className="text-xl text-violet-100"
+              className="text-xl font-bold"
             >
-              av {ws.longest_ride_couple}
+              {ws.longest_ride_couple}
             </motion.p>
+            {data.is_longest_rider && (
+              <motion.p 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 1.2, type: 'spring' }}
+                className="text-2xl text-green-300 mt-4"
+              >
+                Det var du! 💪
+              </motion.p>
+            )}
           </motion.div>
         </Slide>
       );
@@ -481,18 +599,28 @@ export default function WrapPage() {
               initial={{ scale: 0.5 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.5, type: 'spring' }}
-              className="text-7xl font-black mb-2"
+              className="text-7xl font-black mb-4"
             >
               {ws.total_portions}
             </motion.p>
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-              className="text-3xl font-bold"
+              transition={{ delay: 0.8 }}
+              className="text-2xl font-bold mb-4"
             >
-              portioner
+              portioner mat
             </motion.p>
+            {ws.total_portions > 100 && (
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.1 }}
+                className="text-xl text-green-200"
+              >
+                Det är som en liten restaurang! 🍽️
+              </motion.p>
+            )}
           </motion.div>
         </Slide>
       );
@@ -590,52 +718,66 @@ export default function WrapPage() {
       );
     }
     
-    // Slide 10: Thank you + Share (always last)
+    // Slide 10: Thank you + Share CTA (strong social trigger)
     newSlides.push(
       <Slide key="thanks" bg="from-amber-500 via-orange-500 to-red-600">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-center"
+          className="text-center px-4"
         >
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', bounce: 0.5 }}
-            className="text-7xl mb-6"
-          >
-            ✨
-          </motion.div>
           <motion.h2 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="text-4xl font-bold mb-4"
+            transition={{ delay: 0.2 }}
+            className="text-5xl font-bold mb-8"
           >
             Tack för en magisk kväll!
           </motion.h2>
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="text-orange-100 text-lg mb-8"
+          
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5 }}
+            className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8 max-w-md mx-auto"
           >
-            {data.couple_name}
-          </motion.p>
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1 }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              shareToInstagram();
-            }}
-            className="bg-white text-orange-600 font-bold py-4 px-8 rounded-full text-lg shadow-xl"
-          >
-            📲 Dela på Instagram
-          </motion.button>
+            <p className="text-3xl mb-4">Dela din wrap!</p>
+            <p className="text-lg text-orange-100 mb-6">
+              Berätta för världen om din kväll
+            </p>
+            
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                shareWrap();
+              }}
+              className="bg-gradient-to-r from-pink-500 to-purple-500 
+                         text-white px-8 py-4 rounded-full text-xl font-bold
+                         hover:shadow-2xl transition-shadow w-full"
+            >
+              📱 Dela med #Cykelfesten
+            </motion.button>
+          </motion.div>
+          
+          {data.has_award && (
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.2 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.location.href = `/e/${slug}/award?coupleId=${coupleId}&person=${personType}`;
+              }}
+              className="text-xl underline hover:text-white transition-colors"
+            >
+              Se din utmärkelse →
+            </motion.button>
+          )}
         </motion.div>
       </Slide>
     );
@@ -681,32 +823,48 @@ export default function WrapPage() {
     }
   }
   
-  async function shareToInstagram() {
-    const ws = data?.wrap_stats;
+  async function shareWrap() {
+    if (!data) return;
     
-    // Create share text
-    const text = `🚴 Min Cykelfest-kväll:\n\n` +
-      (ws?.total_distance_km ? `🌍 Vi cyklade totalt ${ws.total_distance_km} km\n` : '') +
-      `📍 Jag stod för ${data?.distance_km} km\n` +
-      `👥 Träffade ${data?.people_met} nya vänner\n` +
-      (ws?.total_portions ? `🍽️ ${ws.total_portions} portioner serverades\n` : '') +
-      `\nTack ${data?.event_name}! ✨\n\n` +
-      `#Cykelfesten #DinnerSafari`;
+    // Create personalized share text
+    const shareText = `Jag cyklade ${data.distance_km} km, träffade ${data.people_met} personer och fick en utmärkelse! 🚴✨`;
     
-    // Try native share
+    const shareData = {
+      title: `${data.person_name}s Cykelfest`,
+      text: shareText,
+      url: window.location.href,
+    };
+    
+    // Try native share (works on mobile)
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: 'Min Cykelfest-kväll',
-          text,
-          url: window.location.href,
-        });
+        await navigator.share(shareData);
       } catch (e) {
-        // User cancelled or error
+        // User cancelled or error - fallback to clipboard
+        if ((e as Error).name !== 'AbortError') {
+          await copyToClipboard(shareText);
+        }
       }
     } else {
-      // Fallback: copy to clipboard
-      await navigator.clipboard.writeText(text);
+      // Desktop fallback: copy to clipboard
+      await copyToClipboard(shareText);
+    }
+  }
+  
+  async function copyToClipboard(text: string) {
+    const fullText = `${text}\n\n${window.location.href}\n\n#Cykelfesten #DinnerSafari #Piteå2026`;
+    
+    try {
+      await navigator.clipboard.writeText(fullText);
+      alert('Kopierat till urklipp! Klistra in i din story 📱');
+    } catch (e) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = fullText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
       alert('Kopierat till urklipp! 📋');
     }
   }
