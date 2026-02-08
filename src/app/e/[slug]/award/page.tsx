@@ -21,6 +21,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { AWARDS, type Award } from '@/lib/awards/calculate';
 
+// Default enabled awards (non-sensitive)
+const DEFAULT_ENABLED_AWARDS = [
+  'longest_distance', 'shortest_distance', 'average_distance',
+  'first_signup', 'last_signup',
+  'furthest_from_center', 'closest_to_center',
+  'most_fun_facts',
+  'wildcard', 'social_butterfly', 'mystery_guest',
+  'perfect_host', 'party_starter', 'night_owl',
+];
+
 interface AwardData {
   person_name: string;              // Individual name, not couple
   event_name: string;
@@ -28,6 +38,7 @@ interface AwardData {
   award: Award;
   value: string | null;
   explanation: string;              // Personalized explanation
+  thank_you_message: string | null; // Admin's custom message
 }
 
 export default function AwardPage() {
@@ -56,10 +67,10 @@ export default function AwardPage() {
       return;
     }
     
-    // Get couple info
+    // Get couple info with event settings
     const { data: couple } = await supabase
       .from('couples')
-      .select('*, events(*)')
+      .select('*, events(id, name, event_date, enabled_awards, thank_you_message)')
       .eq('id', coupleId)
       .single();
     
@@ -69,6 +80,10 @@ export default function AwardPage() {
     }
     
     const event = couple.events as any;
+    
+    // Get enabled awards (null = use defaults, empty array = none)
+    const enabledAwards: string[] = event?.enabled_awards ?? DEFAULT_ENABLED_AWARDS;
+    const thankYouMessage: string | null = event?.thank_you_message || null;
     
     // Determine which person we're showing
     const isPartner = personType === 'partner' && couple.partner_name;
@@ -82,30 +97,62 @@ export default function AwardPage() {
       .eq('person_type', personType)
       .maybeSingle();
     
-    if (!assignment) {
-      // No award assigned yet - show default
-      const defaultAward = AWARDS.find(a => a.id === 'wildcard') || AWARDS[0];
+    // Edge case: No awards enabled at all
+    if (enabledAwards.length === 0) {
       setData({
         person_name: personName || 'Deltagare',
         event_name: event?.name || '',
         event_date: event?.event_date || '',
-        award: defaultAward,
+        award: { id: 'participant', emoji: '🌟', title: 'Deltagare', subtitle: 'Tack för att du var med!', color_from: 'from-blue-500', color_to: 'to-purple-500' },
         value: null,
-        explanation: getExplanation(defaultAward, null, personName),
+        explanation: `${personName || 'Du'} var med och gjorde kvällen till något speciellt!`,
+        thank_you_message: thankYouMessage,
       });
       setLoading(false);
       return;
     }
     
-    const award = AWARDS.find(a => a.id === assignment.award_id) || AWARDS[0];
+    if (!assignment) {
+      // No award assigned yet - show default wildcard
+      const wildcardAward = AWARDS.find(a => a.id === 'wildcard') || AWARDS[0];
+      setData({
+        person_name: personName || 'Deltagare',
+        event_name: event?.name || '',
+        event_date: event?.event_date || '',
+        award: wildcardAward,
+        value: null,
+        explanation: getExplanation(wildcardAward, null, personName),
+        thank_you_message: thankYouMessage,
+      });
+      setLoading(false);
+      return;
+    }
+    
+    // Check if assigned award is still enabled
+    let award = AWARDS.find(a => a.id === assignment.award_id);
+    let value = assignment.value;
+    let explanation: string;
+    
+    if (award && !enabledAwards.includes(award.id)) {
+      // Award was disabled by admin - show wildcard instead
+      award = AWARDS.find(a => a.id === 'wildcard') || AWARDS[0];
+      value = null;
+      explanation = getExplanation(award, null, personName);
+    } else if (!award) {
+      award = AWARDS[0];
+      explanation = getExplanation(award, value, personName);
+    } else {
+      explanation = getExplanation(award, value, personName);
+    }
     
     setData({
       person_name: personName || 'Deltagare',
       event_name: event?.name || '',
       event_date: event?.event_date || '',
       award,
-      value: assignment.value,
-      explanation: getExplanation(award, assignment.value, personName),
+      value,
+      explanation,
+      thank_you_message: thankYouMessage,
     });
     
     setLoading(false);
@@ -595,11 +642,24 @@ export default function AwardPage() {
         </motion.div>
         
         <h2 className="text-3xl font-bold mb-4">Dela din utmärkelse!</h2>
-        <p className="text-xl text-white/80 mb-8">
+        
+        {/* Admin's thank you message */}
+        {data.thank_you_message && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white/20 backdrop-blur-sm rounded-2xl p-6 mb-6 max-w-sm mx-auto"
+          >
+            <p className="text-lg">{data.thank_you_message}</p>
+          </motion.div>
+        )}
+        
+        <p className="text-xl text-white/80 mb-6">
           Visa dina vänner vad du fick! 🏆
         </p>
         
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-8 max-w-sm mx-auto">
+        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-8 max-w-sm mx-auto">
           <p className="text-lg italic">
             "Vilken utmärkelse fick DU?"
           </p>
