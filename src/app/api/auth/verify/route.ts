@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { randomBytes } from 'crypto';
 
 // GET /api/auth/verify?token=xxx
-// Verify magic link and create session
+// Verify magic link, create session, set cookie, show success page
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token');
@@ -56,10 +56,33 @@ export async function GET(request: NextRequest) {
   const organizer = tokenData.organizer as any;
   const redirectPath = organizer.name ? '/organizer' : '/organizer/onboarding';
   
-  // Redirect to set-session endpoint which will set cookie and redirect
-  const setSessionUrl = new URL('/api/auth/set-session', request.url);
-  setSessionUrl.searchParams.set('token', sessionToken);
-  setSessionUrl.searchParams.set('redirect', redirectPath);
+  // Build cookie value
+  const maxAge = 7 * 24 * 60 * 60;
+  const cookieValue = `organizer_session=${sessionToken}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure`;
   
-  return NextResponse.redirect(setSessionUrl);
+  // Return HTML page with cookie set - NO REDIRECT CHAIN
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head><title>Inloggad!</title></head>
+      <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div style="background: white; padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+          <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
+          <h1 style="margin: 0 0 8px 0; color: #1a1a1a;">Inloggad!</h1>
+          <p style="color: #666; margin-bottom: 24px;">Välkommen${organizer.name ? ' ' + organizer.name : ''}!</p>
+          <a href="${redirectPath}" style="display: inline-block; background: #4f46e5; color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px;">
+            Gå till Dashboard →
+          </a>
+        </div>
+      </body>
+    </html>
+  `;
+  
+  return new NextResponse(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html',
+      'Set-Cookie': cookieValue,
+    },
+  });
 }
