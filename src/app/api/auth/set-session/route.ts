@@ -26,20 +26,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
     
-    // Create response and set cookie
-    const response = NextResponse.json({ success: true });
+    // Create response with Set-Cookie header directly
+    const maxAge = 7 * 24 * 60 * 60;
+    const cookieValue = `organizer_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure; HttpOnly`;
     
-    response.cookies.set({
-      name: 'organizer_session',
-      value: token,
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60,
-      sameSite: 'lax',
-      secure: true,
-      httpOnly: true,
+    return new NextResponse(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Set-Cookie': cookieValue,
+      },
     });
-    
-    return response;
     
   } catch (error) {
     console.error('Set session error:', error);
