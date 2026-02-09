@@ -56,45 +56,10 @@ export async function GET(request: NextRequest) {
   const organizer = tokenData.organizer as any;
   const redirectPath = organizer.name ? '/organizer' : '/organizer/onboarding';
   
-  // Return HTML page that calls API to set cookie, then redirects
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Loggar in...</title>
-      </head>
-      <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
-        <div style="text-align: center;">
-          <div style="font-size: 48px; margin-bottom: 16px;">🚴</div>
-          <p id="status">Loggar in...</p>
-        </div>
-        <script>
-          (async function() {
-            try {
-              // Call API to set cookie (same-origin request)
-              const res = await fetch('/api/auth/set-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: '${sessionToken}' }),
-                credentials: 'include'
-              });
-              
-              if (res.ok) {
-                document.getElementById('status').textContent = 'Inloggad! Redirectar...';
-                window.location.href = '${redirectPath}';
-              } else {
-                document.getElementById('status').textContent = 'Fel: ' + res.status;
-              }
-            } catch (err) {
-              document.getElementById('status').textContent = 'Fel: ' + err.message;
-            }
-          })();
-        </script>
-      </body>
-    </html>
-  `;
+  // Redirect to set-session endpoint which will set cookie and redirect
+  const setSessionUrl = new URL('/api/auth/set-session', request.url);
+  setSessionUrl.searchParams.set('token', sessionToken);
+  setSessionUrl.searchParams.set('redirect', redirectPath);
   
-  return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html' },
-  });
+  return NextResponse.redirect(setSessionUrl);
 }
