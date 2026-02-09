@@ -12,7 +12,7 @@ export default function NewEventPage() {
   
   // Check auth on mount
   useEffect(() => {
-    fetch('/api/organizer/profile')
+    fetch('/api/organizer/profile', { credentials: 'include' })
       .then(res => {
         console.log('Auth check response:', res.status);
         if (res.status === 401) {
@@ -44,7 +44,7 @@ export default function NewEventPage() {
     setError(null);
     
     try {
-      const res = await fetch('/api/organizer/events', {
+      const res = await fetch('/api/organizer/events', { credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),

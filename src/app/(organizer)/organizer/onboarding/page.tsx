@@ -16,7 +16,7 @@ export default function OnboardingPage() {
     setError(null);
     
     try {
-      const res = await fetch('/api/organizer/profile', {
+      const res = await fetch('/api/organizer/profile', { credentials: 'include',
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, phone }),
