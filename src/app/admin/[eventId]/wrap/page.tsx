@@ -95,28 +95,58 @@ export default function AdminWrapPage() {
         return;
       }
       
-      // Get envelopes for distances
-      const { data: envelopes } = await supabase
-        .from('envelopes')
-        .select('*, couple:couples(*)')
-        .eq('match_plan_id', event.active_match_plan_id);
+      // Get assignments for actual travel routes
+      const { data: assignments } = await supabase
+        .from('assignments')
+        .select('*, couple:couples(*), host:couples!assignments_host_couple_id_fkey(*)')
+        .eq('event_id', eventId);
       
-      // Calculate distances per couple
+      // Calculate distances per couple using actual coordinates
       const coupleDistances: Record<string, { distance: number; name: string }> = {};
       
-      envelopes?.forEach(env => {
-        const coupleId = env.couple_id;
-        const couple = env.couple as any;
-        const distance = (env.cycling_minutes || 0) * 250; // ~15 km/h = 250m/min
+      // Group assignments by couple and course order
+      const coupleRoutes: Record<string, { coords: { lat: number; lng: number }[]; name: string }> = {};
+      
+      assignments?.forEach(a => {
+        const coupleId = a.couple_id;
+        const couple = a.couple as any;
+        const host = a.host as any;
         
-        if (!coupleDistances[coupleId]) {
-          coupleDistances[coupleId] = {
-            distance: 0,
+        if (!coupleRoutes[coupleId]) {
+          coupleRoutes[coupleId] = {
+            coords: [],
             name: `${couple?.invited_name}${couple?.partner_name ? ' & ' + couple.partner_name : ''}`
           };
+          // Start from couple's home
+          if (couple?.coordinates) {
+            coupleRoutes[coupleId].coords.push(couple.coordinates);
+          }
         }
-        coupleDistances[coupleId].distance += distance;
+        
+        // Add host location
+        if (host?.coordinates) {
+          coupleRoutes[coupleId].coords.push(host.coordinates);
+        }
       });
+      
+      // Calculate total distance for each couple
+      for (const [coupleId, route] of Object.entries(coupleRoutes)) {
+        let totalDistance = 0;
+        for (let i = 1; i < route.coords.length; i++) {
+          const from = route.coords[i - 1];
+          const to = route.coords[i];
+          // Haversine distance
+          const R = 6371000; // Earth radius in meters
+          const dLat = (to.lat - from.lat) * Math.PI / 180;
+          const dLng = (to.lng - from.lng) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          totalDistance += R * c;
+        }
+        coupleDistances[coupleId] = { distance: totalDistance, name: route.name };
+      }
       
       // Find shortest and longest
       const distances = Object.entries(coupleDistances);
