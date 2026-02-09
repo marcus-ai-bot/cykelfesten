@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   const organizer = tokenData.organizer as any;
   const redirectPath = organizer.name ? '/organizer' : '/organizer/onboarding';
   
-  // Return HTML page that sets cookie via JavaScript and redirects
+  // Return HTML page that calls API to set cookie, then redirects
   const html = `
     <!DOCTYPE html>
     <html>
@@ -69,41 +69,32 @@ export async function GET(request: NextRequest) {
           <p id="status">Loggar in...</p>
         </div>
         <script>
-          // Set cookie (without HttpOnly so JS can set it)
-          document.cookie = "organizer_session=${sessionToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure";
-          
-          // Verify cookie was set
-          var cookieSet = document.cookie.includes('organizer_session');
-          console.log('Cookie set via JS:', cookieSet);
-          document.getElementById('status').textContent = cookieSet ? 'Cookie OK, redirecting...' : 'Cookie failed!';
-          
-          // Redirect after short delay
-          setTimeout(function() {
-            window.location.href = "${redirectPath}";
-          }, 1000);
+          (async function() {
+            try {
+              // Call API to set cookie (same-origin request)
+              const res = await fetch('/api/auth/set-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: '${sessionToken}' }),
+                credentials: 'include'
+              });
+              
+              if (res.ok) {
+                document.getElementById('status').textContent = 'Inloggad! Redirectar...';
+                window.location.href = '${redirectPath}';
+              } else {
+                document.getElementById('status').textContent = 'Fel: ' + res.status;
+              }
+            } catch (err) {
+              document.getElementById('status').textContent = 'Fel: ' + err.message;
+            }
+          })();
         </script>
       </body>
     </html>
   `;
   
-  // Create response with multiple Set-Cookie attempts
-  const response = new NextResponse(html, {
-    headers: {
-      'Content-Type': 'text/html',
-    },
+  return new NextResponse(html, {
+    headers: { 'Content-Type': 'text/html' },
   });
-  
-  // Set cookie using response.cookies
-  // Note: NOT httpOnly so JavaScript can also set it as backup
-  response.cookies.set({
-    name: 'organizer_session',
-    value: sessionToken,
-    path: '/',
-    maxAge: 7 * 24 * 60 * 60,
-    sameSite: 'lax',
-    secure: true,
-    httpOnly: false, // Allow JS to read/set as backup
-  });
-  
-  return response;
 }
