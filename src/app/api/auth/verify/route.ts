@@ -54,23 +54,36 @@ export async function GET(request: NextRequest) {
   
   // Determine redirect URL
   const organizer = tokenData.organizer as any;
-  const redirectUrl = organizer.name 
-    ? new URL('/organizer', request.url)
-    : new URL('/organizer/onboarding', request.url);
+  const redirectPath = organizer.name ? '/organizer' : '/organizer/onboarding';
   
-  // Create response with redirect
-  const response = NextResponse.redirect(redirectUrl);
+  // Return HTML page that sets cookie via JavaScript and redirects
+  // This is more reliable than setting cookie on redirect response
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Loggar in...</title>
+        <meta http-equiv="refresh" content="2;url=${redirectPath}">
+      </head>
+      <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+        <div style="text-align: center;">
+          <div style="font-size: 48px; margin-bottom: 16px;">🚴</div>
+          <p>Loggar in...</p>
+        </div>
+        <script>
+          document.cookie = "organizer_session=${sessionToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure";
+          setTimeout(function() {
+            window.location.href = "${redirectPath}";
+          }, 500);
+        </script>
+      </body>
+    </html>
+  `;
   
-  // Set session cookie on the response
-  response.cookies.set('organizer_session', sessionToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    expires: sessionExpires,
-    path: '/',
+  return new NextResponse(html, {
+    headers: {
+      'Content-Type': 'text/html',
+      'Set-Cookie': `organizer_session=${sessionToken}; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure; HttpOnly`,
+    },
   });
-  
-  console.log('Cookie set on response, redirecting to:', redirectUrl.pathname);
-  
-  return response;
 }
