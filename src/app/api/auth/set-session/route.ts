@@ -27,8 +27,9 @@ export async function POST(request: NextRequest) {
     }
     
     // Create response with Set-Cookie header directly
+    // Note: Removed HttpOnly for now to debug
     const maxAge = 7 * 24 * 60 * 60;
-    const cookieValue = `organizer_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure; HttpOnly`;
+    const cookieValue = `organizer_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure`;
     
     return new NextResponse(JSON.stringify({ success: true }), {
       status: 200,
