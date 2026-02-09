@@ -6,8 +6,8 @@ import { resend, FROM_EMAIL, BASE_URL } from '@/lib/resend';
 // Called by Vercel Cron at 08:00 every day
 // Sends reminder to organizers for events that ended but haven't sent wraps
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Allow up to 60 seconds for sending emails
 
 export async function GET(request: NextRequest) {
   // Verify cron secret (Vercel sends this header)
