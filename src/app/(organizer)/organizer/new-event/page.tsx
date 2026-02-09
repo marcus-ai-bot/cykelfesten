@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -8,6 +8,22 @@ export default function NewEventPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  
+  // Check auth on mount
+  useEffect(() => {
+    fetch('/api/organizer/profile')
+      .then(res => {
+        if (res.status === 401) {
+          router.push('/login');
+        } else {
+          setCheckingAuth(false);
+        }
+      })
+      .catch(() => {
+        router.push('/login');
+      });
+  }, [router]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -31,6 +47,11 @@ export default function NewEventPage() {
       const data = await res.json();
       
       if (!res.ok) {
+        // If not logged in, redirect to login
+        if (res.status === 401) {
+          router.push('/login');
+          return;
+        }
         throw new Error(data.error || 'Något gick fel');
       }
       
@@ -40,6 +61,14 @@ export default function NewEventPage() {
     } finally {
       setLoading(false);
     }
+  }
+  
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Laddar...</div>
+      </div>
+    );
   }
   
   return (
