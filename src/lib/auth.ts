@@ -43,7 +43,10 @@ export async function getOrganizer(): Promise<Organizer | null> {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('organizer_session')?.value;
   
+  console.log('getOrganizer - sessionToken exists:', !!sessionToken);
+  
   if (!sessionToken) {
+    console.log('No session token found in cookies');
     return null;
   }
   

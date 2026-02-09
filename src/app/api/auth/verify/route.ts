@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 import { randomBytes } from 'crypto';
 
 // GET /api/auth/verify?token=xxx
@@ -53,23 +52,25 @@ export async function GET(request: NextRequest) {
       expires_at: sessionExpires.toISOString(),
     });
   
-  // Set session cookie
-  const cookieStore = await cookies();
-  cookieStore.set('organizer_session', sessionToken, {
+  // Determine redirect URL
+  const organizer = tokenData.organizer as any;
+  const redirectUrl = organizer.name 
+    ? new URL('/organizer', request.url)
+    : new URL('/organizer/onboarding', request.url);
+  
+  // Create response with redirect
+  const response = NextResponse.redirect(redirectUrl);
+  
+  // Set session cookie on the response
+  response.cookies.set('organizer_session', sessionToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     sameSite: 'lax',
     expires: sessionExpires,
     path: '/',
   });
   
-  // Redirect to dashboard or original destination
-  const organizer = tokenData.organizer as any;
+  console.log('Cookie set on response, redirecting to:', redirectUrl.pathname);
   
-  // If no name set, redirect to onboarding
-  if (!organizer.name) {
-    return NextResponse.redirect(new URL('/organizer/onboarding', request.url));
-  }
-  
-  return NextResponse.redirect(new URL('/organizer', request.url));
+  return response;
 }
