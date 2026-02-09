@@ -14,13 +14,19 @@ export default function NewEventPage() {
   useEffect(() => {
     fetch('/api/organizer/profile')
       .then(res => {
+        console.log('Auth check response:', res.status);
         if (res.status === 401) {
           router.push('/login');
+        } else if (res.status === 404) {
+          console.error('Profile API not found - deployment issue?');
+          setError('Tekniskt fel. Vänta och försök igen.');
+          setCheckingAuth(false);
         } else {
           setCheckingAuth(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Auth check failed:', err);
         router.push('/login');
       });
   }, [router]);
