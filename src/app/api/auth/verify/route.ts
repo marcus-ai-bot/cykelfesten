@@ -57,33 +57,53 @@ export async function GET(request: NextRequest) {
   const redirectPath = organizer.name ? '/organizer' : '/organizer/onboarding';
   
   // Return HTML page that sets cookie via JavaScript and redirects
-  // This is more reliable than setting cookie on redirect response
   const html = `
     <!DOCTYPE html>
     <html>
       <head>
         <title>Loggar in...</title>
-        <meta http-equiv="refresh" content="2;url=${redirectPath}">
       </head>
       <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
         <div style="text-align: center;">
           <div style="font-size: 48px; margin-bottom: 16px;">🚴</div>
-          <p>Loggar in...</p>
+          <p id="status">Loggar in...</p>
         </div>
         <script>
+          // Set cookie (without HttpOnly so JS can set it)
           document.cookie = "organizer_session=${sessionToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure";
+          
+          // Verify cookie was set
+          var cookieSet = document.cookie.includes('organizer_session');
+          console.log('Cookie set via JS:', cookieSet);
+          document.getElementById('status').textContent = cookieSet ? 'Cookie OK, redirecting...' : 'Cookie failed!';
+          
+          // Redirect after short delay
           setTimeout(function() {
             window.location.href = "${redirectPath}";
-          }, 500);
+          }, 1000);
         </script>
       </body>
     </html>
   `;
   
-  return new NextResponse(html, {
+  // Create response with multiple Set-Cookie attempts
+  const response = new NextResponse(html, {
     headers: {
       'Content-Type': 'text/html',
-      'Set-Cookie': `organizer_session=${sessionToken}; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure; HttpOnly`,
     },
   });
+  
+  // Set cookie using response.cookies
+  // Note: NOT httpOnly so JavaScript can also set it as backup
+  response.cookies.set({
+    name: 'organizer_session',
+    value: sessionToken,
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60,
+    sameSite: 'lax',
+    secure: true,
+    httpOnly: false, // Allow JS to read/set as backup
+  });
+  
+  return response;
 }
