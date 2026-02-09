@@ -56,12 +56,10 @@ export async function GET(request: NextRequest) {
   const organizer = tokenData.organizer as any;
   const redirectPath = organizer.name ? '/organizer' : '/organizer/onboarding';
   
-  // Build cookie value
-  // Note: Testing without Secure flag to debug mobile issues
-  const maxAge = 7 * 24 * 60 * 60;
-  const cookieValue = `organizer_session=${sessionToken}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+  // Build cookie - use proper attributes for production
+  const maxAge = 7 * 24 * 60 * 60; // 7 days
   
-  // Return HTML page with cookie set - NO REDIRECT CHAIN
+  // Return HTML page with cookie set via response.cookies (proper Next.js way)
   const html = `
     <!DOCTYPE html>
     <html>
@@ -82,11 +80,21 @@ export async function GET(request: NextRequest) {
     </html>
   `;
   
-  return new NextResponse(html, {
+  const response = new NextResponse(html, {
     status: 200,
     headers: {
-      'Content-Type': 'text/html',
-      'Set-Cookie': cookieValue,
+      'Content-Type': 'text/html; charset=utf-8',
     },
   });
+  
+  // Set cookie using Next.js proper method
+  response.cookies.set('organizer_session', sessionToken, {
+    path: '/',
+    maxAge,
+    httpOnly: true,
+    secure: true, // Required for HTTPS on Vercel
+    sameSite: 'lax',
+  });
+  
+  return response;
 }
