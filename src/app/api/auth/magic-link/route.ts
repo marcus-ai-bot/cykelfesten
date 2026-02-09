@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Send email
-    const loginUrl = `${BASE_URL}/auth/verify?token=${token}`;
+    const loginUrl = `${BASE_URL}/api/auth/verify?token=${token}`;
     
     const { error: emailError } = await resend.emails.send({
       from: FROM_EMAIL,
