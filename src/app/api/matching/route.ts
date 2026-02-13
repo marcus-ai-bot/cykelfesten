@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { runFullMatch, setEnvelopeTimes } from '@/lib/matching';
 import { populateLivingEnvelopeData } from '@/lib/envelope';
+import { requireEventAccess } from '@/lib/auth';
 import type { Couple, Event, Assignment, EventTiming } from '@/types/database';
 
 export async function POST(request: Request) {
@@ -13,6 +14,12 @@ export async function POST(request: Request) {
         { error: 'event_id krävs' },
         { status: 400 }
       );
+    }
+    
+    // Auth: Require organizer access to this event
+    const auth = await requireEventAccess(event_id);
+    if (!auth.success) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     
     const supabase = createAdminClient();

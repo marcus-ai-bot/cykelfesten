@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
+import { requireEventAccess } from '@/lib/auth';
 
 /**
  * Delay Envelopes API
@@ -17,6 +18,12 @@ export async function POST(request: Request) {
         { error: 'event_id och delay_minutes krävs' },
         { status: 400 }
       );
+    }
+    
+    // Auth: Require organizer access to this event
+    const auth = await requireEventAccess(event_id);
+    if (!auth.success) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     
     const supabase = createAdminClient();

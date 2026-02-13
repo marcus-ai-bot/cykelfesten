@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { requireEventAccess } from '@/lib/auth';
 
 /**
  * Reserve Management API
@@ -17,6 +18,31 @@ export async function POST(request: Request) {
     
     if (!action) {
       return NextResponse.json({ error: 'action krävs' }, { status: 400 });
+    }
+    
+    // For list action, we need event_id directly
+    // For other actions, we get it from the couple
+    let eventIdToCheck = event_id;
+    
+    if (!eventIdToCheck && couple_id) {
+      // Get event_id from couple
+      const readClient = await createClient();
+      const { data: coupleData } = await readClient
+        .from('couples')
+        .select('event_id')
+        .eq('id', couple_id)
+        .single();
+      eventIdToCheck = coupleData?.event_id;
+    }
+    
+    if (!eventIdToCheck) {
+      return NextResponse.json({ error: 'event_id or couple_id required' }, { status: 400 });
+    }
+    
+    // Auth: Require organizer access to this event
+    const auth = await requireEventAccess(eventIdToCheck);
+    if (!auth.success) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     
     const supabase = createAdminClient();

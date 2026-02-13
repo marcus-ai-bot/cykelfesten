@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { geocodeAddress, getCyclingDistanceMatrix, type Coordinates } from '@/lib/geo';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { requireEventAccess } from '@/lib/auth';
 
 interface CoupleWithCoords {
   id: string;
@@ -34,6 +30,18 @@ export async function POST(request: NextRequest) {
     if (!event_id) {
       return NextResponse.json({ error: 'event_id required' }, { status: 400 });
     }
+    
+    // Auth: Require organizer access to this event
+    const auth = await requireEventAccess(event_id);
+    if (!auth.success) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+    
+    // Use service role for admin operations
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
     
     // Load couples
     const { data: couples, error } = await supabase

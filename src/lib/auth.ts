@@ -168,3 +168,72 @@ export async function logout() {
   
   cookieStore.delete('organizer_session');
 }
+
+/**
+ * Auth result for API routes
+ */
+export type AuthResult = 
+  | {
+      success: true;
+      organizer: Organizer;
+      role: 'founder' | 'co-organizer';
+    }
+  | {
+      success: false;
+      error: string;
+      status: 401 | 403;
+    };
+
+/**
+ * Require organizer with access to a specific event (for API routes)
+ * Returns organizer and role if authorized, error details if not
+ */
+export async function requireEventAccess(eventId: string): Promise<AuthResult> {
+  const organizer = await getOrganizer();
+  
+  if (!organizer) {
+    return {
+      success: false,
+      error: 'Not authenticated',
+      status: 401,
+    };
+  }
+  
+  const { hasAccess, role } = await checkEventAccess(organizer.id, eventId);
+  
+  if (!hasAccess || !role) {
+    return {
+      success: false,
+      error: 'No access to this event',
+      status: 403,
+    };
+  }
+  
+  return {
+    success: true,
+    organizer,
+    role,
+  };
+}
+
+/**
+ * Require any authenticated organizer (for API routes)
+ * Use this for routes that don't need event-specific access
+ */
+export async function requireAuth(): Promise<AuthResult> {
+  const organizer = await getOrganizer();
+  
+  if (!organizer) {
+    return {
+      success: false,
+      error: 'Not authenticated',
+      status: 401,
+    };
+  }
+  
+  return {
+    success: true,
+    organizer,
+    role: 'founder', // Default role when not event-specific
+  };
+}

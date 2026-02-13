@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { geocodeAddress } from '@/lib/geo';
+import { requireEventAccess } from '@/lib/auth';
 
 // POST /api/admin/geocode-addresses
 // Geocodes all addresses for couples in an event that don't have coordinates yet
@@ -11,6 +12,12 @@ export async function POST(request: NextRequest) {
     
     if (!eventId) {
       return NextResponse.json({ error: 'eventId required' }, { status: 400 });
+    }
+    
+    // Auth: Require organizer access to this event
+    const auth = await requireEventAccess(eventId);
+    if (!auth.success) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     
     const supabase = await createClient();

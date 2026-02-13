@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { AWARDS } from '@/lib/awards/calculate';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { requireEventAccess } from '@/lib/auth';
 
 // Default enabled awards (non-sensitive)
 const DEFAULT_ENABLED_AWARDS = [
@@ -35,6 +31,18 @@ export async function POST(request: NextRequest) {
     if (!eventId) {
       return NextResponse.json({ error: 'eventId required' }, { status: 400 });
     }
+    
+    // Auth: Require organizer access to this event
+    const auth = await requireEventAccess(eventId);
+    if (!auth.success) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+    
+    // Use service role for admin operations
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
     
     // Get event settings
     const { data: event, error: eventError } = await supabase
