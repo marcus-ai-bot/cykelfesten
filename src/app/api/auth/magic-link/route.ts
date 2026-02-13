@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { resend, FROM_EMAIL, BASE_URL } from '@/lib/resend';
 import { randomBytes } from 'crypto';
+import { checkRateLimit, getClientIp, AUTH_RATE_LIMIT } from '@/lib/rate-limit';
 
 // POST /api/auth/magic-link
 // Send a magic link to an organizer's email
@@ -15,6 +16,37 @@ export async function POST(request: NextRequest) {
     }
     
     const normalizedEmail = email.toLowerCase().trim();
+    
+    // Rate limiting - check both email and IP
+    const clientIp = getClientIp(request);
+    
+    const ipLimit = checkRateLimit(clientIp, AUTH_RATE_LIMIT.byIp);
+    if (!ipLimit.success) {
+      return NextResponse.json(
+        { 
+          error: 'För många försök. Vänta några minuter.',
+          retryAfter: ipLimit.retryAfterSeconds 
+        },
+        { 
+          status: 429,
+          headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) }
+        }
+      );
+    }
+    
+    const emailLimit = checkRateLimit(normalizedEmail, AUTH_RATE_LIMIT.byEmail);
+    if (!emailLimit.success) {
+      return NextResponse.json(
+        { 
+          error: 'För många inloggningsförsök för denna email. Vänta några minuter.',
+          retryAfter: emailLimit.retryAfterSeconds 
+        },
+        { 
+          status: 429,
+          headers: { 'Retry-After': String(emailLimit.retryAfterSeconds) }
+        }
+      );
+    }
     const supabase = await createClient();
     
     // Check if organizer exists
