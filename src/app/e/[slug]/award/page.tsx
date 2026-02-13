@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+// Note: Supabase client removed - using API for data fetching
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { AWARDS, type Award } from '@/lib/awards/calculate';
@@ -45,6 +45,9 @@ export default function AwardPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
+  
+  // Support both signed token (preferred) and legacy coupleId+person params
+  const token = searchParams.get('token');
   const coupleId = searchParams.get('coupleId');
   const personType = searchParams.get('person') || 'invited'; // 'invited' or 'partner'
   
@@ -55,107 +58,67 @@ export default function AwardPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const badgeRef = useRef<HTMLDivElement | null>(null);
   
-  const supabase = createClient();
-  
   useEffect(() => {
     loadData();
-  }, [slug, coupleId, personType]);
+  }, [slug, token, coupleId, personType]);
   
   async function loadData() {
-    if (!coupleId) {
+    // Need either token or coupleId
+    if (!token && !coupleId) {
       setLoading(false);
       return;
     }
     
-    // Get couple info with event settings
-    const { data: couple } = await supabase
-      .from('couples')
-      .select('*, events(id, name, event_date, enabled_awards, thank_you_message)')
-      .eq('id', coupleId)
-      .single();
-    
-    if (!couple) {
+    try {
+      // Build API URL with auth params
+      const apiUrl = new URL('/api/award/data', window.location.origin);
+      apiUrl.searchParams.set('eventSlug', slug);
+      
+      if (token) {
+        apiUrl.searchParams.set('token', token);
+      } else if (coupleId) {
+        apiUrl.searchParams.set('coupleId', coupleId);
+        apiUrl.searchParams.set('person', personType);
+      }
+      
+      const response = await fetch(apiUrl.toString());
+      
+      if (!response.ok) {
+        console.error('Failed to load award data:', response.status);
+        setLoading(false);
+        return;
+      }
+      
+      const awardData = await response.json();
+      
+      // If no award, show default participant award
+      if (!awardData.has_award || !awardData.award) {
+        const wildcardAward = AWARDS.find(a => a.id === 'wildcard') || AWARDS[0];
+        setData({
+          person_name: awardData.person_name || 'Deltagare',
+          event_name: awardData.event_name || '',
+          event_date: awardData.event_date || '',
+          award: wildcardAward,
+          value: null,
+          explanation: getExplanation(wildcardAward, null, awardData.person_name),
+          thank_you_message: awardData.thank_you_message,
+        });
+      } else {
+        setData({
+          person_name: awardData.person_name,
+          event_name: awardData.event_name,
+          event_date: awardData.event_date,
+          award: awardData.award,
+          value: awardData.value,
+          explanation: awardData.explanation,
+          thank_you_message: awardData.thank_you_message,
+        });
+      }
+    } catch (error) {
+      console.error('Error loading award data:', error);
+    } finally {
       setLoading(false);
-      return;
     }
-    
-    const event = couple.events as any;
-    
-    // Get enabled awards (null = use defaults, empty array = none)
-    const enabledAwards: string[] = event?.enabled_awards ?? DEFAULT_ENABLED_AWARDS;
-    const thankYouMessage: string | null = event?.thank_you_message || null;
-    
-    // Determine which person we're showing
-    const isPartner = personType === 'partner' && couple.partner_name;
-    const personName = isPartner ? couple.partner_name : couple.invited_name;
-    
-    // Get THIS person's award assignment
-    const { data: assignment } = await supabase
-      .from('award_assignments')
-      .select('*')
-      .eq('couple_id', coupleId)
-      .eq('person_type', personType)
-      .maybeSingle();
-    
-    // Edge case: No awards enabled at all
-    if (enabledAwards.length === 0) {
-      setData({
-        person_name: personName || 'Deltagare',
-        event_name: event?.name || '',
-        event_date: event?.event_date || '',
-        award: { id: 'participant', emoji: '🌟', title: 'Deltagare', subtitle: 'Tack för att du var med!', color_from: 'from-blue-500', color_to: 'to-purple-500' },
-        value: null,
-        explanation: `${personName || 'Du'} var med och gjorde kvällen till något speciellt!`,
-        thank_you_message: thankYouMessage,
-      });
-      setLoading(false);
-      return;
-    }
-    
-    if (!assignment) {
-      // No award assigned yet - show default wildcard
-      const wildcardAward = AWARDS.find(a => a.id === 'wildcard') || AWARDS[0];
-      setData({
-        person_name: personName || 'Deltagare',
-        event_name: event?.name || '',
-        event_date: event?.event_date || '',
-        award: wildcardAward,
-        value: null,
-        explanation: getExplanation(wildcardAward, null, personName),
-        thank_you_message: thankYouMessage,
-      });
-      setLoading(false);
-      return;
-    }
-    
-    // Check if assigned award is still enabled
-    let award = AWARDS.find(a => a.id === assignment.award_id);
-    let value = assignment.value;
-    let explanation: string;
-    
-    if (award && !enabledAwards.includes(award.id)) {
-      // Award was disabled by admin - show wildcard instead
-      award = AWARDS.find(a => a.id === 'wildcard') || AWARDS[0];
-      value = null;
-      explanation = getExplanation(award, null, personName);
-    } else if (!award) {
-      award = AWARDS[0];
-      explanation = getExplanation(award, value, personName);
-    } else {
-      explanation = getExplanation(award, value, personName);
-    }
-    
-    setData({
-      person_name: personName || 'Deltagare',
-      event_name: event?.name || '',
-      event_date: event?.event_date || '',
-      award,
-      value,
-      explanation,
-      thank_you_message: thankYouMessage,
-    });
-    
-    setLoading(false);
   }
   
   function getExplanation(award: Award, value: string | null, name: string | null): string {
