@@ -4,14 +4,15 @@
  * Returns the current state of all envelopes for a participant.
  * Backend controls all timing - client only displays what server sends.
  * 
- * GET /api/envelope/status?eventId=xxx&coupleId=yyy
+ * GET /api/envelope/status?eventId=xxx&token=yyy
+ * (Legacy: &coupleId=yyy is still supported during migration)
  * 
- * Security: coupleId acts as a simple token. In production,
- * consider signed URLs or JWT for better security.
+ * Security: Uses HMAC-signed tokens to prevent unauthorized access
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getAccessFromParams } from '@/lib/tokens';
 import type { 
   EnvelopeStatusResponse, 
   CourseEnvelopeStatus, 
@@ -40,14 +41,18 @@ const STATE_ORDER: EnvelopeState[] = ['LOCKED', 'TEASING', 'CLUE_1', 'CLUE_2', '
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const eventId = searchParams.get('eventId');
-  const coupleId = searchParams.get('coupleId');
   
-  if (!eventId || !coupleId) {
+  // Get coupleId from signed token (preferred) or legacy params
+  const access = getAccessFromParams(searchParams);
+  
+  if (!eventId || !access) {
     return NextResponse.json(
-      { error: 'Missing eventId or coupleId' },
+      { error: 'Missing eventId or valid token/coupleId' },
       { status: 400 }
     );
   }
+  
+  const { coupleId } = access;
   
   const supabase = await createClient();
   const now = new Date();
