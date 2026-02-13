@@ -90,6 +90,9 @@ export default function WrapPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
+  
+  // Support both signed token (preferred) and legacy coupleId+person params
+  const token = searchParams.get('token');
   const coupleId = searchParams.get('coupleId');
   const personType = searchParams.get('person') || 'invited'; // 'invited' or 'partner'
   
@@ -102,14 +105,14 @@ export default function WrapPage() {
   const [audioPlaying, setAudioPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
-  const supabase = createClient();
+  const supabase = createClient(); // Keep for tracking only
   
   // Dynamic slides based on available data
   const [slides, setSlides] = useState<React.ReactNode[]>([]);
   
   useEffect(() => {
     loadData();
-  }, [slug, coupleId, personType]);
+  }, [slug, token, coupleId, personType]);
   
   // Track wrap link open (once per session)
   useEffect(() => {
@@ -149,99 +152,51 @@ export default function WrapPage() {
   }, [currentSlide, isPlaying, hasStarted, slides.length]);
   
   async function loadData() {
-    if (!coupleId) {
+    // Need either token or coupleId
+    if (!token && !coupleId) {
       setLoading(false);
       return;
     }
     
-    // Get couple with fun_facts and event
-    const { data: couple } = await supabase
-      .from('couples')
-      .select('*, invited_fun_facts, partner_fun_facts, events(*)')
-      .eq('id', coupleId)
-      .single();
-    
-    if (!couple) {
-      setLoading(false);
-      return;
+    try {
+      // Build API URL with auth params
+      const apiUrl = new URL('/api/wrap/data', window.location.origin);
+      apiUrl.searchParams.set('eventSlug', slug);
+      
+      if (token) {
+        // Preferred: signed token
+        apiUrl.searchParams.set('token', token);
+      } else if (coupleId) {
+        // Legacy: raw coupleId (still supported during migration)
+        apiUrl.searchParams.set('coupleId', coupleId);
+        apiUrl.searchParams.set('person', personType);
+      }
+      
+      const response = await fetch(apiUrl.toString());
+      
+      if (!response.ok) {
+        console.error('Failed to load wrap data:', response.status);
+        setLoading(false);
+        return;
+      }
+      
+      const wrapData: WrapData = await response.json();
+      
+      // Set music based on decade
+      const musicFile = `/music/${wrapData.music_decade}.mp3`;
+      setMusicSrc(musicFile);
+      
+      setData({
+        ...wrapData,
+        music_decade: wrapData.music_decade === '80s' ? '80-tal' : 
+                      wrapData.music_decade === '90s' ? '90-tal' :
+                      wrapData.music_decade === '2000s' ? '2000-tal' :
+                      wrapData.music_decade === '2010s' ? '2010-tal' :
+                      wrapData.music_decade === '2020s' ? '2020-tal' : 'festlig',
+      });
+    } catch (error) {
+      console.error('Error loading wrap data:', error);
     }
-    
-    const event = couple.events as any;
-    
-    // Determine which person we're showing
-    const isPartner = personType === 'partner' && couple.partner_name;
-    const personName = isPartner ? couple.partner_name : couple.invited_name;
-    const personFunFacts = isPartner ? couple.partner_fun_facts : couple.invited_fun_facts;
-    
-    // Get envelopes for this couple
-    const { data: envelopes } = await supabase
-      .from('envelopes')
-      .select('*')
-      .eq('couple_id', coupleId)
-      .eq('match_plan_id', event.active_match_plan_id);
-    
-    // Get all couples for "people met"
-    const { data: allCouples } = await supabase
-      .from('couples')
-      .select('id')
-      .eq('event_id', event.id)
-      .eq('confirmed', true);
-    
-    // Calculate THIS person's stats
-    // Note: We're dividing couple's distance by 2 if partner exists
-    const totalCyclingMin = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes || 0), 0) || 0;
-    const coupleDistanceKm = Math.round(totalCyclingMin * 0.25 * 10) / 10;
-    
-    // Individual distance: if partner exists, assume 50/50 split
-    const distanceKm = isPartner || couple.partner_name 
-      ? Math.round(coupleDistanceKm / 2 * 10) / 10
-      : coupleDistanceKm;
-    
-    const peopleMet = Math.max(0, ((allCouples?.length || 1) - 1) * 2);
-    
-    // Get wrap_stats from event (or use defaults)
-    const wrapStats = (event as any).wrap_stats as WrapStats | null;
-    
-    // Calculate distance percent
-    const distancePercent = wrapStats?.total_distance_km 
-      ? Math.round((distanceKm / wrapStats.total_distance_km) * 100 * 10) / 10
-      : 0;
-    
-    // Check if THIS person is the longest rider
-    const isLongestRider = wrapStats 
-      ? distanceKm >= (wrapStats.longest_ride_meters / 1000)
-      : false;
-    
-    // Get music based on THIS person's fun facts
-    const music = getMusicFile(personFunFacts || null);
-    setMusicSrc(music);
-    
-    // Check if this person has an award
-    const { data: award } = await supabase
-      .from('award_assignments')
-      .select('id')
-      .eq('couple_id', coupleId)
-      .eq('person_type', personType)
-      .maybeSingle();
-    
-    const hasAward = !!award;
-    
-    setData({
-      person_name: personName || 'Deltagare',
-      event_name: event.name,
-      event_date: event.event_date,
-      distance_km: distanceKm,
-      distance_percent: distancePercent,
-      people_met: peopleMet,
-      music_decade: music.includes('80s') ? '80-tal' : 
-                    music.includes('90s') ? '90-tal' :
-                    music.includes('2000s') ? '2000-tal' :
-                    music.includes('2010s') ? '2010-tal' :
-                    music.includes('2020s') ? '2020-tal' : 'festlig',
-      wrap_stats: wrapStats,
-      has_award: hasAward,
-      is_longest_rider: isLongestRider,
-    });
     
     setLoading(false);
   }
