@@ -7,11 +7,12 @@
  * - Quick questions about the evening
  * - AI generates a thank-you message
  * - Host adjusts and approves
+ * 
+ * Security: Uses API layer with token validation
  */
 
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -35,33 +36,52 @@ export default function HostRecapPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
-  const coupleId = searchParams.get('coupleId');
+  const token = searchParams.get('token');
   
-  const [step, setStep] = useState<'questions' | 'preview' | 'done'>('questions');
+  const [step, setStep] = useState<'loading' | 'questions' | 'preview' | 'done'>('loading');
   const [data, setData] = useState<RecapData>(INITIAL_DATA);
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [eventName, setEventName] = useState('');
   const [coupleName, setCoupleName] = useState('');
   
-  const supabase = createClient();
-  
   useEffect(() => {
     loadCoupleInfo();
-  }, [coupleId]);
+  }, [token, slug]);
   
   async function loadCoupleInfo() {
-    if (!coupleId) return;
+    if (!token) {
+      setError('Saknar åtkomsttoken');
+      setStep('questions');
+      return;
+    }
     
-    const { data: couple } = await supabase
-      .from('couples')
-      .select('invited_name, partner_name, events(name)')
-      .eq('id', coupleId)
-      .single();
-    
-    if (couple) {
-      setCoupleName(`${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`);
-      setEventName((couple.events as any)?.name || '');
+    try {
+      const response = await fetch(
+        `/api/host-recap/data?eventSlug=${encodeURIComponent(slug)}&token=${encodeURIComponent(token)}`
+      );
+      
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Kunde inte ladda data');
+      }
+      
+      const recapData = await response.json();
+      setCoupleName(recapData.couple_name);
+      setEventName(recapData.event_name);
+      
+      // If already submitted, show done state
+      if (recapData.existing_recap?.submitted_at) {
+        setGeneratedMessage(recapData.existing_recap.generated_message);
+        setStep('done');
+      } else {
+        setStep('questions');
+      }
+    } catch (err: any) {
+      console.error('Failed to load recap data:', err);
+      setError(err.message);
+      setStep('questions');
     }
   }
   
@@ -86,32 +106,63 @@ export default function HostRecapPage() {
   }
   
   async function handleSubmit() {
-    setLoading(true);
-    
-    // Save to database
-    const { error } = await supabase
-      .from('host_recaps')
-      .upsert({
-        couple_id: coupleId,
-        last_guest_left: data.last_guest_left,
-        three_words: data.three_words,
-        funniest_moment: data.funniest_moment,
-        unexpected: data.unexpected,
-        custom_message: data.message_to_guests,
-        generated_message: generatedMessage,
-        submitted_at: new Date().toISOString(),
-      });
-    
-    if (!error) {
-      setStep('done');
+    if (!token) {
+      setError('Saknar åtkomsttoken');
+      return;
     }
     
-    setLoading(false);
+    setLoading(true);
+    
+    try {
+      const response = await fetch('/api/host-recap/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventSlug: slug,
+          token,
+          data: {
+            ...data,
+            generated_message: generatedMessage,
+          },
+        }),
+      });
+      
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Kunde inte spara');
+      }
+      
+      setStep('done');
+    } catch (err: any) {
+      console.error('Failed to submit recap:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
   
   function handleNext() {
     generateMessage();
     setStep('preview');
+  }
+  
+  if (step === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
+        <div className="animate-pulse text-amber-600 text-xl">Laddar...</div>
+      </div>
+    );
+  }
+  
+  if (error && step !== 'questions') {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-xl mb-4">😕 {error}</p>
+          <Link href="/" className="text-amber-600 underline">Tillbaka</Link>
+        </div>
+      </div>
+    );
   }
   
   if (step === 'done') {
@@ -173,6 +224,12 @@ export default function HostRecapPage() {
               />
             </div>
             
+            {error && (
+              <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+            
             <div className="flex gap-3">
               <button
                 onClick={() => setStep('questions')}
@@ -216,6 +273,12 @@ export default function HostRecapPage() {
               <p className="text-amber-600 font-medium mt-2">{coupleName}</p>
             )}
           </div>
+          
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm">
+              {error}
+            </div>
+          )}
           
           {/* Questions */}
           <div className="space-y-4">

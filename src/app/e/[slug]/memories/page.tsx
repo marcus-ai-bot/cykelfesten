@@ -7,12 +7,13 @@
  * - Event statistics
  * - All host messages
  * - Instagram handles of participants
- * - Personal stats (per couple via ?coupleId=xxx)
+ * - Personal stats (per authenticated couple)
+ * 
+ * Security: Uses API layer with token validation
  */
 
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -49,104 +50,42 @@ export default function MemoriesPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
-  const coupleId = searchParams.get('coupleId');
+  const token = searchParams.get('token');
   
   const [data, setData] = useState<MemoriesData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'stats' | 'messages' | 'people'>('stats');
-  
-  const supabase = createClient();
   
   useEffect(() => {
     loadData();
-  }, [slug, coupleId]);
+  }, [slug, token]);
   
   async function loadData() {
-    // Get event
-    const { data: event } = await supabase
-      .from('events')
-      .select('*')
-      .eq('slug', slug)
-      .single();
-    
-    if (!event) {
+    if (!token) {
+      setError('Saknar åtkomsttoken');
       setLoading(false);
       return;
     }
     
-    // Get all couples
-    const { data: couples } = await supabase
-      .from('couples')
-      .select('id, invited_name, partner_name, instagram_handle, partner_instagram')
-      .eq('event_id', event.id)
-      .eq('confirmed', true);
-    
-    // Get host messages
-    const { data: recaps } = await supabase
-      .from('host_recaps')
-      .select('*, couples(invited_name, partner_name)')
-      .in('couple_id', couples?.map(c => c.id) || []);
-    
-    // Get envelopes for distance calculation
-    const { data: envelopes } = await supabase
-      .from('envelopes')
-      .select('cycling_minutes, couple_id')
-      .eq('match_plan_id', event.active_match_plan_id);
-    
-    // Calculate stats
-    const totalCouples = couples?.length || 0;
-    const totalCyclingMin = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes || 0), 0) || 0;
-    const totalDistanceKm = Math.round(totalCyclingMin * 0.25 * 10) / 10;
-    
-    // Build participants list
-    const participants: Participant[] = [];
-    for (const c of couples || []) {
-      if (c.invited_name) {
-        participants.push({ name: c.invited_name, instagram: c.instagram_handle });
-      }
-      if (c.partner_name) {
-        participants.push({ name: c.partner_name, instagram: c.partner_instagram });
-      }
-    }
-    
-    // Build host messages
-    const hostMessages: HostMessage[] = (recaps || [])
-      .filter(r => r.generated_message)
-      .map(r => ({
-        host_names: `${(r.couples as any)?.invited_name || ''}${(r.couples as any)?.partner_name ? ` & ${(r.couples as any).partner_name}` : ''}`,
-        course: 'Värd',
-        message: r.generated_message,
-      }));
-    
-    // Personal stats (if coupleId provided)
-    let personalStats: PersonalStats | null = null;
-    if (coupleId) {
-      const couple = couples?.find(c => c.id === coupleId);
-      const coupleEnvelopes = envelopes?.filter(e => e.couple_id === coupleId);
-      const personalCyclingMin = coupleEnvelopes?.reduce((sum, e) => sum + (e.cycling_minutes || 0), 0) || 0;
+    try {
+      const response = await fetch(
+        `/api/memories/data?eventSlug=${encodeURIComponent(slug)}&token=${encodeURIComponent(token)}`
+      );
       
-      if (couple) {
-        personalStats = {
-          couple_name: `${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`,
-          distance_cycled_km: Math.round(personalCyclingMin * 0.25 * 10) / 10,
-          people_met: Math.max(0, (totalCouples - 1) * 2), // Other couples * 2 people
-          courses_eaten: 3,
-        };
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Kunde inte ladda minnen');
       }
+      
+      const memoriesData = await response.json();
+      setData(memoriesData);
+    } catch (err: any) {
+      console.error('Failed to load memories:', err);
+      setError(err.message || 'Något gick fel');
+    } finally {
+      setLoading(false);
     }
-    
-    setData({
-      event_name: event.name,
-      event_date: event.event_date,
-      total_couples: totalCouples,
-      total_distance_km: totalDistanceKm,
-      total_dishes: totalCouples * 3,
-      host_messages: hostMessages,
-      participants,
-      personal_stats: personalStats,
-    });
-    
-    setLoading(false);
   }
   
   if (loading) {
@@ -157,11 +96,11 @@ export default function MemoriesPage() {
     );
   }
   
-  if (!data) {
+  if (error || !data) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
         <div className="text-center">
-          <p className="text-xl mb-4">😕 Event hittades inte</p>
+          <p className="text-xl mb-4">😕 {error || 'Event hittades inte'}</p>
           <Link href="/" className="text-purple-600 underline">Tillbaka</Link>
         </div>
       </div>
