@@ -1,17 +1,135 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { verifyInviteToken } from '@/lib/tokens';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { geocodeAddress } from '@/lib/geocode';
 
 // POST /api/register
 // Server-side registration: insert couple + trigger emails
 
+const REGISTER_RATE_LIMIT = {
+  byIp: { limit: 10, windowSeconds: 15 * 60, prefix: 'register:ip' },
+  byEmail: { limit: 3, windowSeconds: 60 * 60, prefix: 'register:email' },
+};
+
+// Allowed fields for couple insert (whitelist)
+const ALLOWED_FIELDS = new Set([
+  'invited_name', 'invited_email', 'invited_phone', 'invited_allergies',
+  'invited_birth_year', 'invited_fun_facts', 'invited_pet_allergy',
+  'partner_name', 'partner_email', 'partner_phone', 'partner_allergies',
+  'partner_birth_year', 'partner_fun_facts', 'partner_pet_allergy',
+  'address', 'address_unit', 'address_notes', 'course_preference',
+  'instagram_handle', 'accessibility_needs', 'accessibility_ok',
+  'coordinates',
+]);
+
+function validateAndSanitize(formData: Record<string, unknown>): { clean: Record<string, unknown>; errors: string[] } {
+  const clean: Record<string, unknown> = {};
+  const errors: string[] = [];
+
+  // Only allow whitelisted fields
+  for (const [key, value] of Object.entries(formData)) {
+    if (!ALLOWED_FIELDS.has(key)) continue;
+    clean[key] = value;
+  }
+
+  // Required: invited_name (2-100 chars)
+  if (!clean.invited_name || typeof clean.invited_name !== 'string') {
+    errors.push('Namn krävs');
+  } else if (clean.invited_name.length < 2 || clean.invited_name.length > 100) {
+    errors.push('Namn måste vara 2-100 tecken');
+  }
+
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (clean.invited_email && typeof clean.invited_email === 'string') {
+    if (!emailRegex.test(clean.invited_email) || clean.invited_email.length > 254) {
+      errors.push('Ogiltig e-postadress');
+    }
+  }
+  if (clean.partner_email && typeof clean.partner_email === 'string') {
+    if (!emailRegex.test(clean.partner_email) || clean.partner_email.length > 254) {
+      errors.push('Ogiltig e-postadress för partner');
+    }
+  }
+
+  // String length caps (prevent abuse)
+  for (const field of ['invited_name', 'partner_name', 'address', 'address_unit', 'address_notes', 'instagram_handle', 'accessibility_needs']) {
+    if (clean[field] && typeof clean[field] === 'string' && (clean[field] as string).length > 500) {
+      clean[field] = (clean[field] as string).slice(0, 500);
+    }
+  }
+
+  // Birth year validation
+  for (const field of ['invited_birth_year', 'partner_birth_year']) {
+    if (clean[field] !== undefined && clean[field] !== null) {
+      const year = Number(clean[field]);
+      if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+        errors.push(`Ogiltigt födelseår`);
+      } else {
+        clean[field] = year;
+      }
+    }
+  }
+
+  // Array fields: allergies, fun_facts (max 20 items, max 200 chars each)
+  for (const field of ['invited_allergies', 'partner_allergies', 'invited_fun_facts', 'partner_fun_facts']) {
+    if (clean[field] && Array.isArray(clean[field])) {
+      clean[field] = (clean[field] as string[])
+        .slice(0, 20)
+        .map(s => typeof s === 'string' ? s.slice(0, 200) : String(s));
+    }
+  }
+
+  // course_preference enum
+  if (clean.course_preference && !['starter', 'main', 'dessert'].includes(clean.course_preference as string)) {
+    clean.course_preference = null;
+  }
+
+  // pet_allergy enum
+  for (const field of ['invited_pet_allergy', 'partner_pet_allergy']) {
+    if (clean[field] && !['none', 'cat', 'dog', 'both'].includes(clean[field] as string)) {
+      clean[field] = 'none';
+    }
+  }
+
+  return { clean, errors };
+}
+
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP
+    const ip = getClientIp(request);
+    const ipLimit = checkRateLimit(ip, REGISTER_RATE_LIMIT.byIp);
+    if (!ipLimit.success) {
+      return NextResponse.json(
+        { error: `För många anmälningar. Försök igen om ${ipLimit.retryAfterSeconds}s.` },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { slug, invite_token, ...formData } = body;
 
     if (!slug || !invite_token) {
       return NextResponse.json({ error: 'Missing slug or invite token' }, { status: 400 });
+    }
+
+    // Rate limit by email
+    if (formData.invited_email) {
+      const emailLimit = checkRateLimit(formData.invited_email, REGISTER_RATE_LIMIT.byEmail);
+      if (!emailLimit.success) {
+        return NextResponse.json(
+          { error: `Denna e-postadress har redan registrerats nyligen.` },
+          { status: 429 }
+        );
+      }
+    }
+
+    // Validate and sanitize input
+    const { clean, errors } = validateAndSanitize(formData);
+    if (errors.length > 0) {
+      return NextResponse.json({ error: errors.join('. ') }, { status: 400 });
     }
 
     const supabase = createAdminClient();
@@ -36,12 +154,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ogiltig inbjudningslänk' }, { status: 403 });
     }
 
+    // Geocode address if provided (non-blocking, best-effort)
+    if (clean.address && !clean.coordinates) {
+      const coords = await geocodeAddress(clean.address as string);
+      if (coords) {
+        clean.coordinates = coords;
+      }
+    }
+
     // Insert couple
     const { data: couple, error: insertError } = await supabase
       .from('couples')
       .insert({
         event_id: event.id,
-        ...formData,
+        ...clean,
         confirmed: true,
       })
       .select('id')
@@ -63,7 +189,7 @@ export async function POST(request: NextRequest) {
     }).catch((err) => console.error('notify-registered failed:', err));
 
     // Partner invite email
-    if (formData.partner_email) {
+    if (clean.partner_email) {
       fetch(`${baseUrl}/api/register/notify-partner`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -24,6 +24,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ valid: false, error: 'Event not found' }, { status: 404 });
   }
 
+  if (event.status !== 'open') {
+    return NextResponse.json({ valid: false, error: 'Anmälan är inte öppen för detta event', status: event.status }, { status: 403 });
+  }
+
   if (!verifyInviteToken(event.id, invite)) {
     return NextResponse.json({ valid: false, error: 'Invalid invite' }, { status: 403 });
   }

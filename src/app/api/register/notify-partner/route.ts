@@ -2,16 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { resend, FROM_EMAIL } from '@/lib/resend';
 import { randomBytes } from 'crypto';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 // POST /api/register/notify-partner
 // Called after registration to send partner invite email
 // Body: { couple_id: string }
 
+const NOTIFY_RATE_LIMIT = { limit: 5, windowSeconds: 15 * 60, prefix: 'notify-partner' };
+
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(ip, NOTIFY_RATE_LIMIT);
+    if (!rl.success) {
+      return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+    }
+
     const { couple_id } = await request.json();
 
-    if (!couple_id) {
+    if (!couple_id || typeof couple_id !== 'string' || couple_id.length > 50) {
       return NextResponse.json({ error: 'couple_id required' }, { status: 400 });
     }
 
