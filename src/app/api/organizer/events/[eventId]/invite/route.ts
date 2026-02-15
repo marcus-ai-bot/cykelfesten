@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
 import { resend, FROM_EMAIL, BASE_URL } from '@/lib/resend';
 
@@ -37,7 +37,7 @@ export async function POST(
       return NextResponse.json({ error: 'Du kan inte bjuda in dig själv' }, { status: 400 });
     }
     
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // Get event details
     const { data: event } = await supabase
@@ -180,7 +180,7 @@ export async function GET(
       return NextResponse.json({ error: 'No access to this event' }, { status: 403 });
     }
     
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // Get or create a generic invite token for this event
     // This is a "shareable link" anyone can use

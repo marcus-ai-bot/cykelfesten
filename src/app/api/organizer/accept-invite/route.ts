@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer } from '@/lib/auth';
 
 // POST /api/organizer/accept-invite
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Token required' }, { status: 400 });
     }
     
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // Find invite
     const { data: invite, error: inviteError } = await supabase

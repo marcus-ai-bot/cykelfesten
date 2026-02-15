@@ -140,8 +140,8 @@ function RegisterForm() {
         return result;
       };
       
-      // Insert couple
-      const { error: insertError } = await supabase
+      // Insert couple and get ID back
+      const { data: insertedCouple, error: insertError } = await supabase
         .from('couples')
         .insert({
           event_id: event.id,
@@ -166,10 +166,21 @@ function RegisterForm() {
           accessibility_needs: form.accessibility_needs || null,
           accessibility_ok: form.accessibility_ok,
           confirmed: true,
-        });
+        })
+        .select('id')
+        .single();
       
       if (insertError) {
         throw new Error(insertError.message);
+      }
+      
+      // Send partner invite email (fire-and-forget)
+      if (hasPartner && form.partner_email && insertedCouple?.id) {
+        fetch('/api/register/notify-partner', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ couple_id: insertedCouple.id }),
+        }).catch(() => {}); // Don't block on email failure
       }
       
       // Redirect to success page
