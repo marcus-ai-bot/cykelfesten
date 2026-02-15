@@ -51,7 +51,7 @@ export default async function OrganizerEventPage({ params }: Props) {
     .from('couples')
     .select('*', { count: 'exact', head: true })
     .eq('event_id', eventId)
-    .is('cancelled', null);
+    .neq('cancelled', true);
   
   const eventDate = new Date(event.event_date).toLocaleDateString('sv-SE', {
     weekday: 'long',

@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       .select('id, invited_name')
       .eq('event_id', event.id)
       .eq('invited_email', normalizedEmail)
-      .is('cancelled', null)
+      .neq('cancelled', true)
       .single();
 
     if (asInvited) {
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       .select('id, partner_name, partner_invite_token')
       .eq('event_id', event.id)
       .eq('partner_email', normalizedEmail)
-      .is('cancelled', null)
+      .neq('cancelled', true)
       .single();
 
     if (asPartner) {
