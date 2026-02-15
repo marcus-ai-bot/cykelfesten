@@ -1,7 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/server';
 import { geocodeAddress, getCyclingDistanceMatrix, type Coordinates } from '@/lib/geo';
 import { requireEventAccess } from '@/lib/auth';
+
+// Parse PostgREST point format "(lng,lat)" to {lat, lng}
+function parsePoint(point: unknown): Coordinates | null {
+  if (!point) return null;
+  if (typeof point === 'string') {
+    const match = point.match(/\(([^,]+),([^)]+)\)/);
+    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+  }
+  if (typeof point === 'object' && point !== null) {
+    const p = point as any;
+    if (p.lat != null && p.lng != null) return { lat: p.lat, lng: p.lng };
+  }
+  return null;
+}
 
 interface CoupleWithCoords {
   id: string;
@@ -37,11 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     
-    // Use service role for admin operations
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = createAdminClient();
     
     // Load couples
     const { data: couples, error } = await supabase
@@ -55,6 +65,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ warnings: [], message: 'No couples found' });
     }
     
+    // Parse point format from DB
+    for (const c of couples) {
+      c.coordinates = parsePoint(c.coordinates);
+    }
+
     // Geocode any addresses without coordinates
     const needsGeocoding = couples.filter(c => !c.coordinates && c.address);
     
