@@ -71,7 +71,7 @@ export default async function GuestsPage({ params }: Props) {
         ) : (
           <div className="space-y-4">
             {activeCouples.map((couple) => (
-              <CoupleCard key={couple.id} couple={couple} />
+              <CoupleCard key={couple.id} couple={couple} eventId={eventId} />
             ))}
           </div>
         )}
@@ -80,7 +80,7 @@ export default async function GuestsPage({ params }: Props) {
   );
 }
 
-function CoupleCard({ couple }: { couple: any }) {
+function CoupleCard({ couple, eventId }: { couple: any; eventId: string }) {
   const registeredAt = new Date(couple.created_at).toLocaleDateString('sv-SE', {
     day: 'numeric',
     month: 'short',
@@ -94,7 +94,7 @@ function CoupleCard({ couple }: { couple: any }) {
   ].filter(Boolean);
   
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+    <Link href={`/organizer/event/${eventId}/guests/${couple.id}`} className="block bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           {/* Names */}
@@ -161,6 +161,6 @@ function CoupleCard({ couple }: { couple: any }) {
           {registeredAt}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
