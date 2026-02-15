@@ -32,15 +32,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate token if not exists
+    // Generate token if not exists (but don't mark as sent yet)
     let token = couple.partner_invite_token;
     if (!token) {
       token = randomBytes(32).toString('hex');
       await supabase
         .from('couples')
-        .update({
-          partner_invite_token: token,
-          partner_invite_sent_at: new Date().toISOString(),
-        })
+        .update({ partner_invite_token: token })
         .eq('id', couple_id);
     }
 
@@ -79,8 +77,14 @@ export async function POST(request: NextRequest) {
 
     if (emailError) {
       console.error('Partner email error:', emailError);
-      return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to send email', details: String(emailError) }, { status: 500 });
     }
+
+    // Mark as sent only AFTER successful email
+    await supabase
+      .from('couples')
+      .update({ partner_invite_sent_at: new Date().toISOString() })
+      .eq('id', couple_id);
 
     return NextResponse.json({ success: true, sent_to: couple.partner_email });
   } catch (error) {

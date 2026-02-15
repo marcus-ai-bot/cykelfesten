@@ -174,13 +174,23 @@ function RegisterForm() {
         throw new Error(insertError.message);
       }
       
-      // Send partner invite email (fire-and-forget)
-      if (hasPartner && form.partner_email && insertedCouple?.id) {
-        fetch('/api/register/notify-partner', {
+      // Send confirmation + partner invite emails (fire-and-forget)
+      if (insertedCouple?.id) {
+        // Confirmation to the person who registered
+        fetch('/api/register/notify-registered', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ couple_id: insertedCouple.id }),
-        }).catch(() => {}); // Don't block on email failure
+        }).catch(() => {});
+        
+        // Partner invite (if partner has email)
+        if (hasPartner && form.partner_email) {
+          fetch('/api/register/notify-partner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ couple_id: insertedCouple.id }),
+          }).catch(() => {});
+        }
       }
       
       // Redirect to success page
