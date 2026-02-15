@@ -97,11 +97,43 @@ function buildSuccessResponse(tokenData: any, sessionToken: string, request: Nex
   const redirectPath = organizer?.name ? '/organizer' : '/organizer/onboarding';
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   
-  // Use 302 redirect with Set-Cookie header directly
-  const redirectUrl = new URL(redirectPath, request.url);
-  const response = NextResponse.redirect(redirectUrl, 302);
+  // Return HTML page that sets cookie via JS (NOT httpOnly) then redirects
+  // This avoids browser issues with Set-Cookie on redirects/HTML responses
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Inloggad!</title>
+        <script>
+          document.cookie = "organizer_session=${sessionToken}; path=/; max-age=${maxAge}; secure; samesite=lax";
+          // Verify cookie was set
+          if (document.cookie.includes("organizer_session")) {
+            window.location.href = "${redirectPath}";
+          } else {
+            document.getElementById("error").style.display = "block";
+          }
+        </script>
+      </head>
+      <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div style="background: white; padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+          <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
+          <h1 style="margin: 0 0 8px 0; color: #1a1a1a;">Inloggad!</h1>
+          <p style="color: #666;">Skickar dig vidare...</p>
+          <div id="error" style="display:none; margin-top: 20px; padding: 16px; background: #fee; border-radius: 8px; color: #c00;">
+            Cookies verkar vara blockerade i din browser. Kontrollera inställningarna.
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
   
-  // Set cookie via raw header to ensure it's sent correctly
+  const response = new NextResponse(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+  
+  // Also set via header as backup (httpOnly version)
   const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
   response.headers.append(
     'Set-Cookie',
