@@ -40,13 +40,33 @@ interface EventLinkRaw {
  * Returns null if not logged in
  */
 export async function getOrganizer(): Promise<Organizer | null> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('organizer_session')?.value;
+  // Try multiple methods to read the cookie (Next.js cookies() can miss JS-set cookies)
+  let sessionToken: string | undefined;
   
-  console.log('getOrganizer - sessionToken exists:', !!sessionToken);
+  // Method 1: Next.js cookies() API
+  try {
+    const cookieStore = await cookies();
+    sessionToken = cookieStore.get('organizer_session')?.value;
+  } catch {
+    // cookies() can throw in some contexts
+  }
+  
+  // Method 2: Parse from request headers (fallback)
+  if (!sessionToken) {
+    try {
+      const { headers } = await import('next/headers');
+      const headersList = await headers();
+      const cookieHeader = headersList.get('cookie') || '';
+      const match = cookieHeader.match(/organizer_session=([^;]+)/);
+      if (match) {
+        sessionToken = match[1];
+      }
+    } catch {
+      // headers() might not be available
+    }
+  }
   
   if (!sessionToken) {
-    console.log('No session token found in cookies');
     return null;
   }
   

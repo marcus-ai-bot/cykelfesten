@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer } from '@/lib/auth';
 import { randomBytes } from 'crypto';
 
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name, date and city are required' }, { status: 400 });
     }
     
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // Generate unique slug
     const baseSlug = name
@@ -98,7 +98,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Not logged in' }, { status: 401 });
     }
     
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     const { data: eventLinks, error } = await supabase
       .from('event_organizers')
