@@ -14,24 +14,45 @@ export async function GET(request: NextRequest) {
   
   const supabase = createAdminClient();
   
-  // Find and validate token
+  // Find token (allow both unused AND recently-used tokens for link preview resilience)
   const { data: tokenData, error: tokenError } = await supabase
     .from('magic_link_tokens')
     .select('*, organizer:organizers(*)')
     .eq('token', token)
-    .is('used_at', null)
     .gt('expires_at', new Date().toISOString())
     .single();
   
   if (tokenError || !tokenData) {
+    console.error('Token not found or expired:', tokenError?.message);
     return NextResponse.redirect(new URL('/login?error=expired_token', request.url));
   }
   
-  // Mark token as used
-  await supabase
-    .from('magic_link_tokens')
-    .update({ used_at: new Date().toISOString() })
-    .eq('token', token);
+  // If token was already used, check if there's an existing valid session
+  if (tokenData.used_at) {
+    const { data: existingSession } = await supabase
+      .from('organizer_sessions')
+      .select('session_token, expires_at')
+      .eq('organizer_id', tokenData.organizer_id)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (existingSession) {
+      // Reuse existing session
+      console.log('Reusing existing session for organizer:', tokenData.organizer_id);
+      return buildSuccessResponse(tokenData, existingSession.session_token, request);
+    }
+    
+    // Token was used but no session exists (link preview ate it) — create new session anyway
+    console.log('Token used but no session found — creating new session (link preview recovery)');
+  } else {
+    // Mark token as used
+    await supabase
+      .from('magic_link_tokens')
+      .update({ used_at: new Date().toISOString() })
+      .eq('token', token);
+  }
   
   // Update last login
   await supabase
@@ -44,7 +65,7 @@ export async function GET(request: NextRequest) {
   const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
   
   // Store session
-  await supabase
+  const { error: sessionError } = await supabase
     .from('organizer_sessions')
     .insert({
       organizer_id: tokenData.organizer_id,
@@ -52,26 +73,38 @@ export async function GET(request: NextRequest) {
       expires_at: sessionExpires.toISOString(),
     });
   
-  // Determine redirect URL
-  const organizer = tokenData.organizer as any;
-  const redirectPath = organizer.name ? '/organizer' : '/organizer/onboarding';
+  if (sessionError) {
+    console.error('SESSION INSERT FAILED:', sessionError);
+    return NextResponse.json({ 
+      error: 'Failed to create session', 
+      details: sessionError.message,
+    }, { status: 500 });
+  }
   
-  // Build cookie - use proper attributes for production
+  console.log('SESSION CREATED for organizer:', tokenData.organizer_id);
+  
+  return buildSuccessResponse(tokenData, sessionToken, request);
+}
+
+function buildSuccessResponse(tokenData: any, sessionToken: string, request: NextRequest) {
+  const organizer = tokenData.organizer as any;
+  const redirectPath = organizer?.name ? '/organizer' : '/organizer/onboarding';
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   
-  // Return HTML page with cookie set via response.cookies (proper Next.js way)
   const html = `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="UTF-8">
+        <meta http-equiv="refresh" content="2;url=${redirectPath}">
         <title>Inloggad!</title>
       </head>
       <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
         <div style="background: white; padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
           <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
           <h1 style="margin: 0 0 8px 0; color: #1a1a1a;">Inloggad!</h1>
-          <p style="color: #666; margin-bottom: 24px;">Välkommen${organizer.name ? ' ' + organizer.name : ''}!</p>
+          <p style="color: #666; margin-bottom: 24px;">Välkommen${organizer?.name ? ' ' + organizer.name : ''}!</p>
+          <p style="color: #999;">Skickar dig vidare...</p>
           <a href="${redirectPath}" style="display: inline-block; background: #4f46e5; color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px;">
             Gå till Dashboard →
           </a>
@@ -82,17 +115,14 @@ export async function GET(request: NextRequest) {
   
   const response = new NextResponse(html, {
     status: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-    },
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
   
-  // Set cookie using Next.js proper method
   response.cookies.set('organizer_session', sessionToken, {
     path: '/',
     maxAge,
     httpOnly: true,
-    secure: true, // Required for HTTPS on Vercel
+    secure: true,
     sameSite: 'lax',
   });
   
