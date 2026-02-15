@@ -97,40 +97,19 @@ function buildSuccessResponse(tokenData: any, sessionToken: string, request: Nex
   const redirectPath = organizer?.name ? '/organizer' : '/organizer/onboarding';
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   
-  // Return HTML page that redirects after Set-Cookie header is processed
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Inloggad!</title>
-        <meta http-equiv="refresh" content="1;url=${redirectPath}">
-        <script>
-          // Redirect immediately — cookie is set via Set-Cookie header
-          window.location.href = "${redirectPath}";
-        </script>
-      </head>
-      <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-        <div style="background: white; padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
-          <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
-          <h1 style="margin: 0 0 8px 0; color: #1a1a1a;">Inloggad!</h1>
-          <p style="color: #666;">Skickar dig vidare...</p>
-        </div>
-      </body>
-    </html>
-  `;
+  // Use a standard redirect with Set-Cookie header
+  // The browser processes Set-Cookie BEFORE following the redirect
+  const redirectUrl = new URL(redirectPath, request.url);
+  const response = NextResponse.redirect(redirectUrl);
   
-  const response = new NextResponse(html, {
-    status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  // Set cookie on the redirect response — browser stores it before following redirect
+  response.cookies.set('organizer_session', sessionToken, {
+    path: '/',
+    maxAge,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
   });
-  
-  // Also set via header as backup (httpOnly version)
-  const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
-  response.headers.append(
-    'Set-Cookie',
-    `organizer_session=${sessionToken}; Path=/; Max-Age=${maxAge}; Expires=${expires}; HttpOnly; Secure; SameSite=Lax`
-  );
   
   return response;
 }
