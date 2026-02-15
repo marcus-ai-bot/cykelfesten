@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import type { Course } from '@/types/database';
 
 export default function RegisterPage() {
@@ -104,23 +103,6 @@ function RegisterForm() {
     setError(null);
     
     try {
-      const supabase = createClient();
-      
-      // Get event by slug
-      const { data: event, error: eventError } = await supabase
-        .from('events')
-        .select('id, status')
-        .eq('slug', slug)
-        .single();
-      
-      if (eventError || !event) {
-        throw new Error('Event hittades inte');
-      }
-      
-      if (event.status !== 'open') {
-        throw new Error('Anmälan är inte öppen för detta event');
-      }
-      
       // Parse allergies to array
       const parseAllergies = (str: string): string[] => 
         str.split(',').map(s => s.trim()).filter(Boolean);
@@ -140,11 +122,13 @@ function RegisterForm() {
         return result;
       };
       
-      // Insert couple and get ID back
-      const { data: insertedCouple, error: insertError } = await supabase
-        .from('couples')
-        .insert({
-          event_id: event.id,
+      // Register via server API (handles insert + emails)
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          invite_token: inviteToken,
           invited_name: form.invited_name,
           invited_email: form.invited_email,
           invited_phone: form.invited_phone || null,
@@ -165,32 +149,13 @@ function RegisterForm() {
           partner_pet_allergy: hasPartner ? form.partner_pet_allergy : 'none',
           accessibility_needs: form.accessibility_needs || null,
           accessibility_ok: form.accessibility_ok,
-          confirmed: true,
-        })
-        .select('id')
-        .single();
+        }),
+      });
       
-      if (insertError) {
-        throw new Error(insertError.message);
-      }
+      const data = await res.json();
       
-      // Send confirmation + partner invite emails (fire-and-forget)
-      if (insertedCouple?.id) {
-        // Confirmation to the person who registered
-        fetch('/api/register/notify-registered', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ couple_id: insertedCouple.id }),
-        }).catch(() => {});
-        
-        // Partner invite (if partner has email)
-        if (hasPartner && form.partner_email) {
-          fetch('/api/register/notify-partner', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ couple_id: insertedCouple.id }),
-          }).catch(() => {});
-        }
+      if (!res.ok) {
+        throw new Error(data.error || 'Något gick fel vid registreringen');
       }
       
       // Redirect to success page
