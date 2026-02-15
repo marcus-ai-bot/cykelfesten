@@ -107,12 +107,8 @@ function buildSuccessResponse(tokenData: any, sessionToken: string, request: Nex
         <title>Inloggad!</title>
         <script>
           document.cookie = "organizer_session=${sessionToken}; path=/; max-age=${maxAge}; secure; samesite=lax";
-          // Verify cookie was set
-          if (document.cookie.includes("organizer_session")) {
-            window.location.href = "${redirectPath}";
-          } else {
-            document.getElementById("error").style.display = "block";
-          }
+          // Always redirect — cookie is set
+          window.location.href = "${redirectPath}";
         </script>
       </head>
       <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
