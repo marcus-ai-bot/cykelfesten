@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { resend, FROM_EMAIL, BASE_URL } from '@/lib/resend';
 import { randomBytes } from 'crypto';
 import { checkRateLimit, getClientIp, AUTH_RATE_LIMIT } from '@/lib/rate-limit';
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         }
       );
     }
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // Check if organizer exists
     let { data: organizer } = await supabase

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { randomBytes } from 'crypto';
 
 // GET /api/auth/verify?token=xxx
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=invalid_token', request.url));
   }
   
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // Find and validate token
   const { data: tokenData, error: tokenError } = await supabase

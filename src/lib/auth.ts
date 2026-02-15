@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 
 export interface Organizer {
@@ -50,7 +50,7 @@ export async function getOrganizer(): Promise<Organizer | null> {
     return null;
   }
   
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // Find valid session
   const { data: session, error } = await supabase
@@ -98,7 +98,7 @@ export async function getOrganizerWithEvents(): Promise<OrganizerWithEvents | nu
     return null;
   }
   
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // Get events where this person is an organizer
   const { data: eventLinks } = await supabase
@@ -134,7 +134,7 @@ export async function checkEventAccess(
   organizerId: string, 
   eventId: string
 ): Promise<{ hasAccess: boolean; role: 'founder' | 'co-organizer' | null }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   const { data } = await supabase
     .from('event_organizers')
@@ -159,7 +159,7 @@ export async function logout() {
   const sessionToken = cookieStore.get('organizer_session')?.value;
   
   if (sessionToken) {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase
       .from('organizer_sessions')
       .delete()
