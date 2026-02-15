@@ -182,6 +182,24 @@ export default function SettingsPage() {
           </div>
         </Section>
 
+        {/* Advanced */}
+        <Section title="🔧 Avancerat">
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { href: `/organizer/event/${eventId}/timing`, label: '⏱️ Timing-editor', desc: 'Kuvert-reveal tider' },
+              { href: `/organizer/event/${eventId}/messages`, label: '💬 Meddelanden', desc: 'Kuvert-texter' },
+              { href: `/organizer/event/${eventId}/awards`, label: '🏆 Awards', desc: 'Utmärkelser' },
+              { href: `/organizer/event/${eventId}/wrap`, label: '🎬 Wrap', desc: 'Sammanfattning & mail' },
+            ].map(({ href, label, desc }) => (
+              <Link key={href} href={href}
+                className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="font-medium text-sm text-gray-900">{label}</div>
+                <div className="text-xs text-gray-500">{desc}</div>
+              </Link>
+            ))}
+          </div>
+        </Section>
+
         {/* Quick Links */}
         <Section title="🔗 Gästlänkar">
           <div className="flex flex-wrap gap-2">
