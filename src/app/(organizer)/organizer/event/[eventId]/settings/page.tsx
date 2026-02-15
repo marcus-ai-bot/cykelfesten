@@ -190,6 +190,7 @@ export default function SettingsPage() {
               { href: `/organizer/event/${eventId}/messages`, label: '💬 Meddelanden', desc: 'Kuvert-texter' },
               { href: `/organizer/event/${eventId}/awards`, label: '🏆 Awards', desc: 'Utmärkelser' },
               { href: `/organizer/event/${eventId}/wrap`, label: '🎬 Wrap', desc: 'Sammanfattning & mail' },
+              { href: `/organizer/event/${eventId}/notifications`, label: '📧 Notifikationer', desc: 'Wrap-utskick & statistik' },
             ].map(({ href, label, desc }) => (
               <Link key={href} href={href}
                 className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">

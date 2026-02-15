@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { DistanceWarnings } from '@/components/admin/DistanceWarnings';
 
 interface Couple {
   id: string;
@@ -152,6 +153,9 @@ export default function MatchingPage() {
             </div>
           </div>
         )}
+
+        {/* Distance Warnings */}
+        <DistanceWarnings eventId={eventId} />
 
         {/* View tabs */}
         {pairings.length > 0 && (
