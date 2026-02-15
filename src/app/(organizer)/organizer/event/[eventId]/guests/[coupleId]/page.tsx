@@ -241,6 +241,24 @@ export default function CoupleDetailPage() {
           </div>
         </Section>
 
+        {/* Matching Preferences */}
+        <div className="mt-6">
+          <Link
+            href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`}
+            className="block bg-indigo-50 border-2 border-indigo-200 rounded-xl p-5 hover:bg-indigo-100 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-indigo-900">🎯 Matchningspreferenser</h3>
+                <p className="text-sm text-indigo-600 mt-1">
+                  Ställ in vilka par som ska/inte ska mötas vid middagen
+                </p>
+              </div>
+              <span className="text-indigo-400 text-2xl">→</span>
+            </div>
+          </Link>
+        </div>
+
         {/* Danger Zone */}
         <div className="mt-8 border border-red-200 rounded-xl p-6">
           <h3 className="text-lg font-semibold text-red-700 mb-4">⚠️ Åtgärder</h3>
