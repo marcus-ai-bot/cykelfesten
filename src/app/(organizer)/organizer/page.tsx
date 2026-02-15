@@ -34,12 +34,12 @@ export default async function OrganizerDashboard() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-gray-600">{organizer.name}</span>
-            <Link 
+            <a 
               href="/api/auth/logout"
               className="text-gray-500 hover:text-gray-700 text-sm"
             >
               Logga ut
-            </Link>
+            </a>
           </div>
         </div>
       </header>
