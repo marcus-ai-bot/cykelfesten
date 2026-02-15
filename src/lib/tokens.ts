@@ -144,3 +144,22 @@ export function buildTokenUrl(baseUrl: string, coupleId: string, personType: 'in
   url.searchParams.set('token', token);
   return url.toString();
 }
+
+/**
+ * Create a deterministic invite token for an event.
+ * Always returns the same token for the same eventId — no expiry.
+ * Used to create shareable registration links.
+ */
+export function createInviteToken(eventId: string): string {
+  return createHmac('sha256', TOKEN_SECRET)
+    .update(`invite:${eventId}`)
+    .digest('hex')
+    .substring(0, 16);
+}
+
+/**
+ * Verify an invite token for an event.
+ */
+export function verifyInviteToken(eventId: string, token: string): boolean {
+  return createInviteToken(eventId) === token;
+}

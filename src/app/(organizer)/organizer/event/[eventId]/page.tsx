@@ -4,6 +4,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
 import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
+import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,6 +124,9 @@ export default async function OrganizerEventPage({ params }: Props) {
             icon="🏠"
           />
         </div>
+        
+        {/* Invite Link */}
+        <InviteLinkSection eventId={eventId} />
         
         {/* Main Actions Grid */}
         <div className="grid md:grid-cols-2 gap-6 mb-8">
