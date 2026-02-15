@@ -1,18 +1,33 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Course } from '@/types/database';
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 flex items-center justify-center">
+        <div className="text-amber-700 text-lg">Laddar...</div>
+      </main>
+    }>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
+  const inviteToken = searchParams.get('invite');
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasPartner, setHasPartner] = useState(true);
+  const [accessGranted, setAccessGranted] = useState<boolean | null>(null); // null = checking
   
   const [form, setForm] = useState({
     invited_name: '',
@@ -57,6 +72,18 @@ export default function RegisterPage() {
     accessibility_ok: true,
   });
   
+  // Verify invite token on mount
+  useEffect(() => {
+    if (!inviteToken) {
+      setAccessGranted(false);
+      return;
+    }
+    fetch(`/api/register/verify-invite?slug=${slug}&invite=${inviteToken}`)
+      .then(r => r.json())
+      .then(data => setAccessGranted(data.valid === true))
+      .catch(() => setAccessGranted(false));
+  }, [slug, inviteToken]);
+
   const handleFunFactChange = (person: 'invited' | 'partner', field: string, value: string) => {
     setForm(prev => ({
       ...prev,
@@ -155,6 +182,30 @@ export default function RegisterPage() {
     }
   };
   
+  // Loading state while checking invite
+  if (accessGranted === null) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 flex items-center justify-center">
+        <div className="text-amber-700 text-lg">Verifierar inbjudan...</div>
+      </main>
+    );
+  }
+
+  // No valid invite token
+  if (!accessGranted) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="text-5xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-amber-900 mb-2">Inbjudan krävs</h1>
+          <p className="text-amber-700">
+            Du behöver en inbjudningslänk från arrangören för att anmäla dig till denna fest.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 py-12">
       <div className="max-w-xl mx-auto px-4">
