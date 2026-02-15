@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       suffix++;
     }
     
-    // Create event
+    // Create event with sensible defaults for required time fields
     const { data: event, error: eventError } = await supabase
       .from('events')
       .insert({
@@ -54,7 +54,10 @@ export async function POST(request: NextRequest) {
         event_date,
         city,
         description,
-        organizer_email: organizer.email, // For email notifications
+        organizer_email: organizer.email,
+        starter_time: '17:30:00',
+        main_time: '19:00:00',
+        dessert_time: '20:30:00',
       })
       .select()
       .single();
