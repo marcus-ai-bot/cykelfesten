@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { Event } from '@/types/database';
+import { ResendLinkForm } from '@/components/event/ResendLinkForm';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -132,6 +133,11 @@ export default async function EventPage({ params }: Props) {
               🔑 Logga in för att se din sida
             </Link>
           </div>
+        )}
+        
+        {/* Resend link for guests/partners who lost their link */}
+        {typedEvent.status !== 'draft' && (
+          <ResendLinkForm slug={slug} />
         )}
       </div>
     </main>

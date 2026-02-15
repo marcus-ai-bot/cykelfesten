@@ -62,6 +62,27 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
     }
   }
   
+  const [resending, setResending] = useState<string | null>(null);
+
+  async function handleResendInvite(email: string) {
+    setResending(email);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Något gick fel');
+      setMessage({ type: 'success', text: `Ny inbjudan skickad till ${email}` });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setResending(null);
+    }
+  }
+
   const accepted = organizers.filter(o => o.accepted_at);
   const pending = organizers.filter(o => !o.accepted_at);
   
@@ -179,6 +200,13 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
                 <div className="text-sm text-yellow-600">Väntar på svar</div>
               </div>
             </div>
+            <button
+              onClick={() => handleResendInvite(o.organizer.email)}
+              disabled={resending === o.organizer.email}
+              className="text-xs px-3 py-1.5 bg-yellow-200 hover:bg-yellow-300 text-yellow-800 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {resending === o.organizer.email ? 'Skickar...' : '📧 Skicka igen'}
+            </button>
           </div>
         ))}
       </div>

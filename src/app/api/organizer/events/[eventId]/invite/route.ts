@@ -86,18 +86,19 @@ export async function POST(
       .single();
     
     if (existingInvite && !existingInvite.removed_at) {
-      return NextResponse.json({ 
-        error: existingInvite.accepted_at 
-          ? 'Denna person är redan arrangör' 
-          : 'Denna person har redan en väntande inbjudan'
-      }, { status: 400 });
+      if (existingInvite.accepted_at) {
+        return NextResponse.json({ 
+          error: 'Denna person är redan arrangör' 
+        }, { status: 400 });
+      }
+      // Pending invite — resend with new token (fall through to update below)
     }
     
     // Create or update invite
     const inviteToken = crypto.randomUUID();
     
     if (existingInvite) {
-      // Reactivate removed invite
+      // Reactivate removed invite or resend pending invite with new token
       await supabase
         .from('event_organizers')
         .update({
