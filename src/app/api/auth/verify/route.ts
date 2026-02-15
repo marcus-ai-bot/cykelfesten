@@ -64,13 +64,15 @@ export async function GET(request: NextRequest) {
   const sessionToken = randomBytes(32).toString('hex');
   const sessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
   
-  // Store session
+  // Store session (upsert to handle unique constraint on organizer_id)
   const { error: sessionError } = await supabase
     .from('organizer_sessions')
-    .insert({
+    .upsert({
       organizer_id: tokenData.organizer_id,
       session_token: sessionToken,
       expires_at: sessionExpires.toISOString(),
+    }, {
+      onConflict: 'organizer_id',
     });
   
   if (sessionError) {
