@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   
   // Delete session from DB if exists
   if (sessionToken) {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase
       .from('organizer_sessions')
       .delete()

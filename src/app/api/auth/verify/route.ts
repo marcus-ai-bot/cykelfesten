@@ -97,17 +97,16 @@ function buildSuccessResponse(tokenData: any, sessionToken: string, request: Nex
   const redirectPath = organizer?.name ? '/organizer' : '/organizer/onboarding';
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   
-  // Return HTML page that sets cookie via JS (NOT httpOnly) then redirects
-  // This avoids browser issues with Set-Cookie on redirects/HTML responses
+  // Return HTML page that redirects after Set-Cookie header is processed
   const html = `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="UTF-8">
         <title>Inloggad!</title>
+        <meta http-equiv="refresh" content="1;url=${redirectPath}">
         <script>
-          document.cookie = "organizer_session=${sessionToken}; path=/; max-age=${maxAge}; secure; samesite=lax";
-          // Always redirect — cookie is set
+          // Redirect immediately — cookie is set via Set-Cookie header
           window.location.href = "${redirectPath}";
         </script>
       </head>
@@ -116,9 +115,6 @@ function buildSuccessResponse(tokenData: any, sessionToken: string, request: Nex
           <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
           <h1 style="margin: 0 0 8px 0; color: #1a1a1a;">Inloggad!</h1>
           <p style="color: #666;">Skickar dig vidare...</p>
-          <div id="error" style="display:none; margin-top: 20px; padding: 16px; background: #fee; border-radius: 8px; color: #c00;">
-            Cookies verkar vara blockerade i din browser. Kontrollera inställningarna.
-          </div>
         </div>
       </body>
     </html>

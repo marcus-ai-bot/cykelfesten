@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 
 // GET /api/debug/session
 // Debug endpoint to see what's happening with sessions
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   };
   
   if (sessionToken) {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // Check if session exists in DB
     const { data: session, error: sessionError } = await supabase

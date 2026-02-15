@@ -30,15 +30,20 @@ export async function POST(request: NextRequest) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
     
-    // Check if slug exists
-    const { data: existing } = await supabase
-      .from('events')
-      .select('slug')
-      .like('slug', `${baseSlug}%`);
-    
-    const slug = existing?.length 
-      ? `${baseSlug}-${existing.length + 1}` 
-      : baseSlug;
+    // Check if slug exists and find unique one
+    let slug = baseSlug;
+    let suffix = 2;
+    while (true) {
+      const { data: existing } = await supabase
+        .from('events')
+        .select('id')
+        .eq('slug', slug)
+        .limit(1)
+        .single();
+      if (!existing) break;
+      slug = `${baseSlug}-${suffix}`;
+      suffix++;
+    }
     
     // Create event
     const { data: event, error: eventError } = await supabase

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 
 // GET /api/auth/set-session?token=xxx&redirect=/organizer
 // Sets session cookie and redirects - uses GET for reliable cookie setting
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=no_token', request.url));
   }
   
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // Verify token exists in database
   const { data: session, error } = await supabase

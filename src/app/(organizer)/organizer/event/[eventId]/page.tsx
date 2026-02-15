@@ -1,9 +1,11 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { requireOrganizer, checkEventAccess } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
 import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
+
+export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ eventId: string }>;
@@ -19,7 +21,7 @@ export default async function OrganizerEventPage({ params }: Props) {
     notFound();
   }
   
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   // Get event details
   const { data: event } = await supabase
