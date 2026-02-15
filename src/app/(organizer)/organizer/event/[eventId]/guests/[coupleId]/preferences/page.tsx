@@ -24,12 +24,12 @@ interface SourceCouple {
   partner_name: string | null;
 }
 
-const PREF_CONFIG: Record<Preference, { label: string; emoji: string; color: string; border: string; bg: string }> = {
-  avoid:     { label: 'Ej mötas',       emoji: '⛔', color: 'text-red-700',    border: 'border-red-400 ring-2 ring-red-200',    bg: 'bg-red-50' },
-  low:       { label: 'Ej prioriterat', emoji: '👎', color: 'text-orange-700', border: 'border-orange-300 ring-2 ring-orange-100', bg: 'bg-orange-50' },
-  neutral:   { label: 'Spelar ingen roll', emoji: '🤷', color: 'text-gray-500', border: 'border-gray-200', bg: 'bg-white' },
-  preferred: { label: 'Prioriterat',    emoji: '👍', color: 'text-green-700',  border: 'border-green-400 ring-2 ring-green-200',  bg: 'bg-green-50' },
-  known:     { label: 'Träffats förut', emoji: '🔄', color: 'text-blue-700',   border: 'border-blue-400 ring-2 ring-blue-200',   bg: 'bg-blue-50' },
+const PREF_CONFIG: Record<Preference, { label: string; shortLabel: string; emoji: string; color: string; border: string; bg: string }> = {
+  avoid:     { label: 'Ej mötas',       shortLabel: 'Undvik',      emoji: '⛔', color: 'text-red-700',    border: 'border-red-400 ring-2 ring-red-200',    bg: 'bg-red-50' },
+  low:       { label: 'Låg prio',       shortLabel: 'Låg prio',   emoji: '👎', color: 'text-orange-700', border: 'border-orange-300 ring-2 ring-orange-100', bg: 'bg-orange-50' },
+  neutral:   { label: 'Spelar ingen roll', shortLabel: 'Neutral', emoji: '🤷', color: 'text-gray-500', border: 'border-gray-200', bg: 'bg-white' },
+  preferred: { label: 'Prioriterat',    shortLabel: 'Prio',       emoji: '👍', color: 'text-green-700',  border: 'border-green-400 ring-2 ring-green-200',  bg: 'bg-green-50' },
+  known:     { label: 'Träffats förut', shortLabel: 'Träffats',   emoji: '🔄', color: 'text-blue-700',   border: 'border-blue-400 ring-2 ring-blue-200',   bg: 'bg-blue-50' },
 };
 
 const PREF_ORDER: Preference[] = ['avoid', 'low', 'neutral', 'preferred', 'known'];
@@ -304,7 +304,7 @@ function SwipeableCard({
               title={pc.label}
             >
               <span className="block text-base">{pc.emoji}</span>
-              <span className="block mt-0.5 leading-tight">{pc.label.split(' ')[0]}</span>
+              <span className="block mt-0.5 leading-tight">{pc.shortLabel}</span>
             </button>
           );
         })}
