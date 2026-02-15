@@ -15,6 +15,8 @@ interface CoupleCard {
   allergies: string[];
   pet_allergy: boolean;
   distance: number | null;
+  duration_min: number | null;
+  distance_source: string | null;
   preference: Preference;
 }
 
@@ -260,7 +262,8 @@ function SwipeableCard({
         </div>
         {couple.distance !== null && (
           <span className="shrink-0 ml-3 bg-gray-100 text-gray-700 text-xs font-medium px-2 py-1 rounded-full">
-            📏 {couple.distance < 1 ? `${Math.round(couple.distance * 1000)}m` : `${couple.distance.toFixed(1)} km`}
+            🚴 {couple.distance < 1 ? `${Math.round(couple.distance * 1000)}m` : `${couple.distance.toFixed(1)} km`}
+            {couple.duration_min ? ` · ${couple.duration_min} min` : ''}
           </span>
         )}
       </div>

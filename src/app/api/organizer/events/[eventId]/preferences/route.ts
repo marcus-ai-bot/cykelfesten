@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
+import { getCyclingDistance, type Coordinates } from '@/lib/geo';
 
 interface RouteContext {
   params: Promise<{ eventId: string }>;
+}
+
+// Parse PostgREST point format "(lng,lat)" to {lat, lng}
+function parsePoint(point: unknown): Coordinates | null {
+  if (!point) return null;
+  if (typeof point === 'string') {
+    const match = point.match(/\(([^,]+),([^)]+)\)/);
+    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+  }
+  if (typeof point === 'object' && point !== null) {
+    const p = point as any;
+    if (p.lat != null && p.lng != null) return { lat: p.lat, lng: p.lng };
+  }
+  return null;
 }
 
 // GET /api/organizer/events/[eventId]/preferences?coupleId=xxx
@@ -58,38 +73,59 @@ export async function GET(request: Request, context: RouteContext) {
   });
 
   // Find the source couple for distance calculation
-  const sourcCouple = couples?.find((c: any) => c.id === coupleId);
-  const sourceCoords = sourcCouple?.coordinates;
+  const sourceCouple = couples?.find((c: any) => c.id === coupleId);
+  const sourceCoords = parsePoint(sourceCouple?.coordinates);
 
-  // Calculate distances and build response
-  const otherCouples = (couples || [])
-    .filter((c: any) => c.id !== coupleId)
-    .map((c: any) => {
-      let distance: number | null = null;
-      if (sourceCoords && c.coordinates) {
-        distance = haversineKm(sourceCoords, c.coordinates);
-      }
-      return {
-        id: c.id,
-        invited_name: c.invited_name,
-        partner_name: c.partner_name,
-        address: c.address,
-        address_unit: c.address_unit,
-        allergies: [
-          ...(c.invited_allergies || []),
-          ...(c.partner_allergies || []),
-        ].filter(Boolean),
-        pet_allergy: c.invited_pet_allergy !== 'none' || c.partner_pet_allergy !== 'none',
-        distance,
-        preference: prefMap[c.id] || 'neutral',
-      };
-    });
+  // Calculate cycling distances for all other couples
+  const others = (couples || []).filter((c: any) => c.id !== coupleId);
+  
+  // Build distances: use ORS cycling for each pair (parallel, max 5 concurrent)
+  const distanceMap = new Map<string, { km: number; min: number; source: string }>();
+  
+  if (sourceCoords) {
+    const targets = others
+      .map(c => ({ id: c.id, coords: parsePoint(c.coordinates) }))
+      .filter(t => t.coords !== null);
+    
+    // Batch parallel requests (5 at a time to stay within rate limits)
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+      const batch = targets.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map(async (t) => {
+          const dist = await getCyclingDistance(sourceCoords, t.coords!);
+          return { id: t.id, dist };
+        })
+      );
+      results.forEach(r => distanceMap.set(r.id, { km: r.dist.distance_km, min: r.dist.duration_min, source: r.dist.source }));
+    }
+  }
+
+  const otherCouples = others.map((c: any) => {
+    const dist = distanceMap.get(c.id);
+    return {
+      id: c.id,
+      invited_name: c.invited_name,
+      partner_name: c.partner_name,
+      address: c.address,
+      address_unit: c.address_unit,
+      allergies: [
+        ...(c.invited_allergies || []),
+        ...(c.partner_allergies || []),
+      ].filter(Boolean),
+      pet_allergy: c.invited_pet_allergy !== 'none' || c.partner_pet_allergy !== 'none',
+      distance: dist ? dist.km : null,
+      duration_min: dist ? dist.min : null,
+      distance_source: dist ? dist.source : null,
+      preference: prefMap[c.id] || 'neutral',
+    };
+  });
 
   return NextResponse.json({
-    sourceCouple: sourcCouple ? {
-      id: sourcCouple.id,
-      invited_name: sourcCouple.invited_name,
-      partner_name: sourcCouple.partner_name,
+    sourceCouple: sourceCouple ? {
+      id: sourceCouple.id,
+      invited_name: sourceCouple.invited_name,
+      partner_name: sourceCouple.partner_name,
     } : null,
     couples: otherCouples,
   });
@@ -152,22 +188,4 @@ export async function PUT(request: Request, context: RouteContext) {
   return NextResponse.json({ ok: true });
 }
 
-// Haversine distance in km
-function haversineKm(
-  a: { lat: number; lng: number } | any,
-  b: { lat: number; lng: number } | any
-): number {
-  const toRad = (x: number) => (x * Math.PI) / 180;
-  const lat1 = typeof a === 'object' && 'lat' in a ? a.lat : a?.latitude || 0;
-  const lng1 = typeof a === 'object' && 'lng' in a ? a.lng : a?.longitude || 0;
-  const lat2 = typeof b === 'object' && 'lat' in b ? b.lat : b?.latitude || 0;
-  const lng2 = typeof b === 'object' && 'lng' in b ? b.lng : b?.longitude || 0;
-  
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lng2 - lng1);
-  const sa = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return R * 2 * Math.atan2(Math.sqrt(sa), Math.sqrt(1 - sa));
-}
+// (haversine removed - using getCyclingDistance from @/lib/geo instead)
