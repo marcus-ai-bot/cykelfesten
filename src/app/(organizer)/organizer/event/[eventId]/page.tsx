@@ -148,19 +148,11 @@ export default async function OrganizerEventPage({ params }: Props) {
             disabled={!couplesCount}
           />
           
-          {/* Envelopes */}
-          <ActionCard
-            href={`/organizer/event/${eventId}/envelopes`}
-            title="Kuvert"
-            description="Hantera digitala kuvert och timing"
-            icon="✉️"
-          />
-          
           {/* Settings */}
           <ActionCard
             href={`/organizer/event/${eventId}/settings`}
             title="Inställningar"
-            description="Datum, tider och features"
+            description="Datum, tider, kuvert och notifieringar"
             icon="⚙️"
           />
         </div>
