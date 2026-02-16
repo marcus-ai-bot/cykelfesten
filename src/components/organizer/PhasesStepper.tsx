@@ -198,11 +198,11 @@ export function PhasesStepper({
                 type="button"
                 onClick={() => setActivePhaseIndex(index)}
                 className={`
-                  relative flex items-center gap-2 rounded-full px-4 py-2.5
+                  flex items-center gap-2 rounded-full px-4 py-2.5
                   text-sm font-semibold whitespace-nowrap
                   transition-all duration-200 ease-out
                   ${isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                    ? 'bg-indigo-600 text-white shadow-sm'
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }
                 `}
@@ -210,11 +210,7 @@ export function PhasesStepper({
                 <span className="text-base leading-none">{phase.icon}</span>
                 <span className="hidden sm:inline">{phase.name}</span>
                 {showStatus && (
-                  <StatusDot
-                    status={phase.status}
-                    size="sm"
-                    className="absolute -top-0.5 -right-0.5"
-                  />
+                  <StatusDot status={phase.status} size="sm" />
                 )}
               </button>
             );
