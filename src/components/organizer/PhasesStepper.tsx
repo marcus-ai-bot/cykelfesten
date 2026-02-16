@@ -54,10 +54,12 @@ export function PhasesStepper({
     return () => clearTimeout(timeout);
   }, [activePhaseIndex]);
 
-  const phases = [
+  type PhaseStatus = 'not_started' | 'in_progress' | 'complete' | 'needs_action';
+  const phases: Array<{ key: string; name: string; icon: string; status: PhaseStatus; content: React.ReactNode }> = [
     {
       key: 'invite',
       name: 'Inbjudan',
+      icon: '📨',
       status: couplesCount === 0 ? 'not_started' : 'in_progress',
       content: (
         <div className="space-y-6">
@@ -92,6 +94,7 @@ export function PhasesStepper({
     {
       key: 'dinner',
       name: 'Middag',
+      icon: '🍽️',
       status: !hasMatching ? 'not_started' : isPast ? 'complete' : 'in_progress',
       content: (
         <div className="space-y-6">
@@ -123,6 +126,7 @@ export function PhasesStepper({
     {
       key: 'after',
       name: 'Dagen efter',
+      icon: '🌅',
       status: !isPast ? 'not_started' : 'in_progress',
       content: (
         <div className="grid md:grid-cols-2 gap-6">
