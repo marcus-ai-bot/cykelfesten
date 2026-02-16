@@ -2,9 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { requireOrganizer, checkEventAccess } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
-import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
-import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
+import { PhasesStepper } from '@/components/organizer/PhasesStepper';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +50,14 @@ export default async function OrganizerEventPage({ params }: Props) {
     .select('*', { count: 'exact', head: true })
     .eq('event_id', eventId)
     .neq('cancelled', true);
+
+  const { data: matchPlan } = await supabase
+    .from('match_plans')
+    .select('id')
+    .eq('event_id', eventId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
   
   const eventDate = new Date(event.event_date).toLocaleDateString('sv-SE', {
     weekday: 'long',
@@ -125,76 +131,16 @@ export default async function OrganizerEventPage({ params }: Props) {
           />
         </div>
         
-        {/* Invite Link */}
-        <InviteLinkSection eventId={eventId} />
-        
-        {/* Main Actions Grid */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Guests */}
-          <ActionCard
-            href={`/organizer/event/${eventId}/guests`}
-            title="Gästlista"
-            description="Hantera registreringar och bekräftelser"
-            icon="👥"
-            count={couplesCount || 0}
-          />
-          
-          {/* Matching */}
-          <ActionCard
-            href={`/organizer/event/${eventId}/matching`}
-            title="Matchning"
-            description="Koppla ihop gäster med värdar"
-            icon="🔀"
-            disabled={!couplesCount}
-          />
-          
-          {/* Settings */}
-          <ActionCard
-            href={`/organizer/event/${eventId}/settings`}
-            title="Inställningar"
-            description="Datum, tider, kuvert och notifieringar"
-            icon="⚙️"
-          />
-        </div>
-        
-        {/* Guest Preview Section */}
-        <GuestPreviewSection eventId={eventId} slug={event.slug} />
-        
-        {/* Team Section */}
-        <InviteTeamSection 
-          eventId={eventId} 
+        <PhasesStepper
+          eventId={eventId}
+          eventSlug={event.slug}
+          couplesCount={couplesCount || 0}
+          isPast={isPast}
+          hasMatching={!!matchPlan}
           organizers={organizers || []}
           isFounder={isFounder}
           currentOrganizerId={organizer.id}
         />
-        
-        {/* Post-Event Actions (if past) */}
-        {isPast && (
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-6 mt-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              🎬 Efterfest & Wraps
-            </h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              <Link
-                href={`/organizer/event/${eventId}/wraps`}
-                className="bg-white rounded-xl p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="text-2xl mb-2">📧</div>
-                <div className="font-medium">Skicka Wraps</div>
-                <div className="text-sm text-gray-500">Personliga sammanfattningar</div>
-              </Link>
-              <Link
-                href={`/e/${event.slug}/memories`}
-                target="_blank"
-                className="bg-white rounded-xl p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="text-2xl mb-2">📸</div>
-                <div className="font-medium">Se Memories</div>
-                <div className="text-sm text-gray-500">Statistik och hälsningar</div>
-              </Link>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
@@ -209,55 +155,5 @@ function StatCard({ label, value, icon }: { label: string; value: number | strin
       </div>
       <div className="text-2xl font-bold text-gray-900">{value}</div>
     </div>
-  );
-}
-
-function ActionCard({ 
-  href, 
-  title, 
-  description, 
-  icon, 
-  count,
-  disabled 
-}: { 
-  href: string; 
-  title: string; 
-  description: string; 
-  icon: string;
-  count?: number;
-  disabled?: boolean;
-}) {
-  if (disabled) {
-    return (
-      <div className="bg-gray-100 rounded-xl p-6 opacity-50 cursor-not-allowed">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-3xl mb-3">{icon}</div>
-            <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
-            <p className="text-sm text-gray-500">{description}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  return (
-    <Link
-      href={href}
-      className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-indigo-200"
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-3xl mb-3">{icon}</div>
-          <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
-          <p className="text-sm text-gray-500">{description}</p>
-        </div>
-        {count !== undefined && (
-          <div className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-sm font-medium">
-            {count}
-          </div>
-        )}
-      </div>
-    </Link>
   );
 }
