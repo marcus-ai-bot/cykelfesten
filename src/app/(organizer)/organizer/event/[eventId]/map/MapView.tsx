@@ -418,7 +418,15 @@ export function MapView({ eventId, eventName }: Props) {
           <Link href={`/organizer/event/${eventId}`} className="text-gray-500 hover:text-gray-700">
             ← Tillbaka
           </Link>
-          <div className="text-sm font-semibold text-gray-900">{eventName}</div>
+          <div className="text-center">
+            <div className="text-sm font-semibold text-gray-900">{eventName}</div>
+            {data.couples.length > 0 && (
+              <div className="text-xs text-gray-500">
+                {data.couples.length} par på kartan
+                {data.missingCoords.length > 0 && ` · ${data.missingCoords.length} saknar adress`}
+              </div>
+            )}
+          </div>
           <div />
         </div>
       </header>
@@ -459,7 +467,7 @@ export function MapView({ eventId, eventName }: Props) {
       <div className="relative flex-1 min-h-0">
         <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
 
-        <div className="absolute top-4 left-4 bg-white/95 backdrop-blur rounded-xl shadow-sm border border-gray-200 px-3 py-2 text-sm space-y-1">
+        <div className="absolute bottom-8 left-4 bg-white/95 backdrop-blur rounded-xl shadow-sm border border-gray-200 px-3 py-2 text-sm space-y-1">
           <div className="flex items-center gap-2">
             <span>🟢</span>
             <span>Värd</span>

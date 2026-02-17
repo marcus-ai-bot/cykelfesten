@@ -159,6 +159,6 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ couples: withCoords, missingCoords, routes });
   } catch (err: any) {
     console.error('map-data route error:', err);
-    return NextResponse.json({ error: err?.message || 'Internal error', stack: err?.stack?.split('\n').slice(0, 3) }, { status: 500 });
+    return NextResponse.json({ error: err?.message || 'Internal error' }, { status: 500 });
   }
 }
