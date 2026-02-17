@@ -264,7 +264,14 @@ export function MapView({ eventId, eventName }: Props) {
         map.addLayer({
           id: `host-${course}-halo`, type: 'circle', source: `host-${course}`,
           layout: { visibility: 'none' },
-          paint: { 'circle-radius': 14, 'circle-color': color, 'circle-opacity': 0.25 },
+          paint: {
+            'circle-radius': 16,
+            'circle-color': 'transparent',
+            'circle-opacity': 1,
+            'circle-stroke-color': color,
+            'circle-stroke-width': 3,
+            'circle-stroke-opacity': 0.6,
+          },
         });
 
         // Hover tooltip on route lines
