@@ -84,6 +84,12 @@ export function PhasesStepper({
               icon="👁️"
               target="_blank"
             />
+            <ActionCard
+              href={`/organizer/event/${eventId}/map`}
+              title="Karta"
+              description="Se var gästerna bor"
+              icon="🗺️"
+            />
           </div>
           <InviteLinkSection eventId={eventId} />
           <div id="invite-team" className="scroll-mt-24">
