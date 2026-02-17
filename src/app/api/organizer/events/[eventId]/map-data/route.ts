@@ -37,7 +37,7 @@ export async function GET(request: Request, context: RouteContext) {
     const supabase = createAdminClient();
     const { data: couples, error } = await supabase
       .from('couples')
-      .select('id, invited_name, partner_name, address, coordinates, is_host, confirmed_at')
+      .select('id, invited_name, partner_name, address, coordinates, role, confirmed')
       .eq('event_id', eventId)
       .order('invited_name');
 
@@ -59,8 +59,8 @@ export async function GET(request: Request, context: RouteContext) {
           address: c.address,
           lat: coords.lat,
           lng: coords.lng,
-          isHost: !!c.is_host,
-          isConfirmed: !!c.confirmed_at,
+          isHost: c.role === 'host',
+          isConfirmed: !!c.confirmed,
         });
       } else {
         missingCoords.push({
