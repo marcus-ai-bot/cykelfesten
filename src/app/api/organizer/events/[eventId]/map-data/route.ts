@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
-import { requireOrganizer, checkEventAccess } from '@/lib/auth';
+import { getOrganizer, checkEventAccess } from '@/lib/auth';
 import type { Coordinates } from '@/lib/geo';
 
 interface RouteContext {
@@ -22,7 +22,10 @@ function parsePoint(point: unknown): Coordinates | null {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const organizer = await requireOrganizer();
+  const organizer = await getOrganizer();
+  if (!organizer) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { eventId } = await context.params;
 
   const access = await checkEventAccess(organizer.id, eventId);
