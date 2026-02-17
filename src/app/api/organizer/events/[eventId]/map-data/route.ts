@@ -21,6 +21,38 @@ function parsePoint(point: unknown): Coordinates | null {
   return null;
 }
 
+/**
+ * Spread pins that share exact coordinates into a small circle.
+ * Radius ~15m so they're visually distinct at max zoom but still
+ * clearly "same address". A single pin at a location stays put.
+ */
+function applyJitter(
+  items: Array<{ lat: number; lng: number }>,
+  radiusMeters = 15
+) {
+  // Group by coordinate key
+  const groups = new Map<string, number[]>();
+  items.forEach((item, i) => {
+    const key = `${item.lat.toFixed(7)},${item.lng.toFixed(7)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(i);
+  });
+
+  // ~0.00015° ≈ 15m at 65°N latitude
+  const latOffset = radiusMeters / 111_320;
+  const lngOffset = radiusMeters / (111_320 * Math.cos((items[0]?.lat ?? 65) * Math.PI / 180));
+
+  for (const indices of groups.values()) {
+    if (indices.length < 2) continue;
+    const n = indices.length;
+    indices.forEach((idx, i) => {
+      const angle = (2 * Math.PI * i) / n;
+      items[idx].lat += latOffset * Math.sin(angle);
+      items[idx].lng += lngOffset * Math.cos(angle);
+    });
+  }
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     const organizer = await getOrganizer();
@@ -70,6 +102,10 @@ export async function GET(request: Request, context: RouteContext) {
         });
       }
     });
+
+    // Jitter: spread pins that share identical coordinates in a small circle
+    // so they're visually separable at max zoom (~15m radius)
+    applyJitter(withCoords);
 
     return NextResponse.json({ couples: withCoords, missingCoords });
   } catch (err: any) {
