@@ -68,9 +68,7 @@ export function MapView({ eventId, eventName }: Props) {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null });
-  const [activeCourses, setActiveCourses] = useState<Record<Course, boolean>>({
-    starter: false, main: false, dessert: false,
-  });
+  const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [selectedCoupleId, setSelectedCoupleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,41 +145,36 @@ export function MapView({ eventId, eventName }: Props) {
   // IDs of couples related to selected couple (for highlight)
   // Host clicked → that host's guests. Guest clicked → find host → show all host's guests.
   const highlightFilter = useMemo(() => {
-    if (!selectedCoupleId || !data.routes) return null;
+    if (!selectedCoupleId || !data.routes || !activeCourse) return null;
     const relatedIds = new Set<string>();
     relatedIds.add(selectedCoupleId);
 
-    // Collect host IDs the selected couple is associated with (as host or guest)
+    const segs = data.routes[activeCourse] || [];
     const relevantHostIds = new Set<string>();
 
-    COURSES.forEach((course) => {
-      if (!activeCourses[course]) return;
-      (data.routes![course] || []).forEach((seg) => {
-        if (seg.hostId === selectedCoupleId) {
-          relevantHostIds.add(seg.hostId);
-        } else if (seg.guestId === selectedCoupleId) {
-          relevantHostIds.add(seg.hostId);
-          relatedIds.add(seg.hostId);
-        }
-      });
+    segs.forEach((seg) => {
+      if (seg.hostId === selectedCoupleId) {
+        relevantHostIds.add(seg.hostId);
+      } else if (seg.guestId === selectedCoupleId) {
+        relevantHostIds.add(seg.hostId);
+        relatedIds.add(seg.hostId);
+      }
     });
 
-    // Now add ALL guests going to those hosts
-    COURSES.forEach((course) => {
-      if (!activeCourses[course]) return;
-      (data.routes![course] || []).forEach((seg) => {
-        if (relevantHostIds.has(seg.hostId)) {
-          relatedIds.add(seg.guestId);
-          relatedIds.add(seg.hostId);
-        }
-      });
+    // Add all guests going to those hosts
+    segs.forEach((seg) => {
+      if (relevantHostIds.has(seg.hostId)) {
+        relatedIds.add(seg.guestId);
+        relatedIds.add(seg.hostId);
+      }
     });
 
     return relatedIds.size > 1 ? relatedIds : null;
-  }, [selectedCoupleId, data.routes, activeCourses]);
+  }, [selectedCoupleId, data.routes, activeCourse]);
 
   const toggleCourse = useCallback((course: Course) => {
-    setActiveCourses((prev) => ({ ...prev, [course]: !prev[course] }));
+    setActiveCourse((prev) => prev === course ? null : course);
+    setSelectedCoupleId(null);
   }, []);
 
   /* ── Fetch data ─────────────────────────────────── */
@@ -386,7 +379,7 @@ export function MapView({ eventId, eventName }: Props) {
     if (!mapLoaded || !mapRef.current) return;
     const map = mapRef.current;
     COURSES.forEach((course) => {
-      const vis = activeCourses[course] ? 'visible' : 'none';
+      const vis = activeCourse === course ? 'visible' : 'none';
       ['line', 'bold'].forEach((suffix) => {
         map.getLayer(`route-${course}-${suffix}`) &&
           map.setLayoutProperty(`route-${course}-${suffix}`, 'visibility', vis);
@@ -394,7 +387,7 @@ export function MapView({ eventId, eventName }: Props) {
       map.getLayer(`host-${course}-halo`) &&
         map.setLayoutProperty(`host-${course}-halo`, 'visibility', vis);
     });
-  }, [activeCourses, mapLoaded]);
+  }, [activeCourse, mapLoaded]);
 
   /* ── Highlight selected couple's routes ─────────── */
 
@@ -402,26 +395,21 @@ export function MapView({ eventId, eventName }: Props) {
     if (!mapLoaded || !mapRef.current) return;
     const map = mapRef.current;
 
-    if (highlightFilter && selectedCoupleId) {
+    if (highlightFilter && selectedCoupleId && activeCourse) {
       const relatedArr = Array.from(highlightFilter);
 
-      COURSES.forEach((course) => {
-        if (!activeCourses[course]) return;
+      // Bold lines for related routes, hide the rest
+      map.setFilter(`route-${activeCourse}-bold`, [
+        'any',
+        ['in', ['get', 'hostId'], ['literal', relatedArr]],
+      ]);
+      map.setFilter(`route-${activeCourse}-line`, [
+        'any',
+        ['in', ['get', 'hostId'], ['literal', relatedArr]],
+      ]);
+      map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0);
 
-        // Show bold lines for routes where host is in relevantHostIds
-        map.setFilter(`route-${course}-bold`, [
-          'any',
-          ['in', ['get', 'hostId'], ['literal', relatedArr]],
-        ]);
-        // Hide non-related routes entirely
-        map.setFilter(`route-${course}-line`, [
-          'any',
-          ['in', ['get', 'hostId'], ['literal', relatedArr]],
-        ]);
-        map.setPaintProperty(`route-${course}-line`, 'line-opacity', 0);
-      });
-
-      // Dim unrelated pins to 50%
+      // Dim unrelated pins
       map.setPaintProperty('unclustered-point', 'circle-opacity', [
         'case',
         ['in', ['get', 'id'], ['literal', relatedArr]], 1,
@@ -434,17 +422,15 @@ export function MapView({ eventId, eventName }: Props) {
       ]);
     } else {
       COURSES.forEach((course) => {
-        if (!activeCourses[course]) return;
         map.setFilter(`route-${course}-bold`, ['==', 'guestId', '']);
         map.setFilter(`route-${course}-line`, null);
         map.setPaintProperty(`route-${course}-line`, 'line-opacity', 0.5);
       });
 
-      // Reset pin opacity
       map.setPaintProperty('unclustered-point', 'circle-opacity', 1);
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 1);
     }
-  }, [highlightFilter, selectedCoupleId, activeCourses, mapLoaded]);
+  }, [highlightFilter, selectedCoupleId, activeCourse, mapLoaded]);
 
   /* ── Render ─────────────────────────────────────── */
 
@@ -472,7 +458,7 @@ export function MapView({ eventId, eventName }: Props) {
         <div className="bg-white border-b">
           <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap gap-2">
             {COURSES.map((course) => {
-              const active = activeCourses[course];
+              const active = activeCourse === course;
               const cfg = COURSE_CONFIG[course];
               return (
                 <button
