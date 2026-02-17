@@ -145,20 +145,38 @@ export function MapView({ eventId, eventName }: Props) {
   }, [data.routes]);
 
   // IDs of couples related to selected couple (for highlight)
+  // Host clicked → that host's guests. Guest clicked → find host → show all host's guests.
   const highlightFilter = useMemo(() => {
     if (!selectedCoupleId || !data.routes) return null;
-    // Find all routes involving this couple (as guest or host) across active courses
     const relatedIds = new Set<string>();
     relatedIds.add(selectedCoupleId);
+
+    // Collect host IDs the selected couple is associated with (as host or guest)
+    const relevantHostIds = new Set<string>();
+
     COURSES.forEach((course) => {
       if (!activeCourses[course]) return;
       (data.routes![course] || []).forEach((seg) => {
-        if (seg.guestId === selectedCoupleId || seg.hostId === selectedCoupleId) {
+        if (seg.hostId === selectedCoupleId) {
+          relevantHostIds.add(seg.hostId);
+        } else if (seg.guestId === selectedCoupleId) {
+          relevantHostIds.add(seg.hostId);
+          relatedIds.add(seg.hostId);
+        }
+      });
+    });
+
+    // Now add ALL guests going to those hosts
+    COURSES.forEach((course) => {
+      if (!activeCourses[course]) return;
+      (data.routes![course] || []).forEach((seg) => {
+        if (relevantHostIds.has(seg.hostId)) {
           relatedIds.add(seg.guestId);
           relatedIds.add(seg.hostId);
         }
       });
     });
+
     return relatedIds.size > 1 ? relatedIds : null;
   }, [selectedCoupleId, data.routes, activeCourses]);
 
@@ -384,24 +402,48 @@ export function MapView({ eventId, eventName }: Props) {
     if (!mapLoaded || !mapRef.current) return;
     const map = mapRef.current;
 
-    COURSES.forEach((course) => {
-      if (!activeCourses[course]) return;
+    if (highlightFilter && selectedCoupleId) {
+      const relatedArr = Array.from(highlightFilter);
 
-      if (highlightFilter && selectedCoupleId) {
-        // Bold filter: routes involving selected couple
+      COURSES.forEach((course) => {
+        if (!activeCourses[course]) return;
+
+        // Show bold lines for routes where host is in relevantHostIds
         map.setFilter(`route-${course}-bold`, [
           'any',
-          ['==', ['get', 'guestId'], selectedCoupleId],
-          ['==', ['get', 'hostId'], selectedCoupleId],
+          ['in', ['get', 'hostId'], ['literal', relatedArr]],
         ]);
-        // Dim non-highlighted routes
-        map.setPaintProperty(`route-${course}-line`, 'line-opacity', 0.15);
-      } else {
-        // Reset: no bold, normal opacity
+        // Hide non-related routes entirely
+        map.setFilter(`route-${course}-line`, [
+          'any',
+          ['in', ['get', 'hostId'], ['literal', relatedArr]],
+        ]);
+        map.setPaintProperty(`route-${course}-line`, 'line-opacity', 0);
+      });
+
+      // Dim unrelated pins to 50%
+      map.setPaintProperty('unclustered-point', 'circle-opacity', [
+        'case',
+        ['in', ['get', 'id'], ['literal', relatedArr]], 1,
+        0.35,
+      ]);
+      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', [
+        'case',
+        ['in', ['get', 'id'], ['literal', relatedArr]], 1,
+        0.35,
+      ]);
+    } else {
+      COURSES.forEach((course) => {
+        if (!activeCourses[course]) return;
         map.setFilter(`route-${course}-bold`, ['==', 'guestId', '']);
+        map.setFilter(`route-${course}-line`, null);
         map.setPaintProperty(`route-${course}-line`, 'line-opacity', 0.5);
-      }
-    });
+      });
+
+      // Reset pin opacity
+      map.setPaintProperty('unclustered-point', 'circle-opacity', 1);
+      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 1);
+    }
   }, [highlightFilter, selectedCoupleId, activeCourses, mapLoaded]);
 
   /* ── Render ─────────────────────────────────────── */
