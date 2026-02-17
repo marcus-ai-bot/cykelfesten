@@ -7,7 +7,6 @@ interface RouteContext {
   params: Promise<{ eventId: string }>;
 }
 
-// Parse PostgREST point format "(lng,lat)" to {lat, lng}
 function parsePoint(point: unknown): Coordinates | null {
   if (!point) return null;
   if (typeof point === 'string') {
@@ -15,33 +14,21 @@ function parsePoint(point: unknown): Coordinates | null {
     if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
   }
   if (typeof point === 'object' && point !== null) {
-    const p = point as any;
-    if (p.lat != null && p.lng != null) return { lat: p.lat, lng: p.lng };
+    const p = point as Record<string, unknown>;
+    if (p.lat != null && p.lng != null) return { lat: Number(p.lat), lng: Number(p.lng) };
   }
   return null;
 }
 
-/**
- * Spread pins that share exact coordinates into a small circle.
- * Radius ~15m so they're visually distinct at max zoom but still
- * clearly "same address". A single pin at a location stays put.
- */
-function applyJitter(
-  items: Array<{ lat: number; lng: number }>,
-  radiusMeters = 15
-) {
-  // Group by coordinate key
+function applyJitter(items: Array<{ lat: number; lng: number }>, radiusMeters = 15) {
   const groups = new Map<string, number[]>();
   items.forEach((item, i) => {
     const key = `${item.lat.toFixed(7)},${item.lng.toFixed(7)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(i);
   });
-
-  // ~0.00015° ≈ 15m at 65°N latitude
   const latOffset = radiusMeters / 111_320;
   const lngOffset = radiusMeters / (111_320 * Math.cos((items[0]?.lat ?? 65) * Math.PI / 180));
-
   for (const indices of groups.values()) {
     if (indices.length < 2) continue;
     const n = indices.length;
@@ -51,6 +38,48 @@ function applyJitter(
       items[idx].lng += lngOffset * Math.cos(angle);
     });
   }
+}
+
+/**
+ * Fetch cycling route geometry from Mapbox Directions API.
+ * Returns array of [lng,lat] coordinates, or null on failure.
+ */
+async function fetchCyclingRoute(
+  from: [number, number],
+  to: [number, number],
+  token: string
+): Promise<[number, number][] | null> {
+  try {
+    const url = `https://api.mapbox.com/directions/v5/mapbox/cycling/${from[0]},${from[1]};${to[0]},${to[1]}?geometries=geojson&overview=full&access_token=${token}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.routes?.[0]?.geometry?.coordinates ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Batch fetch cycling routes with concurrency limit.
+ */
+async function batchFetchRoutes(
+  segments: Array<{ from: [number, number]; to: [number, number] }>,
+  token: string,
+  concurrency = 5
+): Promise<([number, number][] | null)[]> {
+  const results: ([number, number][] | null)[] = new Array(segments.length).fill(null);
+  let idx = 0;
+
+  async function worker() {
+    while (idx < segments.length) {
+      const i = idx++;
+      results[i] = await fetchCyclingRoute(segments[i].from, segments[i].to, token);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, segments.length) }, () => worker()));
+  return results;
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -86,28 +115,20 @@ export async function GET(request: Request, context: RouteContext) {
       const coords = parsePoint(c.coordinates);
       if (coords) {
         withCoords.push({
-          id: c.id,
-          name,
-          address: c.address,
-          lat: coords.lat,
-          lng: coords.lng,
+          id: c.id, name, address: c.address,
+          lat: coords.lat, lng: coords.lng,
           isHost: c.role === 'host',
           isConfirmed: !!c.confirmed,
         });
       } else {
-        missingCoords.push({
-          id: c.id,
-          name,
-          address: c.address,
-        });
+        missingCoords.push({ id: c.id, name, address: c.address });
       }
     });
 
-    // Jitter: spread pins that share identical coordinates in a small circle
-    // so they're visually separable at max zoom (~15m radius)
     applyJitter(withCoords);
 
-    const { data: latestPlan, error: planError } = await supabase
+    // Fetch latest match plan
+    const { data: latestPlan } = await supabase
       .from('match_plans')
       .select('id')
       .eq('event_id', eventId)
@@ -115,44 +136,62 @@ export async function GET(request: Request, context: RouteContext) {
       .limit(1)
       .maybeSingle();
 
-    if (planError) {
-      console.error('Supabase error fetching match plan:', planError);
-      return NextResponse.json({ error: planError.message }, { status: 500 });
-    }
+    type Segment = {
+      from: [number, number];
+      to: [number, number];
+      geometry: [number, number][] | null;
+      guestName: string;
+      hostName: string;
+      guestId: string;
+      hostId: string;
+    };
 
-    let routes: {
-      starter: Array<{ from: [number, number]; to: [number, number]; guestName: string; hostName: string }>;
-      main: Array<{ from: [number, number]; to: [number, number]; guestName: string; hostName: string }>;
-      dessert: Array<{ from: [number, number]; to: [number, number]; guestName: string; hostName: string }>;
-    } | null = null;
+    let routes: { starter: Segment[]; main: Segment[]; dessert: Segment[] } | null = null;
 
     if (latestPlan?.id) {
-      const { data: pairings, error: pairingsError } = await supabase
+      const { data: pairings } = await supabase
         .from('course_pairings')
         .select('course, host_couple_id, guest_couple_id')
         .eq('match_plan_id', latestPlan.id);
 
-      if (pairingsError) {
-        console.error('Supabase error fetching course pairings:', pairingsError);
-        return NextResponse.json({ error: pairingsError.message }, { status: 500 });
-      }
-
       const byId = new Map(withCoords.map((c) => [c.id, c]));
-      routes = { starter: [], main: [], dessert: [] };
+      const allSegments: Array<Segment & { course: string }> = [];
 
-      (pairings || []).forEach((pairing: any) => {
-        const guest = byId.get(pairing.guest_couple_id);
-        const host = byId.get(pairing.host_couple_id);
+      (pairings || []).forEach((p: any) => {
+        const guest = byId.get(p.guest_couple_id);
+        const host = byId.get(p.host_couple_id);
         if (!guest || !host) return;
-        const segment = {
-          from: [guest.lng, guest.lat] as [number, number],
-          to: [host.lng, host.lat] as [number, number],
+        allSegments.push({
+          course: p.course,
+          from: [guest.lng, guest.lat],
+          to: [host.lng, host.lat],
+          geometry: null,
           guestName: guest.name,
           hostName: host.name,
-        };
-        if (pairing.course === 'starter') routes!.starter.push(segment);
-        if (pairing.course === 'main') routes!.main.push(segment);
-        if (pairing.course === 'dessert') routes!.dessert.push(segment);
+          guestId: guest.id,
+          hostId: host.id,
+        });
+      });
+
+      // Fetch real cycling routes from Mapbox Directions
+      const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+      if (mapboxToken && allSegments.length > 0) {
+        const geometries = await batchFetchRoutes(
+          allSegments.map((s) => ({ from: s.from, to: s.to })),
+          mapboxToken,
+          5
+        );
+        geometries.forEach((geo, i) => {
+          allSegments[i].geometry = geo;
+        });
+      }
+
+      routes = { starter: [], main: [], dessert: [] };
+      allSegments.forEach((s) => {
+        const { course, ...segment } = s;
+        if (course === 'starter') routes!.starter.push(segment);
+        if (course === 'main') routes!.main.push(segment);
+        if (course === 'dessert') routes!.dessert.push(segment);
       });
     }
 
