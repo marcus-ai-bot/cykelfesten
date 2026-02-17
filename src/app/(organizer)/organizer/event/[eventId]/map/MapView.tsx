@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import mapboxgl from 'mapbox-gl';
+import type { FeatureCollection } from 'geojson';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface MapCouple {
@@ -21,9 +22,21 @@ interface MissingCoords {
   address: string;
 }
 
+interface RouteSegment {
+  from: [number, number];
+  to: [number, number];
+  guestName: string;
+  hostName: string;
+}
+
 interface MapData {
   couples: MapCouple[];
   missingCoords: MissingCoords[];
+  routes: {
+    starter: RouteSegment[];
+    main: RouteSegment[];
+    dessert: RouteSegment[];
+  } | null;
 }
 
 interface Props {
@@ -37,9 +50,17 @@ export function MapView({ eventId, eventName }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [] });
+  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null });
+  const [activeCourses, setActiveCourses] = useState({ starter: false, main: false, dessert: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const routePopupRef = useRef<mapboxgl.Popup | null>(null);
+
+  const courseConfig = {
+    starter: { label: 'Förrätt', emoji: '🥗', color: '#f59e0b' },
+    main: { label: 'Varmrätt', emoji: '🍖', color: '#ef4444' },
+    dessert: { label: 'Efterrätt', emoji: '🍰', color: '#8b5cf6' },
+  } as const;
 
   const featureCollection = useMemo(() => ({
     type: 'FeatureCollection' as const,
@@ -58,6 +79,66 @@ export function MapView({ eventId, eventName }: Props) {
       },
     })),
   }), [data.couples]);
+
+  const routeFeatureCollections = useMemo(() => {
+    const empty: FeatureCollection = { type: 'FeatureCollection', features: [] };
+    if (!data.routes) return { starter: empty, main: empty, dessert: empty };
+
+    const toFeatures = (segments: RouteSegment[]) => ({
+      type: 'FeatureCollection' as const,
+      features: segments.map((segment) => ({
+        type: 'Feature' as const,
+        properties: {
+          guestName: segment.guestName,
+          hostName: segment.hostName,
+        },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: [segment.from, segment.to] as [number, number][],
+        },
+      })),
+    });
+
+    return {
+      starter: toFeatures(data.routes.starter),
+      main: toFeatures(data.routes.main),
+      dessert: toFeatures(data.routes.dessert),
+    };
+  }, [data.routes]);
+
+  const hostHighlightCollections = useMemo(() => {
+    const empty: FeatureCollection = { type: 'FeatureCollection', features: [] };
+    if (!data.routes) return { starter: empty, main: empty, dessert: empty };
+
+    const toHostFeatures = (segments: RouteSegment[]) => {
+      const seen = new Set<string>();
+      const features = [] as any[];
+      segments.forEach((segment) => {
+        const key = `${segment.to[0].toFixed(6)},${segment.to[1].toFixed(6)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        features.push({
+          type: 'Feature' as const,
+          properties: {},
+          geometry: {
+            type: 'Point' as const,
+            coordinates: segment.to as [number, number],
+          },
+        });
+      });
+      return { type: 'FeatureCollection' as const, features };
+    };
+
+    return {
+      starter: toHostFeatures(data.routes.starter),
+      main: toHostFeatures(data.routes.main),
+      dessert: toHostFeatures(data.routes.dessert),
+    };
+  }, [data.routes]);
+
+  const toggleCourse = (course: keyof typeof courseConfig) => {
+    setActiveCourses((prev) => ({ ...prev, [course]: !prev[course] }));
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -144,6 +225,73 @@ export function MapView({ eventId, eventName }: Props) {
         },
       });
 
+      const emptyFeatureCollection: FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+      (Object.keys(courseConfig) as Array<keyof typeof courseConfig>).forEach((course) => {
+        const color = courseConfig[course].color;
+
+        map.addSource(`route-${course}`, {
+          type: 'geojson',
+          data: emptyFeatureCollection,
+        });
+
+        map.addLayer({
+          id: `route-${course}-line`,
+          type: 'line',
+          source: `route-${course}`,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+            visibility: 'none',
+          },
+          paint: {
+            'line-color': color,
+            'line-width': 2,
+            'line-opacity': 0.6,
+            'line-dasharray': [1.5, 1.5],
+          },
+        });
+
+        map.addSource(`host-${course}`, {
+          type: 'geojson',
+          data: emptyFeatureCollection,
+        });
+
+        map.addLayer({
+          id: `host-${course}-halo`,
+          type: 'circle',
+          source: `host-${course}`,
+          layout: {
+            visibility: 'none',
+          },
+          paint: {
+            'circle-radius': 14,
+            'circle-color': color,
+            'circle-opacity': 0.25,
+          },
+        });
+
+        map.on('mouseenter', `route-${course}-line`, (event) => {
+          map.getCanvas().style.cursor = 'pointer';
+          const feature = event.features?.[0];
+          if (!feature) return;
+          const { guestName, hostName } = feature.properties as any;
+          if (routePopupRef.current) routePopupRef.current.remove();
+          routePopupRef.current = new mapboxgl.Popup({ offset: 12, closeButton: false })
+            .setLngLat(event.lngLat)
+            .setHTML(`<div style="font-size:12px; font-weight:600;">${guestName} → ${hostName}</div>`)
+            .addTo(map);
+        });
+
+        map.on('mouseleave', `route-${course}-line`, () => {
+          map.getCanvas().style.cursor = '';
+          if (routePopupRef.current) {
+            routePopupRef.current.remove();
+            routePopupRef.current = null;
+          }
+        });
+      });
+
       map.addLayer({
         id: 'unclustered-point',
         type: 'circle',
@@ -227,19 +375,41 @@ export function MapView({ eventId, eventName }: Props) {
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
-    const source = mapRef.current.getSource('couples') as mapboxgl.GeoJSONSource | undefined;
+    const map = mapRef.current;
+    const source = map.getSource('couples') as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
 
     source.setData(featureCollection);
+
+    (Object.keys(courseConfig) as Array<keyof typeof courseConfig>).forEach((course) => {
+      const routeSource = map.getSource(`route-${course}`) as mapboxgl.GeoJSONSource | undefined;
+      const hostSource = map.getSource(`host-${course}`) as mapboxgl.GeoJSONSource | undefined;
+      routeSource?.setData(routeFeatureCollections[course] as any);
+      hostSource?.setData(hostHighlightCollections[course] as any);
+    });
 
     if (featureCollection.features.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       featureCollection.features.forEach((feature) => {
         bounds.extend(feature.geometry.coordinates as [number, number]);
       });
-      mapRef.current.fitBounds(bounds, { padding: 80, duration: 800 });
+      map.fitBounds(bounds, { padding: 80, duration: 800 });
     }
-  }, [featureCollection, mapLoaded]);
+  }, [featureCollection, routeFeatureCollections, hostHighlightCollections, mapLoaded]);
+
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current) return;
+    const map = mapRef.current;
+    (Object.keys(courseConfig) as Array<keyof typeof courseConfig>).forEach((course) => {
+      const visible = activeCourses[course] ? 'visible' : 'none';
+      if (map.getLayer(`route-${course}-line`)) {
+        map.setLayoutProperty(`route-${course}-line`, 'visibility', visible);
+      }
+      if (map.getLayer(`host-${course}-halo`)) {
+        map.setLayoutProperty(`host-${course}-halo`, 'visibility', visible);
+      }
+    });
+  }, [activeCourses, mapLoaded]);
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -257,6 +427,31 @@ export function MapView({ eventId, eventName }: Props) {
         <div className="bg-amber-50 text-amber-900 border-b border-amber-100">
           <div className="max-w-6xl mx-auto px-4 py-2 text-sm font-medium">
             {data.missingCoords.length} par saknar koordinater
+          </div>
+        </div>
+      )}
+
+      {data.routes && (
+        <div className="bg-white border-b">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap gap-2">
+            {(Object.keys(courseConfig) as Array<keyof typeof courseConfig>).map((course) => {
+              const active = activeCourses[course];
+              const config = courseConfig[course];
+              return (
+                <button
+                  key={course}
+                  type="button"
+                  onClick={() => toggleCourse(course)}
+                  className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border transition ${
+                    active ? 'text-white border-transparent' : 'text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                  style={active ? { backgroundColor: config.color } : undefined}
+                >
+                  <span>{config.emoji}</span>
+                  <span>{config.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

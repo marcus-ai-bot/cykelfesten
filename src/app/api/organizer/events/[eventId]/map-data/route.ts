@@ -107,7 +107,56 @@ export async function GET(request: Request, context: RouteContext) {
     // so they're visually separable at max zoom (~15m radius)
     applyJitter(withCoords);
 
-    return NextResponse.json({ couples: withCoords, missingCoords });
+    const { data: latestPlan, error: planError } = await supabase
+      .from('match_plans')
+      .select('id')
+      .eq('event_id', eventId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (planError) {
+      console.error('Supabase error fetching match plan:', planError);
+      return NextResponse.json({ error: planError.message }, { status: 500 });
+    }
+
+    let routes: {
+      starter: Array<{ from: [number, number]; to: [number, number]; guestName: string; hostName: string }>;
+      main: Array<{ from: [number, number]; to: [number, number]; guestName: string; hostName: string }>;
+      dessert: Array<{ from: [number, number]; to: [number, number]; guestName: string; hostName: string }>;
+    } | null = null;
+
+    if (latestPlan?.id) {
+      const { data: pairings, error: pairingsError } = await supabase
+        .from('course_pairings')
+        .select('course, host_couple_id, guest_couple_id')
+        .eq('match_plan_id', latestPlan.id);
+
+      if (pairingsError) {
+        console.error('Supabase error fetching course pairings:', pairingsError);
+        return NextResponse.json({ error: pairingsError.message }, { status: 500 });
+      }
+
+      const byId = new Map(withCoords.map((c) => [c.id, c]));
+      routes = { starter: [], main: [], dessert: [] };
+
+      (pairings || []).forEach((pairing: any) => {
+        const guest = byId.get(pairing.guest_couple_id);
+        const host = byId.get(pairing.host_couple_id);
+        if (!guest || !host) return;
+        const segment = {
+          from: [guest.lng, guest.lat] as [number, number],
+          to: [host.lng, host.lat] as [number, number],
+          guestName: guest.name,
+          hostName: host.name,
+        };
+        if (pairing.course === 'starter') routes!.starter.push(segment);
+        if (pairing.course === 'main') routes!.main.push(segment);
+        if (pairing.course === 'dessert') routes!.dessert.push(segment);
+      });
+    }
+
+    return NextResponse.json({ couples: withCoords, missingCoords, routes });
   } catch (err: any) {
     console.error('map-data route error:', err);
     return NextResponse.json({ error: err?.message || 'Internal error', stack: err?.stack?.split('\n').slice(0, 3) }, { status: 500 });
