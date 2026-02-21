@@ -97,12 +97,8 @@ export async function GET(request: NextRequest) {
       .eq('event_id', event.id)
       .eq('confirmed', true);
     
-    // 4. Get wrap_stats from database
-    const { data: wrapStats } = await supabase
-      .from('wrap_stats')
-      .select('*')
-      .eq('event_id', event.id)
-      .single();
+    // 4. Get wrap_stats from events table (stored as JSON column)
+    const wrapStats = event.wrap_stats as Record<string, any> | null;
     
     // 5. Check if person has an award
     const { data: award } = await supabase
@@ -157,12 +153,12 @@ export async function GET(request: NextRequest) {
       music_decade: musicDecade,
       wrap_stats: wrapStats ? {
         total_distance_km: wrapStats.total_distance_km ?? totalDistanceKm,
-        total_couples: allCouples?.length ?? 0,
-        total_people: (allCouples?.length ?? 0) * 1.8, // Rough estimate
-        total_portions: (allCouples?.length ?? 0) * 3,
-        shortest_ride_meters: wrapStats.shortest_ride_meters ?? 0,
+        total_couples: wrapStats.total_couples ?? allCouples?.length ?? 0,
+        total_people: wrapStats.total_people ?? Math.round((allCouples?.length ?? 0) * 1.8),
+        total_portions: wrapStats.total_portions ?? (allCouples?.length ?? 0) * 3,
+        shortest_ride_meters: Math.round((wrapStats.shortest_ride_km ?? 0) * 1000),
         shortest_ride_couple: wrapStats.shortest_ride_couple ?? '',
-        longest_ride_meters: wrapStats.longest_ride_meters ?? 0,
+        longest_ride_meters: Math.round((wrapStats.longest_ride_km ?? 0) * 1000),
         longest_ride_couple: wrapStats.longest_ride_couple ?? '',
         districts_count: wrapStats.districts_count ?? 1,
         fun_facts_count: wrapStats.fun_facts_count ?? 0,
