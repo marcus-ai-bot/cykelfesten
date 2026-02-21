@@ -113,46 +113,66 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
     for (let ci = 0; ci < courseOrder.length; ci++) {
       const course = courseOrder[ci];
       const nextCourse = courseOrder[ci + 1]; // undefined for dessert
-      
-      // Build lookup: coupleId → { hostName, hostAddress, hostCoords } in next course
-      const nextHostFor = new Map<string, { name: string; address: string; coords: [number, number] }>();
+
+      // Build lookup: coupleId → where they go in the next course
+      // If they're a GUEST → they go to their host
+      // If they're a HOST → they stay at their own home
+      const nextDestFor = new Map<string, { name: string; address: string; coords: [number, number]; isHome: boolean }>();
+
       if (nextCourse && data.routes![nextCourse]) {
+        // First: mark all hosts in next course → they go home (stay home)
+        const nextHosts = new Set<string>();
+        for (const seg of data.routes![nextCourse]) {
+          if (!nextHosts.has(seg.hostId)) {
+            nextHosts.add(seg.hostId);
+            const host = byId.get(seg.hostId);
+            if (host) {
+              nextDestFor.set(seg.hostId, {
+                name: host.name,
+                address: host.address,
+                coords: [host.lng, host.lat],
+                isHome: true,
+              });
+            }
+          }
+        }
+
+        // Then: all guests in next course → they go to their host
         for (const seg of data.routes![nextCourse]) {
           const host = byId.get(seg.hostId);
           if (host) {
-            // Guest goes to this host next
-            nextHostFor.set(seg.guestId, { name: host.name, address: host.address, coords: [host.lng, host.lat] });
-            // Host also goes somewhere — check if host is a guest in next course
+            nextDestFor.set(seg.guestId, {
+              name: host.name,
+              address: host.address,
+              coords: [host.lng, host.lat],
+              isHome: false,
+            });
           }
-        }
-        // Also find where each host goes in the next course (they're a guest somewhere)
-        for (const seg of data.routes![nextCourse]) {
-          const host = byId.get(seg.hostId);
-          if (host) nextHostFor.set(seg.guestId, { name: host.name, address: host.address, coords: [host.lng, host.lat] });
         }
       }
 
       for (const group of result[course]) {
         // Where does the host go next?
-        const hostNext = nextHostFor.get(group.hostId);
+        const hostNext = nextDestFor.get(group.hostId);
         if (hostNext) {
           group.hostNextAddress = hostNext.address;
-          group.hostNextHostName = hostNext.name;
-        } else if (!nextCourse) {
-          group.hostNextAddress = group.hostAddress; // Dessert → home
+          group.hostNextHostName = hostNext.isHome ? null : hostNext.name;
+        } else {
+          // No next course (dessert) or not found → home
+          group.hostNextAddress = group.hostAddress;
           group.hostNextHostName = null;
         }
 
         // Where does each guest go next?
         for (const guest of group.guests) {
-          const guestNext = nextHostFor.get(guest.id);
+          const guestNext = nextDestFor.get(guest.id);
           if (guestNext) {
             guest.toAddress = guestNext.address;
-            guest.toHostName = guestNext.name;
+            guest.toHostName = guestNext.isHome ? null : guestNext.name;
             guest.toCoords = guestNext.coords;
             guest.toDistanceKm = haversineKm(group.hostCoords, guestNext.coords);
-          } else if (!nextCourse) {
-            // After dessert → home
+          } else {
+            // No next course or not found → home
             guest.toAddress = guest.address;
             guest.toHostName = null;
             guest.toCoords = guest.coords;

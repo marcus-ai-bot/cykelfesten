@@ -332,9 +332,10 @@ function ExpandedContent({ group, cfg, onPrev, onNext, groupIndex, groupTotal }:
             <div className="space-y-2.5">
               {group.guests.map((guest) => {
                 const dist = guest.toDistanceKm;
+                const isGoingHome = !guest.toHostName;
                 const toLabel = guest.toHostName
                   ? `Till ${guest.toHostName.split(' & ')[0]}`
-                  : 'Hem';
+                  : (dist != null && dist < 0.01 ? 'Stannar (värd här)' : 'Hem');
                 const minutes = dist ? Math.round(dist / 0.25) : null;
                 return (
                   <div key={guest.id} className="flex items-start gap-3 py-1">
