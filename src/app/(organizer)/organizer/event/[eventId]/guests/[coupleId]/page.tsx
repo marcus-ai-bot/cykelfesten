@@ -32,7 +32,7 @@ interface Couple {
   confirmed: boolean;
   cancelled: boolean;
   created_at: string;
-  events: { id: string; name: string; slug: string; coordinates?: string };
+  events: { id: string; name: string; slug: string };
 }
 
 export default function CoupleDetailPage() {
@@ -48,8 +48,6 @@ export default function CoupleDetailPage() {
   const [form, setForm] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [eventCenter, setEventCenter] = useState<{ lat: number; lng: number } | undefined>();
-
   useEffect(() => {
     fetch(`/api/organizer/couples/${coupleId}`)
       .then(r => r.json())
@@ -64,14 +62,6 @@ export default function CoupleDetailPage() {
       .catch(() => setError('Kunde inte ladda data'))
       .finally(() => setLoading(false));
   }, [coupleId]);
-
-  // Extract event center from couple data for proximity bias
-  useEffect(() => {
-    if (couple?.events?.coordinates) {
-      const m = String(couple.events.coordinates).match(/\(([^,]+),([^)]+)\)/);
-      if (m) setEventCenter({ lng: parseFloat(m[1]), lat: parseFloat(m[2]) });
-    }
-  }, [couple]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -246,7 +236,7 @@ export default function CoupleDetailPage() {
                     ...(coordinates ? { address_coordinates: coordinates } : {}),
                   }));
                 }}
-                proximity={eventCenter}
+                proximity={undefined}
                 placeholder="Storgatan 12, Piteå"
                 className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
