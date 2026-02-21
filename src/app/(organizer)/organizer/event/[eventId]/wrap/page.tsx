@@ -6,17 +6,20 @@ import Link from 'next/link';
 
 interface WrapStats {
   total_distance_km: number;
+  avg_distance_km: number;
   total_couples: number;
   total_people: number;
   total_portions: number;
-  shortest_ride_meters: number;
+  shortest_ride_km: number;
   shortest_ride_couple: string;
-  longest_ride_meters: number;
+  longest_ride_km: number;
   longest_ride_couple: string;
-  age_youngest: number;
-  age_oldest: number;
+  age_youngest: number | null;
+  age_oldest: number | null;
   districts_count: number;
   fun_facts_count: number;
+  couples_with_routes: number;
+  distance_source: string;
   last_guest_departure: string | null;
   wrap1_sent_at: string | null;
   wrap2_sent_at: string | null;
@@ -126,15 +129,16 @@ export default function WrapPage() {
               </div>
             )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <Stat label="Total sträcka" value={stats.total_distance_km > 0 ? `${stats.total_distance_km} km` : '—'} />
-              <Stat label="Antal par" value={stats.total_couples} />
-              <Stat label="Antal personer" value={stats.total_people} />
-              <Stat label="Portioner" value={stats.total_portions} />
-              <Stat label="Kortaste cykling" value={stats.shortest_ride_meters > 0 ? `${stats.shortest_ride_meters}m` : '—'} sub={stats.shortest_ride_couple || undefined} />
-              <Stat label="Längsta cykling" value={stats.longest_ride_meters > 0 ? `${stats.longest_ride_meters}m` : '—'} sub={stats.longest_ride_couple || undefined} />
-              <Stat label="Åldersspan" value={stats.age_youngest && stats.age_oldest ? `${stats.age_youngest}–${stats.age_oldest} år` : 'Saknar födelseår'} />
-              <Stat label="Stadsdelar" value={stats.districts_count || '—'} />
-              <Stat label="Fun facts" value={stats.fun_facts_count} />
+              <Stat label="🚴 Total cykling" value={stats.total_distance_km > 0 ? `${stats.total_distance_km} km` : '—'} />
+              <Stat label="📏 Snitt per par" value={stats.avg_distance_km > 0 ? `${stats.avg_distance_km} km` : '—'} />
+              <Stat label="👥 Antal par" value={stats.total_couples} />
+              <Stat label="👤 Antal personer" value={stats.total_people} />
+              <Stat label="🍽️ Portioner" value={stats.total_portions} />
+              <Stat label="⚡ Kortaste rutt" value={stats.shortest_ride_km > 0 ? `${stats.shortest_ride_km} km` : '—'} sub={stats.shortest_ride_couple || undefined} />
+              <Stat label="🏔️ Längsta rutt" value={stats.longest_ride_km > 0 ? `${stats.longest_ride_km} km` : '—'} sub={stats.longest_ride_couple || undefined} />
+              <Stat label="🎂 Åldersspan" value={stats.age_youngest && stats.age_oldest ? `${stats.age_youngest}–${stats.age_oldest} år` : 'Saknar födelseår'} />
+              <Stat label="🏘️ Stadsdelar" value={stats.districts_count || '—'} />
+              <Stat label="✨ Fun facts" value={stats.fun_facts_count} />
             </div>
           </div>
         )}

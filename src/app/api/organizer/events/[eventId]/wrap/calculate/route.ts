@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
 
-function parsePoint(point: unknown): { lat: number; lng: number } | null {
+type Coord = { lat: number; lng: number };
+
+function parsePoint(point: unknown): Coord | null {
   if (!point) return null;
   if (typeof point === 'string') {
     const m = point.match(/\(([^,]+),([^)]+)\)/);
@@ -15,7 +17,7 @@ function parsePoint(point: unknown): { lat: number; lng: number } | null {
   return null;
 }
 
-function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+function haversineMeters(a: Coord, b: Coord): number {
   const R = 6371000;
   const dLat = (b.lat - a.lat) * Math.PI / 180;
   const dLng = (b.lng - a.lng) * Math.PI / 180;
@@ -25,13 +27,10 @@ function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng:
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-/**
- * Get cycling distance via Mapbox Directions (same as map view + check-distances)
- */
-async function getCyclingMeters(
-  from: { lat: number; lng: number },
-  to: { lat: number; lng: number }
-): Promise<number> {
+async function getCyclingMeters(from: Coord, to: Coord): Promise<number> {
+  // Skip zero-distance legs (same location, e.g. hosting at home)
+  if (haversineMeters(from, to) < 10) return 0;
+  
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token) return haversineMeters(from, to);
   try {
@@ -43,6 +42,14 @@ async function getCyclingMeters(
   } catch {
     return haversineMeters(from, to);
   }
+}
+
+interface CoupleRoute {
+  coupleId: string;
+  name: string;
+  legs: Array<{ from: string; to: string; fromCoord: Coord; toCoord: Coord }>;
+  totalMeters: number;
+  hostingCourse: string | null;
 }
 
 export async function POST(
@@ -64,11 +71,8 @@ export async function POST(
     .eq('event_id', eventId)
     .eq('cancelled', false);
 
-  if (!couples?.length) {
-    return NextResponse.json({ error: 'Inga par hittade' }, { status: 400 });
-  }
+  if (!couples?.length) return NextResponse.json({ error: 'Inga par' }, { status: 400 });
 
-  // Get active match plan
   const { data: event } = await supabase
     .from('events')
     .select('active_match_plan_id, wrap_stats')
@@ -77,89 +81,148 @@ export async function POST(
 
   const matchPlanId = event?.active_match_plan_id;
 
-  // Get assignments for route calculation
   const { data: assignments } = matchPlanId
     ? await supabase
         .from('assignments')
         .select('couple_id, host_couple_id, course')
         .eq('match_plan_id', matchPlanId)
-        .order('course')
     : { data: [] };
 
-  // Build couple coordinate map
-  const coupleCoords = new Map<string, { lat: number; lng: number }>();
+  // Build lookup maps
+  const coupleCoords = new Map<string, Coord>();
   const coupleNames = new Map<string, string>();
+  const coupleAddresses = new Map<string, string>();
+  
   couples.forEach(c => {
     const coords = parsePoint(c.coordinates);
     if (coords) coupleCoords.set(c.id, coords);
     coupleNames.set(c.id, c.invited_name + (c.partner_name ? ` & ${c.partner_name}` : ''));
+    coupleAddresses.set(c.id, c.address || '?');
   });
 
-  // Calculate per-couple total cycling distance (home → host1 → host2 → host3 → home)
-  const coupleRouteDistances = new Map<string, number>();
+  // Build per-couple assignment map: coupleId → { starter: hostId, main: hostId, dessert: hostId }
+  const courseOrder = ['starter', 'main', 'dessert'] as const;
+  const coupleHosts = new Map<string, Map<string, string>>(); // coupleId → course → hostCoupleId
+  
+  assignments?.forEach((a: any) => {
+    if (!coupleHosts.has(a.couple_id)) coupleHosts.set(a.couple_id, new Map());
+    coupleHosts.get(a.couple_id)!.set(a.course, a.host_couple_id);
+  });
 
-  if (assignments?.length) {
-    // Group assignments by couple, ordered by course
-    const coupleAssignments = new Map<string, string[]>(); // coupleId → [hostId per course]
-    const courseOrder = ['starter', 'main', 'dessert'];
+  // Calculate ACTUAL route per couple
+  // The real journey: Home → Course1_location → Course2_location → Course3_location → Home
+  // If hosting a course: location = your home (you stay/return)
+  
+  const coupleRoutes: CoupleRoute[] = [];
+  const allLegs: Array<{ coupleId: string; from: Coord; to: Coord }> = [];
+
+  for (const couple of couples) {
+    const home = coupleCoords.get(couple.id);
+    if (!home) continue;
     
-    assignments.forEach((a: any) => {
-      if (!coupleAssignments.has(a.couple_id)) coupleAssignments.set(a.couple_id, []);
-      coupleAssignments.get(a.couple_id)!.push(a.host_couple_id);
-    });
+    const hosts = coupleHosts.get(couple.id);
+    if (!hosts) continue;
 
-    // Build all legs, then batch with concurrency limit
-    const legs: Array<{ coupleId: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }> = [];
-    
-    for (const [coupleId, hostIds] of coupleAssignments) {
-      const home = coupleCoords.get(coupleId);
-      if (!home) continue;
+    const name = coupleNames.get(couple.id) || couple.id;
+    let hostingCourse: string | null = null;
 
-      let prev = home;
-      for (const hostId of hostIds) {
-        const hostCoords = coupleCoords.get(hostId);
-        if (!hostCoords) continue;
-        legs.push({ coupleId, from: prev, to: hostCoords });
-        prev = hostCoords;
-      }
-      // Return home
-      legs.push({ coupleId, from: prev, to: home });
+    // Build waypoints in order
+    const waypoints: Array<{ label: string; coord: Coord }> = [
+      { label: '🏠 Hem', coord: home },
+    ];
+
+    for (const course of courseOrder) {
+      const hostId = hosts.get(course);
+      if (!hostId) continue;
+      
+      const isHosting = hostId === couple.id;
+      if (isHosting) hostingCourse = course;
+      
+      const hostCoord = coupleCoords.get(hostId);
+      if (!hostCoord) continue;
+      
+      const courseLabel = course === 'starter' ? '🥗 Förrätt'
+        : course === 'main' ? '🍖 Varmrätt'
+        : '🍰 Dessert';
+      
+      waypoints.push({
+        label: isHosting ? `${courseLabel} (värd, hemma)` : `${courseLabel} @ ${coupleAddresses.get(hostId) || '?'}`,
+        coord: hostCoord,
+      });
     }
 
-    // Fetch cycling distances with concurrency limit
-    const BATCH = 10;
-    const legDistances: Array<{ coupleId: string; meters: number }> = [];
-    
-    for (let i = 0; i < legs.length; i += BATCH) {
-      const chunk = legs.slice(i, i + BATCH);
-      const results = await Promise.all(
-        chunk.map(async (leg) => ({
-          coupleId: leg.coupleId,
-          meters: await getCyclingMeters(leg.from, leg.to),
-        }))
-      );
-      legDistances.push(...results);
+    // Return home after last course
+    waypoints.push({ label: '🏠 Hem', coord: home });
+
+    // Build legs
+    const legs: CoupleRoute['legs'] = [];
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      legs.push({
+        from: waypoints[i].label,
+        to: waypoints[i + 1].label,
+        fromCoord: waypoints[i].coord,
+        toCoord: waypoints[i + 1].coord,
+      });
+      allLegs.push({
+        coupleId: couple.id,
+        from: waypoints[i].coord,
+        to: waypoints[i + 1].coord,
+      });
     }
 
-    // Sum per couple
-    for (const { coupleId, meters } of legDistances) {
-      coupleRouteDistances.set(coupleId, (coupleRouteDistances.get(coupleId) || 0) + meters);
-    }
+    coupleRoutes.push({ coupleId: couple.id, name, legs, totalMeters: 0, hostingCourse });
   }
 
-  // Distance stats
-  let shortest = { meters: Infinity, couple: '' };
-  let longest = { meters: 0, couple: '' };
-  let totalDistance = 0;
-
-  for (const [coupleId, dist] of coupleRouteDistances) {
-    totalDistance += dist;
-    const name = coupleNames.get(coupleId) || coupleId;
-    if (dist < shortest.meters && dist > 0) shortest = { meters: dist, couple: name };
-    if (dist > longest.meters) longest = { meters: dist, couple: name };
+  // Batch cycling distance calculation (10 concurrent)
+  const BATCH = 10;
+  const legDistances = new Map<number, number>(); // index → meters
+  
+  for (let i = 0; i < allLegs.length; i += BATCH) {
+    const chunk = allLegs.slice(i, i + BATCH);
+    const results = await Promise.all(
+      chunk.map(async (leg, j) => ({
+        index: i + j,
+        meters: await getCyclingMeters(leg.from, leg.to),
+      }))
+    );
+    results.forEach(r => legDistances.set(r.index, r.meters));
   }
 
-  // Age stats from birth_year
+  // Sum per couple
+  let legIndex = 0;
+  for (const route of coupleRoutes) {
+    let total = 0;
+    for (let i = 0; i < route.legs.length; i++) {
+      const meters = legDistances.get(legIndex) || 0;
+      route.legs[i] = { ...route.legs[i], fromCoord: undefined as any, toCoord: undefined as any }; // strip coords from response
+      (route.legs[i] as any).meters = meters;
+      total += meters;
+      legIndex++;
+    }
+    route.totalMeters = total;
+  }
+
+  // Clean up response (remove coord objects)
+  const routeSummaries = coupleRoutes.map(r => ({
+    name: r.name,
+    hostingCourse: r.hostingCourse,
+    totalKm: Math.round(r.totalMeters / 100) / 10,
+    legs: r.legs.map(l => ({
+      from: l.from,
+      to: l.to,
+      km: Math.round((l as any).meters / 100) / 10,
+    })),
+  }));
+
+  // Overall stats
+  const distances = coupleRoutes.map(r => r.totalMeters).filter(d => d > 0);
+  const totalDistance = distances.reduce((a, b) => a + b, 0);
+  
+  const sorted = [...coupleRoutes].sort((a, b) => a.totalMeters - b.totalMeters);
+  const shortestRoute = sorted.find(r => r.totalMeters > 0);
+  const longestRoute = sorted[sorted.length - 1];
+
+  // Age stats
   const currentYear = new Date().getFullYear();
   const ages: number[] = [];
   couples.forEach(c => {
@@ -167,14 +230,14 @@ export async function POST(
     if (c.partner_birth_year) ages.push(currentYear - c.partner_birth_year);
   });
 
-  // Fun facts count
+  // Fun facts
   let funFactsCount = 0;
   couples.forEach(c => {
     if (c.invited_fun_facts && typeof c.invited_fun_facts === 'string' && c.invited_fun_facts.trim()) funFactsCount++;
     if (c.partner_fun_facts && typeof c.partner_fun_facts === 'string' && c.partner_fun_facts.trim()) funFactsCount++;
   });
 
-  // Districts (cities from address)
+  // Districts
   const districts = new Set<string>();
   couples.forEach(c => {
     if (c.address) {
@@ -188,19 +251,21 @@ export async function POST(
 
   const newStats = {
     total_distance_km: Math.round(totalDistance / 100) / 10,
+    avg_distance_km: distances.length ? Math.round(totalDistance / distances.length / 100) / 10 : 0,
     total_couples: couples.length,
     total_people: couples.reduce((sum, c) => sum + (c.partner_name ? 2 : 1), 0),
-    total_portions: couples.length * 3 * 2, // 3 courses × 2 people approx
-    shortest_ride_meters: shortest.meters === Infinity ? 0 : Math.round(shortest.meters),
-    shortest_ride_couple: shortest.couple || '—',
-    longest_ride_meters: Math.round(longest.meters),
-    longest_ride_couple: longest.couple || '—',
+    total_portions: couples.length * 3 * 2,
+    shortest_ride_km: shortestRoute ? Math.round(shortestRoute.totalMeters / 100) / 10 : 0,
+    shortest_ride_couple: shortestRoute?.name || '—',
+    longest_ride_km: longestRoute ? Math.round(longestRoute.totalMeters / 100) / 10 : 0,
+    longest_ride_couple: longestRoute?.name || '—',
     age_youngest: ages.length ? Math.min(...ages) : null,
     age_oldest: ages.length ? Math.max(...ages) : null,
     districts_count: districts.size,
     districts_list: Array.from(districts),
     fun_facts_count: funFactsCount,
-    couples_with_routes: coupleRouteDistances.size,
+    couples_with_routes: distances.length,
+    distance_source: 'cycling',
     // Preserve manual fields
     last_guest_departure: existing.last_guest_departure || null,
     wrap1_sent_at: existing.wrap1_sent_at || null,
@@ -209,5 +274,8 @@ export async function POST(
 
   await supabase.from('events').update({ wrap_stats: newStats }).eq('id', eventId);
 
-  return NextResponse.json({ stats: newStats });
+  return NextResponse.json({
+    stats: newStats,
+    routes: routeSummaries,
+  });
 }
