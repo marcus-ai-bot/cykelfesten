@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { resend, FROM_EMAIL, BASE_URL } from '@/lib/resend';
+import { sendEmail } from '@/lib/email';
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://cykelfesten.vercel.app';
 
 // POST /api/notify/send-wraps
 // Send wrap emails to all participants of an event
@@ -80,8 +82,7 @@ export async function POST(request: NextRequest) {
           const wrapUrl = `${BASE_URL}/e/${event.slug}/wrap?coupleId=${couple.id}&person=invited`;
           const awardUrl = `${BASE_URL}/e/${event.slug}/award?coupleId=${couple.id}&person=invited`;
           
-          const { data: emailData, error: emailError } = await resend.emails.send({
-            from: FROM_EMAIL,
+          const { data: emailData, error: emailError } = await sendEmail({
             to: couple.invited_email,
             subject: `🎁 Din wrap från ${event.name} är här!`,
             html: `
@@ -130,8 +131,7 @@ export async function POST(request: NextRequest) {
           const awardUrl = `${BASE_URL}/e/${event.slug}/award?coupleId=${couple.id}&person=partner`;
           
           const partnerName = couple.partner_name || 'Partner';
-          const { data: emailData, error: emailError } = await resend.emails.send({
-            from: FROM_EMAIL,
+          const { data: emailData, error: emailError } = await sendEmail({
             to: couple.partner_email,
             subject: `🎁 Din wrap från ${event.name} är här!`,
             html: `

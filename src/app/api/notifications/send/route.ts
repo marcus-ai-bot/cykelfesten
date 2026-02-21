@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
+import { sendEmail } from '@/lib/email';
 
 /**
  * Send Notifications API
@@ -131,14 +132,25 @@ export async function POST(request: Request) {
         continue;
       }
       
-      // TODO: Actually send email via Resend/Supabase/etc
-      // For now, just log it
-      console.log(`[NOTIFICATION] To: ${couple.invited_email}, Subject: ${subject}`);
-      
-      results.push({ 
-        couple_id: couple.id, 
-        status: 'sent', 
-        email: couple.invited_email 
+      const recipientEmail = couple.invited_email;
+      if (recipientEmail) {
+        const html = `<p>${body.replace(/\n/g, '<br/>')}</p>`;
+        const { error: emailError } = await sendEmail({
+          to: recipientEmail,
+          subject,
+          html,
+        });
+
+        if (emailError) {
+          results.push({ couple_id: couple.id, status: 'error', email: recipientEmail });
+          continue;
+        }
+      }
+
+      results.push({
+        couple_id: couple.id,
+        status: 'sent',
+        email: recipientEmail,
       });
     }
     

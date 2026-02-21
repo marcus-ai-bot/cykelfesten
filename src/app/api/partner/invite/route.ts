@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
+import { sendEmail } from '@/lib/email';
 import { randomBytes } from 'crypto';
 
 /**
@@ -58,16 +59,29 @@ export async function POST(request: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cykelfesten.vercel.app';
     const inviteUrl = `${baseUrl}/e/${couple.events.slug}/partner?token=${token}`;
     
-    // TODO: Send email to partner
-    // For now, return the URL for manual sharing
-    console.log(`[PARTNER INVITE] To: ${couple.partner_email}, URL: ${inviteUrl}`);
-    
+    const partnerEmail = couple.partner_email;
+    const partnerName = couple.partner_name;
+    const invitedName = couple.invited_name;
+    const eventName = couple.events?.name || 'Cykelfesten';
+    const profileUrl = inviteUrl;
+
+    const { error: emailError } = await sendEmail({
+      to: partnerEmail,
+      subject: `${invitedName} har anmält er till ${eventName}`,
+      html: `<p>Hej ${partnerName}!</p><p>${invitedName} har anmält er till <strong>${eventName}</strong>.</p><p>Fyll i din profil här: <a href="${profileUrl}">${profileUrl}</a></p>`,
+    });
+
+    if (emailError) {
+      console.error('Partner invite email error:', emailError);
+      return NextResponse.json({ error: 'Kunde inte skicka inbjudan' }, { status: 500 });
+    }
+
     return NextResponse.json({
       success: true,
-      partner_name: couple.partner_name,
-      partner_email: couple.partner_email,
+      partner_name: partnerName,
+      partner_email: partnerEmail,
       invite_url: inviteUrl,
-      message: 'Inbjudan skapad! Dela länken med din partner.',
+      message: 'Inbjudan skickad! Be din partner kolla sin email.',
     });
     
   } catch (error) {

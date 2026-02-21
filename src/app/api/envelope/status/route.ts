@@ -145,9 +145,24 @@ export async function GET(request: NextRequest) {
     // 6b. Get ALL participants' fun facts for the clue pool (CLUE_1)
     const { data: allCouples } = await supabase
       .from('couples')
-      .select('id, invited_fun_facts, partner_fun_facts, invited_allergies, partner_allergies, replacement_allergies, partner_name')
+      .select('id, invited_name, invited_fun_facts, partner_fun_facts, invited_allergies, partner_allergies, invited_allergy_notes, partner_allergy_notes, replacement_allergies, partner_name')
       .eq('event_id', eventId)
       .eq('confirmed', true);
+    
+    const { data: allEnvelopes } = await supabase
+      .from('envelopes')
+      .select('couple_id, host_couple_id, course')
+      .eq('match_plan_id', event.active_match_plan_id);
+    
+    const hostCourseGuestLookup = new Map<string, Map<string, string[]>>();
+    for (const envelope of allEnvelopes ?? []) {
+      if (!envelope.host_couple_id || !envelope.couple_id || !envelope.course) continue;
+      const byCourse = hostCourseGuestLookup.get(envelope.host_couple_id) ?? new Map<string, string[]>();
+      const guests = byCourse.get(envelope.course) ?? [];
+      guests.push(envelope.couple_id);
+      byCourse.set(envelope.course, guests);
+      hostCourseGuestLookup.set(envelope.host_couple_id, byCourse);
+    }
     
     // Build shuffled clue pool from all participants
     const allFunFacts: string[] = [];
@@ -284,8 +299,8 @@ export async function GET(request: NextRequest) {
           envelope.host_couple?.invited_name,
           envelope.host_couple?.partner_name,
         ].filter((n): n is string => !!n) : null,
-        allergies_summary: state === 'OPEN' 
-          ? getAllergiesSummary(envelope.host_couple_id, coupleId) 
+        allergies_summary: isSelfHost && state !== 'LOCKED'
+          ? getAllergiesSummary(envelope.host_couple_id, courseType, hostCourseGuestLookup, allCouples)
           : null,
         is_self_host: isSelfHost,
         host_has_fun_facts: hostHasFunFacts,
@@ -469,8 +484,69 @@ function getNextReveal(envelope: EnvelopeWithHost, currentState: EnvelopeState, 
   };
 }
 
-function getAllergiesSummary(hostCoupleId: string | null, guestCoupleId: string): string[] | null {
-  // TODO: Implement - fetch all guests at this host and summarize allergies
-  // For now, return null
-  return null;
+function getAllergiesSummary(
+  hostCoupleId: string | null,
+  course: Course,
+  hostCourseGuestLookup: Map<string, Map<string, string[]>>,
+  allCouples: Array<{
+    id: string;
+    invited_name?: string | null;
+    partner_name?: string | null;
+    invited_allergies?: string[] | null;
+    partner_allergies?: string[] | null;
+    replacement_allergies?: string[] | null;
+    invited_allergy_notes?: string | null;
+    partner_allergy_notes?: string | null;
+  }> | null
+): string[] | null {
+  if (!hostCoupleId) return null;
+
+  const guestsByCourse = hostCourseGuestLookup.get(hostCoupleId);
+  const guestIds = guestsByCourse?.get(course) ?? [];
+  if (!guestIds.length || !allCouples?.length) return null;
+
+  const couplesById = new Map(allCouples.map(c => [c.id, c]));
+  const allergyCounts = new Map<string, number>();
+  const notes = new Set<string>();
+
+  const addAllergies = (items: unknown, count = 1) => {
+    if (!Array.isArray(items)) return;
+    for (const item of items) {
+      if (typeof item !== 'string') continue;
+      const normalized = item.trim().toLowerCase();
+      if (!normalized) continue;
+      allergyCounts.set(normalized, (allergyCounts.get(normalized) ?? 0) + count);
+    }
+  };
+
+  const addNote = (name: string | null | undefined, note: string | null | undefined) => {
+    if (!note || !note.trim()) return;
+    const prefix = name ? `${name}: ` : '';
+    notes.add(`${prefix}${note.trim()}`);
+  };
+
+  for (const guestId of guestIds) {
+    const guest = couplesById.get(guestId);
+    if (!guest) continue;
+
+    addAllergies(guest.invited_allergies, 1);
+    addAllergies(guest.replacement_allergies, 1);
+    addNote(guest.invited_name ?? null, guest.invited_allergy_notes ?? null);
+
+    if (guest.partner_name) {
+      addAllergies(guest.partner_allergies, 1);
+      addNote(guest.partner_name ?? null, guest.partner_allergy_notes ?? null);
+    }
+  }
+
+  const summary: string[] = [];
+  const sortedAllergies = Array.from(allergyCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [allergy, count] of sortedAllergies) {
+    const label = allergy.charAt(0).toUpperCase() + allergy.slice(1);
+    summary.push(`${label} (${count} pers)`);
+  }
+
+  summary.push(...Array.from(notes));
+
+  return summary.length ? summary : null;
 }
