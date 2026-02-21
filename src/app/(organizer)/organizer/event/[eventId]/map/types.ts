@@ -26,6 +26,8 @@ export interface RouteSegment {
   hostName: string;
   guestId: string;
   hostId: string;
+  fromAddress: string;
+  fromHostName: string | null; // null for starter (coming from home)
 }
 
 export interface MapData {
@@ -47,7 +49,11 @@ export interface MealGroup {
     address: string;
     coords: [number, number];
     allergies: string[];
-    routeDistanceKm: number | null; // actual cycling distance from route geometry
+    routeDistanceKm: number | null;
+    /** Where they're cycling FROM (home for starter, previous host for main/dessert) */
+    fromAddress: string;
+    fromHostName: string | null;
+    fromCoords: [number, number];
   }>;
   totalPeople: number;
 }

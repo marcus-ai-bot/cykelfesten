@@ -162,6 +162,9 @@ export async function GET(request: Request, context: RouteContext) {
       hostName: string;
       guestId: string;
       hostId: string;
+      /** Where the guest is coming from (for main/dessert: previous host) */
+      fromAddress: string;
+      fromHostName: string | null; // null for starter (coming from home)
     };
 
     let routes: { starter: Segment[]; main: Segment[]; dessert: Segment[] } | null = null;
@@ -173,22 +176,67 @@ export async function GET(request: Request, context: RouteContext) {
         .eq('match_plan_id', latestPlan.id);
 
       const byId = new Map(withCoords.map((c) => [c.id, c]));
+
+      // Build journey chain: for each couple, track their host per course
+      // coupleId → { starter: hostCoupleId, main: hostCoupleId, dessert: hostCoupleId }
+      const journeys = new Map<string, Record<string, string>>();
+      (pairings || []).forEach((p: any) => {
+        if (!journeys.has(p.guest_couple_id)) journeys.set(p.guest_couple_id, {});
+        journeys.get(p.guest_couple_id)![p.course] = p.host_couple_id;
+      });
+
+      const courseOrder: Array<{ course: string; prevCourse: string | null }> = [
+        { course: 'starter', prevCourse: null },
+        { course: 'main', prevCourse: 'starter' },
+        { course: 'dessert', prevCourse: 'main' },
+      ];
+
       const allSegments: Array<Segment & { course: string }> = [];
 
-      (pairings || []).forEach((p: any) => {
-        const guest = byId.get(p.guest_couple_id);
-        const host = byId.get(p.host_couple_id);
-        if (!guest || !host) return;
-        allSegments.push({
-          course: p.course,
-          from: [guest.lng, guest.lat],
-          to: [host.lng, host.lat],
-          geometry: null,
-          guestName: guest.name,
-          hostName: host.name,
-          guestId: guest.id,
-          hostId: host.id,
-        });
+      courseOrder.forEach(({ course, prevCourse }) => {
+        (pairings || [])
+          .filter((p: any) => p.course === course)
+          .forEach((p: any) => {
+            const guest = byId.get(p.guest_couple_id);
+            const host = byId.get(p.host_couple_id);
+            if (!guest || !host) return;
+
+            let fromCoords: [number, number];
+            let fromAddress: string;
+            let fromHostName: string | null = null;
+
+            if (prevCourse) {
+              // Chain routing: start from previous course's host
+              const prevHostId = journeys.get(p.guest_couple_id)?.[prevCourse];
+              const prevHost = prevHostId ? byId.get(prevHostId) : null;
+              if (prevHost) {
+                fromCoords = [prevHost.lng, prevHost.lat];
+                fromAddress = prevHost.address;
+                fromHostName = prevHost.name;
+              } else {
+                // Fallback: use guest's home (shouldn't happen if data is complete)
+                fromCoords = [guest.lng, guest.lat];
+                fromAddress = guest.address;
+              }
+            } else {
+              // Starter: start from home
+              fromCoords = [guest.lng, guest.lat];
+              fromAddress = guest.address;
+            }
+
+            allSegments.push({
+              course,
+              from: fromCoords,
+              to: [host.lng, host.lat],
+              geometry: null,
+              guestName: guest.name,
+              hostName: host.name,
+              guestId: guest.id,
+              hostId: host.id,
+              fromAddress,
+              fromHostName,
+            });
+          });
       });
 
       // Fetch real cycling routes from Mapbox Directions

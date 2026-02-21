@@ -91,6 +91,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
             coords: [guest.lng, guest.lat],
             allergies: guest.allergies || [],
             routeDistanceKm: routeDistanceKm(seg.geometry),
+            fromAddress: seg.fromAddress || guest.address,
+            fromHostName: seg.fromHostName || null,
+            fromCoords: seg.from,
           });
           g.totalPeople += guest.personCount;
         }

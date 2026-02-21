@@ -127,16 +127,18 @@ function CardContent({
       {/* Guests */}
       <div className="px-5 py-3">
         <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-          🚲 Gäster ({group.guests.length} par)
+          🚲 {group.guests[0]?.fromHostName ? 'Cyklar hit från föregående rätt' : 'Cyklar hit hemifrån'} ({group.guests.length} par)
         </div>
         <div className="space-y-2.5">
           {group.guests.map((guest) => {
-            // Prefer actual cycling route distance, fallback to bird-flight
             const routeDist = guest.routeDistanceKm;
-            const birdDist = haversineKm(guest.coords, group.hostCoords);
+            const birdDist = haversineKm(guest.fromCoords, group.hostCoords);
             const dist = routeDist ?? birdDist;
             const isRoute = routeDist != null;
             const minutes = Math.round(dist / 0.25); // ~15 km/h
+            const fromLabel = guest.fromHostName
+              ? `Från ${guest.fromHostName.split(' & ')[0]}`
+              : 'Hemifrån';
             return (
               <div key={guest.id} className="flex items-start gap-3 py-1">
                 <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs mt-0.5 shrink-0">
@@ -144,7 +146,9 @@ function CardContent({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-gray-800">{guest.name}</div>
-                  <div className="text-xs text-gray-400 truncate">{guest.address}</div>
+                  <div className="text-xs text-gray-400 truncate">
+                    {fromLabel} · {guest.fromAddress}
+                  </div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`}
                     {isRoute ? ' cykelväg' : ' fågelvägen'}
