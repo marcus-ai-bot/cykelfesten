@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
+import { getOrganizer } from '@/lib/auth';
 import type { 
   EnvelopeStatusResponse, 
   CourseEnvelopeStatus, 
@@ -58,7 +59,8 @@ export async function GET(request: NextRequest) {
   
   // Allow organizers to simulate time for preview
   const simulateTime = searchParams.get('simulateTime');
-  const now = simulateTime ? new Date(simulateTime) : new Date();
+  const organizer = await getOrganizer();
+  const now = simulateTime && organizer ? new Date(simulateTime) : new Date();
   
   try {
     // 1. Verify couple exists and belongs to event
@@ -143,7 +145,7 @@ export async function GET(request: NextRequest) {
     // 6b. Get ALL participants' fun facts for the clue pool (CLUE_1)
     const { data: allCouples } = await supabase
       .from('couples')
-      .select('id, invited_fun_facts, partner_fun_facts')
+      .select('id, invited_fun_facts, partner_fun_facts, invited_allergies, partner_allergies, replacement_allergies, partner_name')
       .eq('event_id', eventId)
       .eq('confirmed', true);
     
@@ -228,8 +230,28 @@ export async function GET(request: NextRequest) {
       const totalCouples = allCouples?.length ?? 0;
       
       // Calculate total cycling distance (rough estimate: sum all envelopes)
-      const totalCyclingMinutes = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes ?? 0), 0) ?? 0;
+      const totalCyclingMinutes = envelopes?.reduce(
+        (sum, e) => sum + Math.min(e.cycling_minutes ?? 0, 60),
+        0
+      ) ?? 0;
       const totalDistanceKm = Math.round(totalCyclingMinutes * 0.25 * 10) / 10; // ~250m/min = 0.25km/min
+      
+      // Estimate vegetarian dishes from actual dietary preferences if available
+      const isVegetarian = (allergies: unknown) =>
+        Array.isArray(allergies) && allergies.some(a =>
+          typeof a === 'string' && /vegetarisk|vegetarian|vegan/.test(a.toLowerCase())
+        );
+      const hasDietaryData = (allCouples ?? []).some(c =>
+        Array.isArray(c.invited_allergies) || Array.isArray(c.partner_allergies) || Array.isArray(c.replacement_allergies)
+      );
+      const vegetarianPeople = (allCouples ?? []).reduce((sum, c) => {
+        let count = 0;
+        if (isVegetarian(c.invited_allergies)) count++;
+        if (c.partner_name && isVegetarian(c.partner_allergies)) count++;
+        if (isVegetarian(c.replacement_allergies)) count++;
+        return sum + count;
+      }, 0);
+      const vegetarianDishes = hasDietaryData ? vegetarianPeople : Math.floor(totalCouples * 0.3);
       
       // Afterparty cycling time from this couple's location
       const afterpartyCyclingMin = envelope.cycling_minutes ?? 10;
@@ -273,7 +295,7 @@ export async function GET(request: NextRequest) {
           total_couples: totalCouples,
           total_distance_km: totalDistanceKm,
           total_dishes: totalCouples * 3, // 3 courses
-          vegetarian_dishes: Math.floor(totalCouples * 0.3), // rough estimate
+          vegetarian_dishes: vegetarianDishes,
         } : null,
         afterparty_practical: isDessert && ['CLUE_2', 'STREET', 'NUMBER', 'OPEN'].includes(state) ? {
           time: event.afterparty_time ?? '21:00',

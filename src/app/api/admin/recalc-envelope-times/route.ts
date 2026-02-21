@@ -63,27 +63,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No envelopes to update' });
     }
 
-    // Recalculate and update each envelope
+    // Recalculate and update each envelope (batch updates)
     let updated = 0;
-    for (const env of envelopes) {
-      const times = calculateEnvelopeTimes(
-        courseStartTimes[env.course as keyof typeof courseStartTimes],
-        timingConfig,
-        env.cycling_minutes ?? undefined
-      );
+    const batchSize = 10;
+    for (let i = 0; i < envelopes.length; i += batchSize) {
+      const batch = envelopes.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(env => {
+          const times = calculateEnvelopeTimes(
+            courseStartTimes[env.course as keyof typeof courseStartTimes],
+            timingConfig,
+            env.cycling_minutes ?? undefined
+          );
 
-      await supabase
-        .from('envelopes')
-        .update({
-          teasing_at: times.teasing_at.toISOString(),
-          clue_1_at: times.clue_1_at.toISOString(),
-          clue_2_at: times.clue_2_at.toISOString(),
-          street_at: times.street_at.toISOString(),
-          number_at: times.number_at.toISOString(),
-          opened_at: times.opened_at.toISOString(),
+          return supabase
+            .from('envelopes')
+            .update({
+              teasing_at: times.teasing_at.toISOString(),
+              clue_1_at: times.clue_1_at.toISOString(),
+              clue_2_at: times.clue_2_at.toISOString(),
+              street_at: times.street_at.toISOString(),
+              number_at: times.number_at.toISOString(),
+              opened_at: times.opened_at.toISOString(),
+            })
+            .eq('id', env.id);
         })
-        .eq('id', env.id);
-      updated++;
+      );
+      updated += batch.length;
     }
 
     return NextResponse.json({ success: true, updated });

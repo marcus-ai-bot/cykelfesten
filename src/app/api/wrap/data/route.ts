@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     // 2. Get envelopes for distance calculation
     const { data: envelopes } = await supabase
       .from('envelopes')
-      .select('couple_id, cycling_minutes')
+      .select('couple_id, course, host_couple_id, cycling_minutes')
       .eq('match_plan_id', event.active_match_plan_id);
     
     // 3. Get all couples for statistics
@@ -116,19 +116,35 @@ export async function GET(request: NextRequest) {
     
     // Calculate individual distance
     const coupleEnvelopes = envelopes?.filter(e => e.couple_id === coupleId) ?? [];
-    const coupleMinutes = coupleEnvelopes.reduce((sum, e) => sum + (e.cycling_minutes ?? 0), 0);
+    const coupleMinutes = coupleEnvelopes.reduce(
+      (sum, e) => sum + Math.min(e.cycling_minutes ?? 0, 60),
+      0
+    );
     const hasPartner = !!couple.partner_name;
     const individualDistanceKm = Math.round((coupleMinutes * 0.25 / (hasPartner ? 2 : 1)) * 10) / 10;
     
     // Calculate total event distance
-    const totalMinutes = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes ?? 0), 0) ?? 0;
+    const totalMinutes = envelopes?.reduce(
+      (sum, e) => sum + Math.min(e.cycling_minutes ?? 0, 60),
+      0
+    ) ?? 0;
     const totalDistanceKm = Math.round(totalMinutes * 0.25 * 10) / 10;
     const distancePercent = totalDistanceKm > 0 
       ? Math.round((individualDistanceKm / totalDistanceKm) * 100 * 10) / 10
       : 0;
     
-    // Count people met (3 hosts per course, minus self-hosting)
-    const peopleMet = 6; // Simplified: 2 hosts × 3 courses (could be more precise)
+    // Count people met: tablemates per course (exclude self), estimate people per couple
+    let couplesMet = 0;
+    for (const env of coupleEnvelopes) {
+      if (!env.host_couple_id) continue;
+      const tablemates = (envelopes ?? [])
+        .filter(e => e.course === env.course && e.host_couple_id === env.host_couple_id)
+        .map(e => e.couple_id);
+      const uniqueCouples = new Set(tablemates);
+      uniqueCouples.delete(coupleId);
+      couplesMet += uniqueCouples.size;
+    }
+    const peopleMet = Math.round(couplesMet * 1.9);
     
     // Determine music decade from fun facts
     const musicDecade = getMusicDecade(personFunFacts);

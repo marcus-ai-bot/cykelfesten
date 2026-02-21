@@ -95,22 +95,35 @@ export default function AdminWrapPage() {
         return;
       }
       
-      // Get assignments for actual travel routes
-      const { data: assignments } = await supabase
-        .from('assignments')
-        .select('*, couple:couples(*), host:couples!assignments_host_couple_id_fkey(*)')
-        .eq('event_id', eventId);
+      // Get envelopes for actual travel routes (host info via envelopes)
+      const matchPlanId = event?.active_match_plan_id;
+      if (!matchPlanId) {
+        setMessage('Inget aktivt matchningsschema hittades');
+        setCalculating(false);
+        return;
+      }
+      
+      const { data: envelopes } = await supabase
+        .from('envelopes')
+        .select('couple_id, course, host_couple_id, host:couples!envelopes_host_couple_id_fkey(coordinates)')
+        .eq('match_plan_id', matchPlanId);
+      
+      const coupleById = new Map(couples.map(c => [c.id, c]));
       
       // Calculate distances per couple using actual coordinates
       const coupleDistances: Record<string, { distance: number; name: string }> = {};
       
-      // Group assignments by couple and course order
+      // Group envelopes by couple and course order
       const coupleRoutes: Record<string, { coords: { lat: number; lng: number }[]; name: string }> = {};
+      const courseOrder: Record<string, number> = { starter: 0, main: 1, dessert: 2 };
+      const sortedEnvelopes = (envelopes ?? []).slice().sort((a: any, b: any) =>
+        (courseOrder[a.course] ?? 0) - (courseOrder[b.course] ?? 0)
+      );
       
-      assignments?.forEach(a => {
-        const coupleId = a.couple_id;
-        const couple = a.couple as any;
-        const host = a.host as any;
+      sortedEnvelopes.forEach(e => {
+        const coupleId = e.couple_id;
+        const couple = coupleById.get(coupleId) as any;
+        const host = (e as any).host as any;
         
         if (!coupleRoutes[coupleId]) {
           coupleRoutes[coupleId] = {

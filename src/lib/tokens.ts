@@ -10,11 +10,15 @@ import { createHmac } from 'crypto';
  * - signature: HMAC-SHA256 of the above
  */
 
-const TOKEN_SECRET = process.env.TOKEN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'fallback-dev-secret';
+const TOKEN_SECRET = process.env.TOKEN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!TOKEN_SECRET) {
+  console.warn('TOKEN_SECRET missing; token signing will be insecure in this environment');
+}
+const TOKEN_SIGNING_SECRET = TOKEN_SECRET || '';
 const TOKEN_EXPIRY_DAYS = 30; // Tokens valid for 30 days
 
 function sign(data: string): string {
-  return createHmac('sha256', TOKEN_SECRET)
+  return createHmac('sha256', TOKEN_SIGNING_SECRET)
     .update(data)
     .digest('hex')
     .substring(0, 16); // Use first 16 chars for shorter URLs
@@ -115,7 +119,7 @@ export function getAccessFromParams(
   }
   
   // Fall back to raw params (legacy support)
-  // TODO: Remove this after migration period
+  // TODO: Remove this legacy fallback after migration/preview flow is fully token-based
   const coupleId = searchParams.get('coupleId');
   const person = searchParams.get('person');
   
@@ -151,7 +155,7 @@ export function buildTokenUrl(baseUrl: string, coupleId: string, personType: 'in
  * Used to create shareable registration links.
  */
 export function createInviteToken(eventId: string): string {
-  return createHmac('sha256', TOKEN_SECRET)
+  return createHmac('sha256', TOKEN_SIGNING_SECRET)
     .update(`invite:${eventId}`)
     .digest('hex')
     .substring(0, 16);

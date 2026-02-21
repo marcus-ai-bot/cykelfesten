@@ -233,8 +233,8 @@ export async function POST(
   // Fun facts
   let funFactsCount = 0;
   couples.forEach(c => {
-    if (c.invited_fun_facts && typeof c.invited_fun_facts === 'string' && c.invited_fun_facts.trim()) funFactsCount++;
-    if (c.partner_fun_facts && typeof c.partner_fun_facts === 'string' && c.partner_fun_facts.trim()) funFactsCount++;
+    if (Array.isArray(c.invited_fun_facts) && c.invited_fun_facts.length > 0) funFactsCount++;
+    if (Array.isArray(c.partner_fun_facts) && c.partner_fun_facts.length > 0) funFactsCount++;
   });
 
   // Districts

@@ -34,6 +34,16 @@ export interface Event {
   gathering_description: string | null;
   afterparty_location: string | null;
   afterparty_description: string | null;
+  afterparty_door_code: string | null;
+  afterparty_byob: boolean | null;
+  afterparty_notes: string | null;
+  afterparty_hosts: string | null;
+  host_self_messages: Record<string, unknown> | null;
+  lips_sealed_messages: Record<string, unknown> | null;
+  mystery_host_messages: Record<string, unknown> | null;
+  enabled_awards: string[] | null;
+  thank_you_message: string | null;
+  wrap_stats: Record<string, any> | null;
   envelope_hours_before: number;
   dropout_cutoff_hours: number;
   public_view_enabled: boolean;
