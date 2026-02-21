@@ -261,12 +261,14 @@ export async function POST(request: Request) {
       })
       .eq('id', matchPlan.id);
     
-    // Auto-lock invite phase: set event status to 'matched'
+    // Set this as the active match plan + auto-lock invite phase
     await supabase
       .from('events')
-      .update({ status: 'matched' })
-      .eq('id', event_id)
-      .in('status', ['draft', 'open']);
+      .update({
+        active_match_plan_id: matchPlan.id,
+        status: 'matched',
+      })
+      .eq('id', event_id);
 
     // Log event
     await supabase.from('event_log').insert({
