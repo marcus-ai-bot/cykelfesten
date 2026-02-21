@@ -57,7 +57,12 @@ export default function WrapPage() {
     try {
       const res = await fetch(`/api/organizer/events/${eventId}/wrap/calculate`, { method: 'POST' });
       const data = await res.json();
-      if (res.ok) { setStats(data.stats); setMessage('✅ Statistik beräknad!'); }
+      if (res.ok) {
+        setStats(data.stats);
+        setMessage(data.stats.total_distance_km > 0
+          ? `✅ Statistik beräknad! ${data.stats.couples_with_routes || 0} par med rutter.`
+          : '⚠️ Statistik beräknad men avstånd saknas — kontrollera matchning och adresser.');
+      }
       else setMessage(`❌ ${data.error}`);
     } catch { setMessage('❌ Nätverksfel'); }
     finally { setCalculating(false); }
@@ -97,7 +102,7 @@ export default function WrapPage() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-4 mb-8">
-          <Link href={`/organizer/event/${eventId}/settings`} className="text-indigo-600 hover:text-indigo-700">← Inställningar</Link>
+          <Link href={`/organizer/event/${eventId}`} className="text-indigo-600 hover:text-indigo-700">← {event?.name || 'Tillbaka'}</Link>
           <h1 className="text-2xl font-bold">🎬 Wrap</h1>
         </div>
 
@@ -115,15 +120,20 @@ export default function WrapPage() {
         {stats && (
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <h2 className="text-lg font-semibold mb-4">📈 Statistik</h2>
+            {stats.total_distance_km === 0 && (
+              <div className="bg-amber-50 text-amber-700 p-3 rounded-lg mb-4 text-sm">
+                ⚠️ Avstånd = 0 — kör matchning först eller kontrollera att adresser har koordinater.
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <Stat label="Total sträcka" value={`${stats.total_distance_km} km`} />
+              <Stat label="Total sträcka" value={stats.total_distance_km > 0 ? `${stats.total_distance_km} km` : '—'} />
               <Stat label="Antal par" value={stats.total_couples} />
               <Stat label="Antal personer" value={stats.total_people} />
               <Stat label="Portioner" value={stats.total_portions} />
-              <Stat label="Kortaste cykling" value={`${stats.shortest_ride_meters}m`} sub={stats.shortest_ride_couple} />
-              <Stat label="Längsta cykling" value={`${stats.longest_ride_meters}m`} sub={stats.longest_ride_couple} />
-              <Stat label="Åldersspan" value={`${stats.age_youngest}-${stats.age_oldest} år`} />
-              <Stat label="Stadsdelar" value={stats.districts_count} />
+              <Stat label="Kortaste cykling" value={stats.shortest_ride_meters > 0 ? `${stats.shortest_ride_meters}m` : '—'} sub={stats.shortest_ride_couple || undefined} />
+              <Stat label="Längsta cykling" value={stats.longest_ride_meters > 0 ? `${stats.longest_ride_meters}m` : '—'} sub={stats.longest_ride_couple || undefined} />
+              <Stat label="Åldersspan" value={stats.age_youngest && stats.age_oldest ? `${stats.age_youngest}–${stats.age_oldest} år` : 'Saknar födelseår'} />
+              <Stat label="Stadsdelar" value={stats.districts_count || '—'} />
               <Stat label="Fun facts" value={stats.fun_facts_count} />
             </div>
           </div>
@@ -140,26 +150,27 @@ export default function WrapPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">📧 Skicka Wraps</h2>
+          <h2 className="text-lg font-semibold mb-2">📧 Skicka Wraps</h2>
+          <p className="text-gray-500 text-sm mb-4">Markera wraps som skickade efter att du delat dem med gästerna (via mail, SMS eller annat).</p>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-2">🎬 Wrap 1 — Statistik</h3>
-              <p className="text-sm text-gray-600 mb-4">Personlig + kollektiv statistik.</p>
+              <h3 className="font-medium mb-1">🎬 Wrap 1 — Statistik</h3>
+              <p className="text-sm text-gray-500 mb-4">Personlig + kollektiv statistik per gäst.</p>
               {stats?.wrap1_sent_at ? (
-                <p className="text-green-600 text-sm">✅ Skickad {new Date(stats.wrap1_sent_at).toLocaleString('sv-SE')}</p>
+                <p className="text-green-600 text-sm">✅ Markerad skickad {new Date(stats.wrap1_sent_at).toLocaleString('sv-SE')}</p>
               ) : (
                 <button onClick={() => markWrapSent(1)} disabled={!stats}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm">📤 Markera skickad</button>
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm w-full">✅ Markera som skickad</button>
               )}
             </div>
             <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-2">🏆 Wrap 2 — Award</h3>
-              <p className="text-sm text-gray-600 mb-4">Personlig utmärkelse.</p>
+              <h3 className="font-medium mb-1">🏆 Wrap 2 — Award</h3>
+              <p className="text-sm text-gray-500 mb-4">Personlig utmärkelse per gäst.</p>
               {stats?.wrap2_sent_at ? (
-                <p className="text-green-600 text-sm">✅ Skickad {new Date(stats.wrap2_sent_at).toLocaleString('sv-SE')}</p>
+                <p className="text-green-600 text-sm">✅ Markerad skickad {new Date(stats.wrap2_sent_at).toLocaleString('sv-SE')}</p>
               ) : (
                 <button onClick={() => markWrapSent(2)} disabled={!stats}
-                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm">📤 Markera skickad</button>
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm w-full">✅ Markera som skickad</button>
               )}
             </div>
           </div>
