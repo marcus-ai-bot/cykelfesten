@@ -5,158 +5,88 @@ import Link from 'next/link';
 import mapboxgl from 'mapbox-gl';
 import type { FeatureCollection, Feature, LineString, Point } from 'geojson';
 import 'mapbox-gl/dist/mapbox-gl.css';
-
-/* ── Types ─────────────────────────────────────────── */
-
-interface MapCouple {
-  id: string;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  isHost: boolean;
-  isConfirmed: boolean;
-}
-
-interface MissingCoords {
-  id: string;
-  name: string;
-  address: string;
-}
-
-interface RouteSegment {
-  from: [number, number];
-  to: [number, number];
-  geometry: [number, number][] | null;
-  guestName: string;
-  hostName: string;
-  guestId: string;
-  hostId: string;
-}
-
-interface MapData {
-  couples: MapCouple[];
-  missingCoords: MissingCoords[];
-  routes: {
-    starter: RouteSegment[];
-    main: RouteSegment[];
-    dessert: RouteSegment[];
-  } | null;
-}
-
-type Course = 'starter' | 'main' | 'dessert';
-
-interface MealGroup {
-  hostId: string;
-  hostName: string;
-  hostAddress: string;
-  hostCoords: [number, number];
-  guests: Array<{
-    id: string;
-    name: string;
-    address: string;
-    coords: [number, number];
-  }>;
-  totalPeople: number;
-}
-
-interface Props {
-  eventId: string;
-  eventName: string;
-}
+import { MealGroupCard } from './MealGroupCard';
+import type { Course, MapCouple, MapData, MealGroup, CourseConfig } from './types';
+import { COURSES, DEFAULT_COURSE_CONFIG } from './types';
 
 /* ── Constants ─────────────────────────────────────── */
 
 const DEFAULT_CENTER: [number, number] = [18.06, 59.33];
-const COURSES: Course[] = ['starter', 'main', 'dessert'];
-const COURSE_CONFIG = {
-  starter: { label: 'Förrätt', emoji: '🥗', color: '#f59e0b', time: '17:30' },
-  main: { label: 'Varmrätt', emoji: '🍖', color: '#ef4444', time: '19:00' },
-  dessert: { label: 'Efterrätt', emoji: '🍰', color: '#8b5cf6', time: '20:30' },
-} as const;
-
-/* ── Haversine distance (km) ──────────────────────── */
-function haversineKm(a: [number, number], b: [number, number]): number {
-  const R = 6371;
-  const dLat = (b[1] - a[1]) * Math.PI / 180;
-  const dLon = (b[0] - a[0]) * Math.PI / 180;
-  const x = Math.sin(dLat / 2) ** 2 +
-    Math.cos(a[1] * Math.PI / 180) * Math.cos(b[1] * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
+const DEFAULT_TIMES: Record<Course, string> = { starter: '17:30', main: '19:00', dessert: '20:30' };
 
 /* ── Component ─────────────────────────────────────── */
 
-export function MapView({ eventId, eventName }: Props) {
+export function MapView({ eventId, eventName }: { eventId: string; eventName: string }) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null });
+  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null, eventTimes: null });
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<MealGroup | null>(null);
+  const [selectedGroupHostId, setSelectedGroupHostId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const popupsRef = useRef<mapboxgl.Popup[]>([]);
+  const allBoundsRef = useRef<mapboxgl.LngLatBounds | null>(null);
+
+  /* ── Course config with real event times ─────────── */
+
+  const courseConfig = useMemo((): Record<Course, CourseConfig> => {
+    const times = data.eventTimes || DEFAULT_TIMES;
+    return {
+      starter: { ...DEFAULT_COURSE_CONFIG.starter, time: times.starter },
+      main: { ...DEFAULT_COURSE_CONFIG.main, time: times.main },
+      dessert: { ...DEFAULT_COURSE_CONFIG.dessert, time: times.dessert },
+    };
+  }, [data.eventTimes]);
 
   /* ── Build meal groups per course ───────────────── */
 
   const mealGroups = useMemo(() => {
-    const result: Record<Course, Map<string, MealGroup>> = {
-      starter: new Map(),
-      main: new Map(),
-      dessert: new Map(),
-    };
+    const result: Record<Course, MealGroup[]> = { starter: [], main: [], dessert: [] };
     if (!data.routes) return result;
 
     const byId = new Map(data.couples.map((c) => [c.id, c]));
 
     COURSES.forEach((course) => {
-      const groups = new Map<string, MealGroup>();
+      const groupMap = new Map<string, MealGroup>();
       (data.routes![course] || []).forEach((seg) => {
         const host = byId.get(seg.hostId);
         const guest = byId.get(seg.guestId);
         if (!host) return;
 
-        if (!groups.has(seg.hostId)) {
-          groups.set(seg.hostId, {
+        if (!groupMap.has(seg.hostId)) {
+          groupMap.set(seg.hostId, {
             hostId: seg.hostId,
             hostName: host.name,
             hostAddress: host.address,
             hostCoords: [host.lng, host.lat],
+            hostAllergies: host.allergies || [],
             guests: [],
-            totalPeople: 2, // host couple
+            totalPeople: host.personCount,
           });
         }
-        const g = groups.get(seg.hostId)!;
+        const g = groupMap.get(seg.hostId)!;
         if (guest && !g.guests.find((x) => x.id === seg.guestId)) {
           g.guests.push({
             id: seg.guestId,
             name: guest.name,
             address: guest.address,
             coords: [guest.lng, guest.lat],
+            allergies: guest.allergies || [],
           });
-          g.totalPeople += guest.name.includes('&') ? 2 : 1;
+          g.totalPeople += guest.personCount;
         }
       });
-      result[course] = groups;
+      result[course] = Array.from(groupMap.values()).sort((a, b) => a.hostName.localeCompare(b.hostName));
     });
     return result;
   }, [data]);
 
-  /* ── Find meal group for a couple+course ────────── */
+  /* ── Selected group derived state ───────────────── */
 
-  const findGroupForCouple = useCallback((coupleId: string, course: Course): MealGroup | null => {
-    const groups = mealGroups[course];
-    // Is this couple a host?
-    if (groups.has(coupleId)) return groups.get(coupleId)!;
-    // Is this couple a guest?
-    for (const group of groups.values()) {
-      if (group.guests.some((g) => g.id === coupleId)) return group;
-    }
-    return null;
-  }, [mealGroups]);
-
-  /* ── IDs in selected group (for map highlight) ──── */
+  const selectedGroup = useMemo(() => {
+    if (!selectedGroupHostId || !activeCourse) return null;
+    return mealGroups[activeCourse].find((g) => g.hostId === selectedGroupHostId) || null;
+  }, [selectedGroupHostId, activeCourse, mealGroups]);
 
   const selectedGroupIds = useMemo(() => {
     if (!selectedGroup) return null;
@@ -165,6 +95,22 @@ export function MapView({ eventId, eventName }: Props) {
     selectedGroup.guests.forEach((g) => ids.add(g.id));
     return ids;
   }, [selectedGroup]);
+
+  const selectedGroupIndex = useMemo(() => {
+    if (!selectedGroup || !activeCourse) return -1;
+    return mealGroups[activeCourse].findIndex((g) => g.hostId === selectedGroup.hostId);
+  }, [selectedGroup, activeCourse, mealGroups]);
+
+  /* ── Find meal group for any couple ─────────────── */
+
+  const findGroupHostId = useCallback((coupleId: string, course: Course): string | null => {
+    const groups = mealGroups[course];
+    for (const g of groups) {
+      if (g.hostId === coupleId) return g.hostId;
+      if (g.guests.some((x) => x.id === coupleId)) return g.hostId;
+    }
+    return null;
+  }, [mealGroups]);
 
   /* ── GeoJSON sources ────────────────────────────── */
 
@@ -184,7 +130,6 @@ export function MapView({ eventId, eventName }: Props) {
       dessert: { type: 'FeatureCollection', features: [] },
     };
     if (!data.routes) return result;
-
     COURSES.forEach((course) => {
       result[course] = {
         type: 'FeatureCollection',
@@ -198,14 +143,14 @@ export function MapView({ eventId, eventName }: Props) {
     return result;
   }, [data.routes]);
 
-  const hostHighlights = useMemo(() => {
+  const hostFeatures = useMemo(() => {
     const result: Record<Course, FeatureCollection<Point>> = {
       starter: { type: 'FeatureCollection', features: [] },
       main: { type: 'FeatureCollection', features: [] },
       dessert: { type: 'FeatureCollection', features: [] },
     };
     if (!data.routes) return result;
-
+    const byId = new Map(data.couples.map((c) => [c.id, c]));
     COURSES.forEach((course) => {
       const seen = new Set<string>();
       result[course] = {
@@ -213,7 +158,7 @@ export function MapView({ eventId, eventName }: Props) {
         features: (data.routes![course] || []).reduce<Feature<Point>[]>((acc, seg) => {
           if (seen.has(seg.hostId)) return acc;
           seen.add(seg.hostId);
-          const host = data.couples.find((c) => c.id === seg.hostId);
+          const host = byId.get(seg.hostId);
           if (host) {
             acc.push({
               type: 'Feature',
@@ -231,44 +176,51 @@ export function MapView({ eventId, eventName }: Props) {
   /* ── Course stats ───────────────────────────────── */
 
   const courseStats = useMemo(() => {
-    const stats: Record<Course, { hosts: number; groups: number }> = {
-      starter: { hosts: 0, groups: 0 },
-      main: { hosts: 0, groups: 0 },
-      dessert: { hosts: 0, groups: 0 },
-    };
-    COURSES.forEach((course) => {
-      const count = mealGroups[course].size;
-      stats[course] = { hosts: count, groups: count };
-    });
+    const stats: Record<Course, number> = { starter: 0, main: 0, dessert: 0 };
+    COURSES.forEach((course) => { stats[course] = mealGroups[course].length; });
     return stats;
   }, [mealGroups]);
+
+  /* ── Refs for stable click handlers ─────────────── */
+
+  const activeCourseRef = useRef(activeCourse);
+  activeCourseRef.current = activeCourse;
+  const findGroupHostIdRef = useRef(findGroupHostId);
+  findGroupHostIdRef.current = findGroupHostId;
 
   /* ── Actions ────────────────────────────────────── */
 
   const toggleCourse = useCallback((course: Course) => {
-    setActiveCourse((prev) => {
-      const next = prev === course ? null : course;
-      if (!next) setSelectedGroup(null);
-      return next;
-    });
-    setSelectedGroup(null);
+    setActiveCourse((prev) => prev === course ? null : course);
+    setSelectedGroupHostId(null);
   }, []);
 
-  const selectCouple = useCallback((coupleId: string) => {
-    if (!activeCourse) return;
-    const group = findGroupForCouple(coupleId, activeCourse);
-    setSelectedGroup((prev) => prev?.hostId === group?.hostId ? null : group);
-  }, [activeCourse, findGroupForCouple]);
+  const handlePinClick = useCallback((coupleId: string) => {
+    const course = activeCourseRef.current;
+    if (!course) return;
+    const hostId = findGroupHostIdRef.current(coupleId, course);
+    if (!hostId) return;
+    setSelectedGroupHostId((prev) => prev === hostId ? null : hostId);
+  }, []);
 
   const clearSelection = useCallback(() => {
-    setSelectedGroup(null);
+    setSelectedGroupHostId(null);
+    // Zoom back to all pins
+    if (mapRef.current && allBoundsRef.current) {
+      mapRef.current.fitBounds(allBoundsRef.current, { padding: 80, duration: 600 });
+    }
   }, []);
 
-  // Refs for stable map click handlers
-  const selectCoupleRef = useRef(selectCouple);
-  selectCoupleRef.current = selectCouple;
-  const clearSelectionRef = useRef(clearSelection);
-  clearSelectionRef.current = clearSelection;
+  const navigateGroup = useCallback((dir: 1 | -1) => {
+    if (!activeCourse) return;
+    const groups = mealGroups[activeCourse];
+    const idx = groups.findIndex((g) => g.hostId === selectedGroupHostId);
+    if (idx < 0) return;
+    const next = idx + dir;
+    if (next >= 0 && next < groups.length) {
+      setSelectedGroupHostId(groups[next].hostId);
+    }
+  }, [activeCourse, mealGroups, selectedGroupHostId]);
 
   /* ── Fetch data ─────────────────────────────────── */
 
@@ -301,7 +253,6 @@ export function MapView({ eventId, eventName }: Props) {
     mapRef.current = map;
 
     map.on('load', () => {
-      // Pin source (clustered)
       map.addSource('couples', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -310,7 +261,7 @@ export function MapView({ eventId, eventName }: Props) {
         clusterRadius: 50,
       });
 
-      // Cluster circles
+      // Clusters
       map.addLayer({
         id: 'clusters', type: 'circle', source: 'couples',
         filter: ['has', 'point_count'],
@@ -333,26 +284,24 @@ export function MapView({ eventId, eventName }: Props) {
 
       const empty: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-      // Route + host layers per course
       COURSES.forEach((course) => {
-        const color = COURSE_CONFIG[course].color;
+        const color = DEFAULT_COURSE_CONFIG[course].color;
 
+        // Routes
         map.addSource(`route-${course}`, { type: 'geojson', data: empty });
-        // Faint lines (background)
         map.addLayer({
           id: `route-${course}-line`, type: 'line', source: `route-${course}`,
           layout: { 'line-join': 'round', 'line-cap': 'round', visibility: 'none' },
-          paint: { 'line-color': color, 'line-width': 2, 'line-opacity': 0.3, 'line-dasharray': [2, 2] },
+          paint: { 'line-color': color, 'line-width': 2, 'line-opacity': 0.25, 'line-dasharray': [2, 2] },
         });
-        // Bold lines (highlighted group)
         map.addLayer({
           id: `route-${course}-bold`, type: 'line', source: `route-${course}`,
           layout: { 'line-join': 'round', 'line-cap': 'round', visibility: 'none' },
           paint: { 'line-color': color, 'line-width': 4, 'line-opacity': 0.85 },
-          filter: ['==', 'guestId', ''],
+          filter: ['==', 'hostId', '__none__'],
         });
 
-        // Host markers (larger circles with stroke)
+        // Hosts
         map.addSource(`host-${course}`, { type: 'geojson', data: empty });
         map.addLayer({
           id: `host-${course}-fill`, type: 'circle', source: `host-${course}`,
@@ -365,19 +314,13 @@ export function MapView({ eventId, eventName }: Props) {
             'circle-stroke-width': 3,
           },
         });
-        // Host label (🏠)
         map.addLayer({
           id: `host-${course}-label`, type: 'symbol', source: `host-${course}`,
-          layout: {
-            visibility: 'none',
-            'text-field': '🏠',
-            'text-size': 11,
-            'text-allow-overlap': true,
-          },
+          layout: { visibility: 'none', 'text-field': '🏠', 'text-size': 11, 'text-allow-overlap': true },
         });
       });
 
-      // Individual pins (on top)
+      // Default pins (on top)
       map.addLayer({
         id: 'unclustered-point', type: 'circle', source: 'couples',
         filter: ['!', ['has', 'point_count']],
@@ -390,8 +333,13 @@ export function MapView({ eventId, eventName }: Props) {
         },
       });
 
-      // Click: clusters
+      // --- Click handlers (use closure-safe pattern) ---
+
+      // Track which layers got clicked to prevent background handler from firing
+      let clickHandled = false;
+
       map.on('click', 'clusters', (e) => {
+        clickHandled = true;
         const f = e.features?.[0];
         const clusterId = f?.properties?.cluster_id;
         if (clusterId == null) return;
@@ -401,31 +349,31 @@ export function MapView({ eventId, eventName }: Props) {
         });
       });
 
-      // Click: individual pins
       map.on('click', 'unclustered-point', (e) => {
+        clickHandled = true;
         const f = e.features?.[0];
-        if (!f) return;
-        const { id } = f.properties as any;
-        selectCoupleRef.current(id);
+        if (f) handlePinClick(f.properties?.id);
       });
 
-      // Click: host markers
       COURSES.forEach((course) => {
         map.on('click', `host-${course}-fill`, (e) => {
+          clickHandled = true;
           const f = e.features?.[0];
-          if (!f) return;
-          const { hostId } = f.properties as any;
-          selectCoupleRef.current(hostId);
+          if (f) handlePinClick(f.properties?.hostId);
         });
         map.on('mouseenter', `host-${course}-fill`, () => { map.getCanvas().style.cursor = 'pointer'; });
         map.on('mouseleave', `host-${course}-fill`, () => { map.getCanvas().style.cursor = ''; });
       });
 
-      // Click: background
-      map.on('click', (e) => {
-        const layers = ['unclustered-point', 'clusters', ...COURSES.flatMap(c => [`route-${c}-line`, `host-${c}-fill`])];
-        const features = map.queryRenderedFeatures(e.point, { layers });
-        if (features.length === 0) clearSelectionRef.current();
+      // Background click — deselect, but only if nothing else was clicked
+      map.on('click', () => {
+        // Delay to let layer handlers set clickHandled
+        setTimeout(() => {
+          if (!clickHandled) {
+            setSelectedGroupHostId(null);
+          }
+          clickHandled = false;
+        }, 0);
       });
 
       ['clusters', 'unclustered-point'].forEach((layer) => {
@@ -440,8 +388,6 @@ export function MapView({ eventId, eventName }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Refs updated above, click handlers use refs via init useEffect
-
   /* ── Sync data → map ────────────────────────────── */
 
   useEffect(() => {
@@ -452,107 +398,82 @@ export function MapView({ eventId, eventName }: Props) {
 
     COURSES.forEach((course) => {
       (map.getSource(`route-${course}`) as mapboxgl.GeoJSONSource | undefined)?.setData(routeFeatures[course] as any);
-      (map.getSource(`host-${course}`) as mapboxgl.GeoJSONSource | undefined)?.setData(hostHighlights[course] as any);
+      (map.getSource(`host-${course}`) as mapboxgl.GeoJSONSource | undefined)?.setData(hostFeatures[course] as any);
     });
 
     if (featureCollection.features.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       featureCollection.features.forEach((f) => bounds.extend(f.geometry.coordinates as [number, number]));
+      allBoundsRef.current = bounds;
       map.fitBounds(bounds, { padding: 80, duration: 800 });
     }
-  }, [featureCollection, routeFeatures, hostHighlights, mapLoaded]);
+  }, [featureCollection, routeFeatures, hostFeatures, mapLoaded]);
 
-  /* ── Toggle course visibility ───────────────────── */
+  /* ── Visual state machine ───────────────────────── */
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
     const map = mapRef.current;
 
+    // State: which course layers are visible
     COURSES.forEach((course) => {
-      const active = activeCourse === course;
-      const vis = active ? 'visible' : 'none';
-      ['line', 'bold'].forEach((suffix) => {
+      const vis = activeCourse === course ? 'visible' : 'none';
+      for (const suffix of ['line', 'bold']) {
         if (map.getLayer(`route-${course}-${suffix}`))
           map.setLayoutProperty(`route-${course}-${suffix}`, 'visibility', vis);
-      });
-      if (map.getLayer(`host-${course}-fill`))
-        map.setLayoutProperty(`host-${course}-fill`, 'visibility', vis);
-      if (map.getLayer(`host-${course}-label`))
-        map.setLayoutProperty(`host-${course}-label`, 'visibility', vis);
+      }
+      for (const suffix of ['fill', 'label']) {
+        if (map.getLayer(`host-${course}-${suffix}`))
+          map.setLayoutProperty(`host-${course}-${suffix}`, 'visibility', vis);
+      }
     });
 
-    // When course is active: dim default pins, let host markers shine
-    if (activeCourse) {
-      map.setPaintProperty('unclustered-point', 'circle-radius', 5);
-      map.setPaintProperty('unclustered-point', 'circle-opacity', 0.3);
-      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 0.3);
-    } else {
-      map.setPaintProperty('unclustered-point', 'circle-radius', 6);
-      map.setPaintProperty('unclustered-point', 'circle-opacity', 0.7);
-      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 1);
-    }
-  }, [activeCourse, mapLoaded]);
-
-  /* ── Highlight selected group ───────────────────── */
-
-  useEffect(() => {
-    if (!mapLoaded || !mapRef.current) return;
-    const map = mapRef.current;
-
-    // Clear any old popups
-    popupsRef.current.forEach((p) => p.remove());
-    popupsRef.current = [];
-
     if (selectedGroup && activeCourse) {
+      // === STATE: Group selected ===
       const ids = Array.from(selectedGroupIds || []);
 
-      // Bold only this group's routes
-      map.setFilter(`route-${activeCourse}-bold`, [
-        'any',
-        ['==', ['get', 'hostId'], selectedGroup.hostId],
-      ]);
-      // Hide faint lines for other groups
-      map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.1);
+      // Bold only this group
+      map.setFilter(`route-${activeCourse}-bold`, ['==', ['get', 'hostId'], selectedGroup.hostId]);
+      map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.08);
 
-      // Dim all pins except group members
-      map.setPaintProperty('unclustered-point', 'circle-opacity', [
-        'case', ['in', ['get', 'id'], ['literal', ids]], 0.9, 0.1,
-      ]);
-      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', [
-        'case', ['in', ['get', 'id'], ['literal', ids]], 1, 0.1,
-      ]);
-      map.setPaintProperty('unclustered-point', 'circle-radius', [
-        'case', ['in', ['get', 'id'], ['literal', ids]], 7, 4,
-      ]);
+      // Dim everything except group
+      map.setPaintProperty('unclustered-point', 'circle-opacity',
+        ['case', ['in', ['get', 'id'], ['literal', ids]], 0.9, 0.08]);
+      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity',
+        ['case', ['in', ['get', 'id'], ['literal', ids]], 1, 0.08]);
+      map.setPaintProperty('unclustered-point', 'circle-radius',
+        ['case', ['in', ['get', 'id'], ['literal', ids]], 7, 3]);
 
-      // Dim host markers except selected
-      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity', [
-        'case', ['==', ['get', 'hostId'], selectedGroup.hostId], 1, 0.15,
-      ]);
+      // Dim other hosts
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity',
+        ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 1, 0.12]);
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-opacity',
+        ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 1, 0.12]);
 
-      // Zoom to fit group
+      // Zoom to group
       const bounds = new mapboxgl.LngLatBounds();
       bounds.extend(selectedGroup.hostCoords);
       selectedGroup.guests.forEach((g) => bounds.extend(g.coords));
-      map.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: 420, right: 80 }, duration: 600, maxZoom: 16 });
+      map.fitBounds(bounds, {
+        padding: { top: 80, bottom: 80, left: window.innerWidth >= 768 ? 380 : 80, right: 80 },
+        duration: 500,
+        maxZoom: 16,
+      });
 
     } else if (activeCourse) {
-      // Course active but no group selected — show all
-      map.setFilter(`route-${activeCourse}-bold`, ['==', 'guestId', '']);
-      map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.3);
-      map.setPaintProperty('unclustered-point', 'circle-opacity', 0.3);
-      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 0.3);
+      // === STATE: Course active, no selection ===
+      map.setFilter(`route-${activeCourse}-bold`, ['==', 'hostId', '__none__']);
+      map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.25);
+
+      map.setPaintProperty('unclustered-point', 'circle-opacity', 0.25);
+      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 0.25);
       map.setPaintProperty('unclustered-point', 'circle-radius', 5);
-      if (map.getLayer(`host-${activeCourse}-fill`))
-        map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity', 0.9);
+
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity', 0.9);
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-opacity', 1);
+
     } else {
-      // Nothing selected — reset everything
-      COURSES.forEach((course) => {
-        map.setFilter(`route-${course}-bold`, ['==', 'guestId', '']);
-        map.setPaintProperty(`route-${course}-line`, 'line-opacity', 0.3);
-        if (map.getLayer(`host-${course}-fill`))
-          map.setPaintProperty(`host-${course}-fill`, 'circle-opacity', 0.9);
-      });
+      // === STATE: Idle (no course) ===
       map.setPaintProperty('unclustered-point', 'circle-opacity', 0.7);
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 1);
       map.setPaintProperty('unclustered-point', 'circle-radius', 6);
@@ -561,7 +482,8 @@ export function MapView({ eventId, eventName }: Props) {
 
   /* ── Render ─────────────────────────────────────── */
 
-  const cfg = activeCourse ? COURSE_CONFIG[activeCourse] : null;
+  const cfg = activeCourse ? courseConfig[activeCourse] : null;
+  const groups = activeCourse ? mealGroups[activeCourse] : [];
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -587,17 +509,17 @@ export function MapView({ eventId, eventName }: Props) {
       {/* Course tabs */}
       {data.routes && (
         <div className="bg-white/95 backdrop-blur border-b border-gray-100 z-20 relative">
-          <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center gap-2">
+          <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center gap-2 overflow-x-auto">
             {COURSES.map((course) => {
               const active = activeCourse === course;
-              const c = COURSE_CONFIG[course];
-              const stats = courseStats[course];
+              const c = courseConfig[course];
+              const count = courseStats[course];
               return (
                 <button
                   key={course}
                   type="button"
                   onClick={() => toggleCourse(course)}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 shrink-0 ${
                     active
                       ? 'text-white shadow-lg scale-105'
                       : 'text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200'
@@ -606,14 +528,12 @@ export function MapView({ eventId, eventName }: Props) {
                 >
                   <span>{c.emoji}</span>
                   <span>{c.label}</span>
-                  <span className={`text-xs ${active ? 'text-white/80' : 'text-gray-400'}`}>
-                    {c.time}
-                  </span>
-                  {stats.hosts > 0 && (
+                  <span className={`text-xs ${active ? 'text-white/80' : 'text-gray-400'}`}>{c.time}</span>
+                  {count > 0 && (
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                       active ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-500'
                     }`}>
-                      {stats.hosts} värdar
+                      {count} värdar
                     </span>
                   )}
                 </button>
@@ -623,87 +543,25 @@ export function MapView({ eventId, eventName }: Props) {
         </div>
       )}
 
-      {/* Map + info card */}
+      {/* Map + overlays */}
       <div className="relative flex-1 min-h-0">
         <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
 
         {/* Meal Group Info Card */}
         {selectedGroup && activeCourse && cfg && (
-          <div className="absolute top-4 left-4 z-10 w-80 max-h-[calc(100vh-180px)] overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-              {/* Card header */}
-              <div className="px-5 py-4 border-b border-gray-100" style={{ backgroundColor: `${cfg.color}08` }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{cfg.emoji}</span>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wide" style={{ color: cfg.color }}>
-                        {cfg.label} · {cfg.time}
-                      </div>
-                      <div className="font-semibold text-gray-900 text-sm mt-0.5">
-                        Hos {selectedGroup.hostName.split(' & ')[0]}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={clearSelection}
-                    className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-
-              {/* Host */}
-              <div className="px-5 py-3 border-b border-gray-50">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold mt-0.5" style={{ backgroundColor: cfg.color }}>
-                    🏠
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 text-sm">{selectedGroup.hostName}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{selectedGroup.hostAddress}</div>
-                    <div className="text-xs mt-1 px-2 py-0.5 rounded-full inline-block font-medium text-white" style={{ backgroundColor: cfg.color }}>
-                      Värd · {selectedGroup.totalPeople} pers
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Guests */}
-              <div className="px-5 py-3">
-                <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-                  Gäster som cyklar hit
-                </div>
-                <div className="space-y-3">
-                  {selectedGroup.guests.map((guest) => {
-                    const dist = haversineKm(guest.coords, selectedGroup.hostCoords);
-                    const minutes = Math.round(dist / 0.25); // ~15 km/h
-                    return (
-                      <div key={guest.id} className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs mt-0.5">
-                          🚲
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-gray-800">{guest.name}</div>
-                          <div className="text-xs text-gray-400">{guest.address}</div>
-                          <div className="text-xs text-gray-500 mt-0.5">
-                            ~{dist < 0.1 ? '<100m' : `${dist.toFixed(1)} km`} · ~{minutes < 1 ? '<1' : minutes} min cykel
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {selectedGroup.guests.length === 0 && (
-                    <div className="text-xs text-gray-400 italic">Inga gäster tilldelade</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <MealGroupCard
+            group={selectedGroup}
+            cfg={cfg}
+            courseName={cfg.label}
+            onClose={clearSelection}
+            onPrev={selectedGroupIndex > 0 ? () => navigateGroup(-1) : null}
+            onNext={selectedGroupIndex < groups.length - 1 ? () => navigateGroup(1) : null}
+            groupIndex={selectedGroupIndex}
+            groupTotal={groups.length}
+          />
         )}
 
-        {/* Legend (only when no group is selected) */}
+        {/* Legend */}
         {!selectedGroup && activeCourse && cfg && (
           <div className="absolute bottom-6 left-4 z-10 bg-white/95 backdrop-blur rounded-xl shadow-sm border border-gray-200 px-4 py-3 text-sm space-y-1.5">
             <div className="flex items-center gap-2">
@@ -712,7 +570,7 @@ export function MapView({ eventId, eventName }: Props) {
             </div>
             <div className="flex items-center gap-2">
               <span className="w-4 h-4 rounded-full bg-gray-400 inline-block" />
-              <span className="text-gray-700">Gäst/Övriga</span>
+              <span className="text-gray-700">Gäst</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-4 border-t-2 border-dashed inline-block" style={{ borderColor: cfg.color, width: '16px' }} />
@@ -722,8 +580,7 @@ export function MapView({ eventId, eventName }: Props) {
           </div>
         )}
 
-        {/* Default legend when no course */}
-        {!activeCourse && !selectedGroup && (
+        {!activeCourse && !selectedGroup && data.couples.length > 0 && (
           <div className="absolute bottom-6 left-4 z-10 bg-white/95 backdrop-blur rounded-xl shadow-sm border border-gray-200 px-4 py-3 text-sm">
             <div className="text-gray-500">Välj en rätt ovan för att se matchningar</div>
           </div>

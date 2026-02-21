@@ -96,9 +96,17 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const supabase = createAdminClient();
+
+    // Fetch event for times
+    const { data: event } = await supabase
+      .from('events')
+      .select('id, name, starter_time, main_time, dessert_time')
+      .eq('id', eventId)
+      .single();
+
     const { data: couples, error } = await supabase
       .from('couples')
-      .select('id, invited_name, partner_name, address, coordinates, role, confirmed')
+      .select('id, invited_name, partner_name, address, coordinates, role, confirmed, person_count, invited_allergies, partner_allergies')
       .eq('event_id', eventId)
       .order('invited_name');
 
@@ -107,18 +115,28 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const withCoords: Array<{ id: string; name: string; address: string; lat: number; lng: number; isHost: boolean; isConfirmed: boolean }> = [];
+    const withCoords: Array<{
+      id: string; name: string; address: string; lat: number; lng: number;
+      isHost: boolean; isConfirmed: boolean; personCount: number;
+      allergies: string[];
+    }> = [];
     const missingCoords: Array<{ id: string; name: string; address: string }> = [];
 
     (couples || []).forEach((c: any) => {
       const name = c.invited_name + (c.partner_name ? ` & ${c.partner_name}` : '');
       const coords = parsePoint(c.coordinates);
+      const allergies = [
+        ...(c.invited_allergies || []),
+        ...(c.partner_allergies || []),
+      ].filter(Boolean);
       if (coords) {
         withCoords.push({
           id: c.id, name, address: c.address,
           lat: coords.lat, lng: coords.lng,
           isHost: c.role === 'host',
           isConfirmed: !!c.confirmed,
+          personCount: c.person_count ?? (c.partner_name ? 2 : 1),
+          allergies,
         });
       } else {
         missingCoords.push({ id: c.id, name, address: c.address });
@@ -195,7 +213,16 @@ export async function GET(request: Request, context: RouteContext) {
       });
     }
 
-    return NextResponse.json({ couples: withCoords, missingCoords, routes });
+    return NextResponse.json({
+      couples: withCoords,
+      missingCoords,
+      routes,
+      eventTimes: event ? {
+        starter: event.starter_time?.slice(0, 5) || '17:30',
+        main: event.main_time?.slice(0, 5) || '19:00',
+        dessert: event.dessert_time?.slice(0, 5) || '20:30',
+      } : null,
+    });
   } catch (err: any) {
     console.error('map-data route error:', err);
     return NextResponse.json({ error: err?.message || 'Internal error' }, { status: 500 });
