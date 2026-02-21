@@ -95,35 +95,26 @@ export function PhasesStepper({
               <InviteLockedBanner eventId={eventId} />
             )}
 
-            {/* Gästlista — alltid synlig */}
-            <ActionCard
-              href={`/organizer/event/${eventId}/guests`}
-              title="Gästlista"
-              description="Hantera registreringar och bekräftelser"
-              icon="👥"
-              count={couplesCount}
-            />
-
-            {/* Inbjudningslänk + Förhandsgranska — bara vid öppen/utkast */}
-            {isInviteOpen && (
-              <>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <ActionCard
-                    href={`/e/${eventSlug}`}
-                    title="Förhandsgranska"
-                    description="Se gästsidan som dina gäster"
-                    icon="👁️"
-                    target="_blank"
-                  />
-                </div>
-                <InviteLinkSection eventId={eventId} />
-              </>
-            )}
-
-            {/* Matchning */}
-            {couplesCount > 0 && (
-              <div className="border-t pt-6">
-                <div className="grid md:grid-cols-2 gap-6">
+            {/* Action cards grid */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <ActionCard
+                href={`/organizer/event/${eventId}/guests`}
+                title="Gästlista"
+                description="Hantera registreringar och bekräftelser"
+                icon="👥"
+                count={couplesCount}
+              />
+              {isInviteOpen && (
+                <ActionCard
+                  href={`/e/${eventSlug}`}
+                  title="Förhandsgranska"
+                  description="Se gästsidan som dina gäster"
+                  icon="👁️"
+                  target="_blank"
+                />
+              )}
+              {couplesCount > 0 && (
+                <>
                   <div className={isEventLocked ? 'pointer-events-none opacity-50' : ''}>
                     <ActionCard
                       href={`/organizer/event/${eventId}/matching`}
@@ -138,9 +129,12 @@ export function PhasesStepper({
                     description="Se matchade grupper på kartan"
                     icon="🗺️"
                   />
-                </div>
-              </div>
-            )}
+                </>
+              )}
+            </div>
+
+            {/* Inbjudningslänk — bara vid öppen/utkast */}
+            {isInviteOpen && <InviteLinkSection eventId={eventId} />}
 
             {/* Arrangörsteam */}
             <div id="invite-team" className="scroll-mt-24 border-t pt-6">
