@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
 import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
@@ -22,9 +23,12 @@ type OrganizerRow = {
   };
 };
 
+type PhaseVisual = 'not_started' | 'in_progress' | 'complete' | 'locked';
+
 interface Props {
   eventId: string;
   eventSlug: string;
+  eventStatus: string;
   couplesCount: number;
   isPast: boolean;
   isToday: boolean;
@@ -38,7 +42,7 @@ interface Phase {
   key: string;
   name: string;
   icon: string;
-  status: PhaseStatus;
+  status: PhaseVisual;
   content: React.ReactNode;
 }
 
@@ -47,6 +51,7 @@ interface Phase {
 export function PhasesStepper({
   eventId,
   eventSlug,
+  eventStatus,
   couplesCount,
   isPast,
   isToday,
@@ -69,9 +74,15 @@ export function PhasesStepper({
       key: 'invite',
       name: 'Inbjudan',
       icon: '📨',
-      status: hasMatching ? 'complete' : couplesCount === 0 ? 'not_started' : 'in_progress',
+      status: (eventStatus === 'matched' || eventStatus === 'locked') ? 'locked'
+        : hasMatching ? 'complete'
+        : couplesCount === 0 ? 'not_started'
+        : 'in_progress',
       content: (
         <div className="space-y-6">
+          {(eventStatus === 'matched' || eventStatus === 'locked') && (
+            <InviteLockedBanner eventId={eventId} />
+          )}
           <div className="grid md:grid-cols-2 gap-6">
             <ActionCard
               href={`/organizer/event/${eventId}/guests`}
@@ -94,7 +105,7 @@ export function PhasesStepper({
               icon="🗺️"
             />
           </div>
-          <InviteLinkSection eventId={eventId} />
+          {eventStatus === 'open' && <InviteLinkSection eventId={eventId} />}
           <div id="invite-team" className="scroll-mt-24">
             <InviteTeamSection
               eventId={eventId}
@@ -201,7 +212,9 @@ export function PhasesStepper({
           {phases.map((phase, index) => {
             const isActive = index === activePhaseIndex;
             // Status ring: complete=green, in_progress=amber, not_started=none
-            const statusRing = !isActive && phase.status === 'complete'
+            const statusRing = !isActive && phase.status === 'locked'
+              ? 'ring-2 ring-gray-400 bg-gray-100 text-gray-500'
+              : !isActive && phase.status === 'complete'
               ? 'ring-2 ring-emerald-400 bg-emerald-50 text-emerald-700'
               : !isActive && phase.status === 'in_progress'
               ? 'ring-2 ring-amber-300 bg-amber-50 text-amber-700'
@@ -228,6 +241,9 @@ export function PhasesStepper({
                   ? <span className="hidden sm:inline">{phase.name}</span>
                   : <span className="text-xs sm:text-sm">{phase.name}</span>
                 }
+                {phase.status === 'locked' && (
+                  <span className="text-xs">🔒</span>
+                )}
                 {isActive && phase.status === 'complete' && (
                   <span className="text-white/80 text-xs">✓</span>
                 )}
@@ -279,7 +295,7 @@ function StatusDot({
   size = 'sm',
   className = '',
 }: {
-  status: PhaseStatus;
+  status: PhaseVisual;
   size?: 'sm' | 'md';
   className?: string;
 }) {
@@ -351,5 +367,49 @@ function ActionCard({
         )}
       </div>
     </Link>
+  );
+}
+
+/* ── InviteLockedBanner ────────────────────────────────── */
+
+function InviteLockedBanner({ eventId }: { eventId: string }) {
+  const router = useRouter();
+  const [unlocking, setUnlocking] = useState(false);
+
+  const handleUnlock = useCallback(async () => {
+    if (!confirm('Lås upp inbjudan? Matchningen kan behöva köras om om du ändrar gästlistan.')) return;
+    setUnlocking(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/unlock-invite`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Kunde inte låsa upp');
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert('Något gick fel');
+    } finally {
+      setUnlocking(false);
+    }
+  }, [eventId, router]);
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <span className="text-2xl">🔒</span>
+        <div>
+          <div className="font-semibold text-gray-900 text-sm">Inbjudan är låst</div>
+          <div className="text-xs text-gray-500">Matchningen är klar. Lås upp för att ändra gästlistan.</div>
+        </div>
+      </div>
+      <button
+        onClick={handleUnlock}
+        disabled={unlocking}
+        className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-200 rounded-lg px-4 py-2 hover:bg-indigo-50 transition disabled:opacity-50 shrink-0"
+      >
+        {unlocking ? 'Låser upp…' : 'Lås upp'}
+      </button>
+    </div>
   );
 }

@@ -136,6 +136,7 @@ export default async function OrganizerEventPage({ params }: Props) {
         <PhasesStepper
           eventId={eventId}
           eventSlug={event.slug}
+          eventStatus={event.status}
           couplesCount={couplesCount || 0}
           isPast={isPast}
           isToday={isToday}
