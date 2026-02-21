@@ -108,15 +108,7 @@ export function PhasesStepper({
             />
           </div>
           <InviteLinkSection eventId={eventId} />
-          <div id="invite-team" className="scroll-mt-24">
-            <InviteTeamSection
-              eventId={eventId}
-              organizers={organizers}
-              isFounder={isFounder}
-              currentOrganizerId={currentOrganizerId}
-            />
-          </div>
-          {/* Matchning — sista steget i inbjudanfasen */}
+          {/* Matchning */}
           {couplesCount > 0 && (
             <div className="border-t pt-6">
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Matchning</h3>
@@ -136,6 +128,14 @@ export function PhasesStepper({
               </div>
             </div>
           )}
+          <div id="invite-team" className="scroll-mt-24 border-t pt-6">
+            <InviteTeamSection
+              eventId={eventId}
+              organizers={organizers}
+              isFounder={isFounder}
+              currentOrganizerId={currentOrganizerId}
+            />
+          </div>
         </div>
       ),
     },
