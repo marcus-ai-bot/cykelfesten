@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { Course } from '@/types/database';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 export default function RegisterPage() {
   return (
@@ -61,6 +62,7 @@ function RegisterForm() {
       importantYear: '',
     },
     address: '',
+    address_coordinates: null as { lat: number; lng: number } | null,
     address_unit: '',
     address_notes: '',
     course_preference: '' as Course | '',
@@ -141,6 +143,9 @@ function RegisterForm() {
           partner_birth_year: hasPartner && form.partner_birth_year ? parseInt(form.partner_birth_year) : null,
           partner_fun_facts: hasPartner ? buildFunFacts(form.partner_fun_facts) : null,
           address: form.address,
+          coordinates: form.address_coordinates
+            ? `(${form.address_coordinates.lng},${form.address_coordinates.lat})`
+            : null,
           address_unit: form.address_unit || null,
           address_notes: form.address_notes || null,
           course_preference: form.course_preference || null,
@@ -647,14 +652,18 @@ function RegisterForm() {
                 <label className="block text-sm font-medium text-amber-700 mb-1">
                   Adress *
                 </label>
-                <input
-                  type="text"
-                  name="address"
+                <AddressAutocomplete
                   value={form.address}
-                  onChange={handleChange}
+                  onChange={(address, coordinates) => {
+                    setForm(prev => ({
+                      ...prev,
+                      address,
+                      address_coordinates: coordinates || prev.address_coordinates,
+                    }));
+                  }}
                   required
                   className="w-full px-4 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  placeholder="Storgatan 12, 123 45 Piteå"
+                  placeholder="Börja skriv din adress..."
                 />
               </div>
               
