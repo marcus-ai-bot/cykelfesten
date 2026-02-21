@@ -69,7 +69,7 @@ export function PhasesStepper({
       key: 'invite',
       name: 'Inbjudan',
       icon: '📨',
-      status: couplesCount === 0 ? 'not_started' : 'in_progress',
+      status: hasMatching ? 'complete' : couplesCount === 0 ? 'not_started' : 'in_progress',
       content: (
         <div className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
@@ -140,7 +140,7 @@ export function PhasesStepper({
     },
     {
       key: 'after',
-      name: 'Dagen efter',
+      name: 'Efteråt',
       icon: '🌅',
       status: !isPast ? 'not_started' : 'in_progress',
       content: (
@@ -200,19 +200,26 @@ export function PhasesStepper({
         <div className="flex gap-1.5 overflow-x-auto flex-nowrap scrollbar-hide">
           {phases.map((phase, index) => {
             const isActive = index === activePhaseIndex;
-            const showStatus = phase.key !== 'settings' && phase.status !== 'not_started';
+            // Status ring: complete=green, in_progress=amber, not_started=none
+            const statusRing = !isActive && phase.status === 'complete'
+              ? 'ring-2 ring-emerald-400 bg-emerald-50 text-emerald-700'
+              : !isActive && phase.status === 'in_progress'
+              ? 'ring-2 ring-amber-300 bg-amber-50 text-amber-700'
+              : !isActive
+              ? 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              : '';
             return (
               <button
                 key={phase.key}
                 type="button"
                 onClick={() => setActivePhaseIndex(index)}
                 className={`
-                  flex items-center gap-2 rounded-full px-4 py-2.5
+                  flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-2
                   text-sm font-semibold whitespace-nowrap
                   transition-all duration-200 ease-out
                   ${isActive
                     ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    : statusRing
                   }
                 `}
               >
@@ -221,8 +228,8 @@ export function PhasesStepper({
                   ? <span className="hidden sm:inline">{phase.name}</span>
                   : <span className="text-xs sm:text-sm">{phase.name}</span>
                 }
-                {showStatus && (
-                  <StatusDot status={phase.status} size="sm" />
+                {isActive && phase.status === 'complete' && (
+                  <span className="text-white/80 text-xs">✓</span>
                 )}
               </button>
             );
