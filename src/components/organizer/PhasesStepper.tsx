@@ -95,42 +95,44 @@ export function PhasesStepper({
               <InviteLockedBanner eventId={eventId} />
             )}
 
-            {/* Action cards grid */}
-            <div className="grid md:grid-cols-2 gap-6">
+            {/* Gästlista — always visible */}
+            <ActionCard
+              href={`/organizer/event/${eventId}/guests`}
+              title="Gästlista"
+              description="Hantera registreringar och bekräftelser"
+              icon="👥"
+              count={couplesCount}
+            />
+
+            {/* Invite-only cards */}
+            {isInviteOpen && (
               <ActionCard
-                href={`/organizer/event/${eventId}/guests`}
-                title="Gästlista"
-                description="Hantera registreringar och bekräftelser"
-                icon="👥"
-                count={couplesCount}
+                href={`/e/${eventSlug}`}
+                title="Förhandsgranska"
+                description="Se gästsidan som dina gäster"
+                icon="👁️"
+                target="_blank"
               />
-              {isInviteOpen && (
+            )}
+
+            {/* Matchning + Karta — paired */}
+            {couplesCount > 0 && (
+              <div className="grid md:grid-cols-2 gap-6">
                 <ActionCard
-                  href={`/e/${eventSlug}`}
-                  title="Förhandsgranska"
-                  description="Se gästsidan som dina gäster"
-                  icon="👁️"
-                  target="_blank"
+                  href={`/organizer/event/${eventId}/matching`}
+                  title={isEventLocked ? '🔒 Matchning låst' : 'Kör matchning'}
+                  description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
+                  icon="🔀"
+                  disabled={isEventLocked}
                 />
-              )}
-              {couplesCount > 0 && (
-                <>
-                  <ActionCard
-                    href={`/organizer/event/${eventId}/matching`}
-                    title={isEventLocked ? '🔒 Matchning låst' : 'Kör matchning'}
-                    description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
-                    icon="🔀"
-                    disabled={isEventLocked}
-                  />
-                  <ActionCard
-                    href={`/organizer/event/${eventId}/map`}
-                    title="Karta"
-                    description="Se matchade grupper på kartan"
-                    icon="🗺️"
-                  />
-                </>
-              )}
-            </div>
+                <ActionCard
+                  href={`/organizer/event/${eventId}/map`}
+                  title="Karta"
+                  description="Se matchade grupper på kartan"
+                  icon="🗺️"
+                />
+              </div>
+            )}
 
             {/* Inbjudningslänk — bara vid öppen/utkast */}
             {isInviteOpen && <InviteLinkSection eventId={eventId} />}
