@@ -3,6 +3,7 @@ import { requireOrganizer, checkEventAccess } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { PhasesStepper } from '@/components/organizer/PhasesStepper';
+import StatusDropdown from '@/components/organizer/StatusDropdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,13 +140,9 @@ export default async function OrganizerEventPage({ params }: Props) {
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
           <div className="flex items-start justify-between">
             <div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
-                {isPast && (
-                  <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                    Avslutad
-                  </span>
-                )}
+                <StatusDropdown eventId={eventId} currentStatus={event.status} />
               </div>
               <p className="text-gray-600 capitalize">{eventDate}</p>
               {event.city && <p className="text-gray-500 text-sm">{event.city}</p>}
