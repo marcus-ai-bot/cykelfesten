@@ -176,8 +176,8 @@ export default function LiveEnvelopePage() {
           </div>
         )}
         
-        {/* Envelopes */}
-        {eventId && coupleId && (
+        {/* Envelopes — only after couple is selected */}
+        {eventId && coupleId && selectedCouple && (
           <EnvelopeContainer
             eventId={eventId}
             coupleId={coupleId}

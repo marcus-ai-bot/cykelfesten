@@ -31,6 +31,7 @@ export function EnvelopeContainer({
 
   // Fetch envelope status
   const fetchStatus = useCallback(async () => {
+    if (!eventId || !coupleId) return;
     try {
       const res = await fetch(
         `/api/envelope/status?eventId=${eventId}&coupleId=${coupleId}`
