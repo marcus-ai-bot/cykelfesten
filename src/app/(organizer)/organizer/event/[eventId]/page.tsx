@@ -236,11 +236,7 @@ function DashboardStats(props: DashboardStatsProps) {
             value: maxCouples ? `${couplesCount} / ${maxCouples}` : String(couplesCount),
             progress: maxCouples ? couplesCount / maxCouples : undefined,
             variant: maxCouples && couplesCount >= maxCouples ? 'success' as const : 'default' as const,
-          },
-          {
-            icon: '💑', label: 'Par + Singlar',
-            value: `${pairsCount} + ${singlesCount}`,
-            subtitle: singlesCount > 0 ? `${singlesCount} utan partner` : 'alla har partner',
+            subtitle: `${pairsCount} par · ${singlesCount} singlar`,
           },
           {
             icon: '📍', label: 'Adresser',
@@ -290,7 +286,7 @@ function DashboardStats(props: DashboardStatsProps) {
   })();
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div className={`grid gap-4 mb-6 ${cards.length === 3 ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4'}`}>
       {cards.map((card, i) => (
         <StatCard key={i} {...card} />
       ))}
