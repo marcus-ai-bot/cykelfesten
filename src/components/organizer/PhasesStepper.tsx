@@ -188,26 +188,40 @@ export function PhasesStepper({
       icon: '🌅',
       status: !isPast ? 'not_started' : 'in_progress',
       content: (
-        <div className="grid md:grid-cols-2 gap-6">
-          <ActionCard
-            href={`/organizer/event/${eventId}/wrap`}
-            title="Wraps"
-            description="Skicka personliga sammanfattningar"
-            icon="📧"
-          />
-          <ActionCard
-            href={`/organizer/event/${eventId}/awards`}
-            title="Awards"
-            description="Skapa och dela ut priser"
-            icon="🏆"
-          />
-          <ActionCard
-            href={`/e/${eventSlug}/memories`}
-            title="Memories"
-            description="Se statistik och hälsningar"
-            icon="📸"
-            target="_blank"
-          />
+        <div className="space-y-6">
+          {!isPast && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+              ⏳ Dessa funktioner blir tillgängliga efter eventet. Du kan förbereda Awards och Wrap-inställningar redan nu.
+            </div>
+          )}
+          <div className="grid md:grid-cols-2 gap-6">
+            <ActionCard
+              href={`/organizer/event/${eventId}/wrap`}
+              title="Wraps"
+              description="Personliga sammanfattningar per gäst"
+              icon="📧"
+            />
+            <ActionCard
+              href={`/organizer/event/${eventId}/awards`}
+              title="Awards"
+              description="Skapa och dela ut priser"
+              icon="🏆"
+            />
+            <ActionCard
+              href={`/organizer/event/${eventId}/notifications`}
+              title="Skicka Wrap"
+              description="Wrap-utskick & statistik"
+              icon="📤"
+            />
+            <ActionCard
+              href={`/e/${eventSlug}/memories`}
+              title="Memories"
+              description="Gemensam statistik & hälsningar"
+              icon="📸"
+              target="_blank"
+              disabled={!isPast}
+            />
+          </div>
         </div>
       ),
     },

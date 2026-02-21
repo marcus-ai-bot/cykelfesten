@@ -247,10 +247,9 @@ export default function SettingsPage() {
           <div className="flex flex-wrap gap-2">
             {[
               { href: `/e/${event.slug}`, label: '🌐 Event-sida' },
-              { href: `/e/${event.slug}/my`, label: '📱 Kuvert-demo' },
+              { href: `/e/${event.slug}/live`, label: '📬 Levande kuvert' },
               { href: `/e/${event.slug}/host`, label: '🏠 Värd-vy' },
               { href: `/e/${event.slug}/party`, label: '🎉 Efterfest' },
-              { href: `/e/${event.slug}/memories`, label: '📸 Memories' },
             ].map(({ href, label }) => (
               <a key={href} href={href} target="_blank"
                 className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
