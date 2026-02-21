@@ -117,7 +117,7 @@ export function DistanceWarnings({ eventId }: Props) {
           {result.warnings.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <h3 className="font-medium text-red-800 mb-3">
-                🚨 {result.warnings.length} par med &gt;5 km avstånd
+                🚨 {result.warnings.length} par med &gt;2 km avstånd
               </h3>
               <div className="space-y-2">
                 {result.warnings.slice(0, 5).map((w, i) => (
@@ -147,7 +147,7 @@ export function DistanceWarnings({ eventId }: Props) {
           
           {result.warnings.length === 0 && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <span className="text-green-700">✅ Alla värdar är inom 5 km från varandra!</span>
+              <span className="text-green-700">✅ Alla värdar är inom 2 km från varandra!</span>
             </div>
           )}
           

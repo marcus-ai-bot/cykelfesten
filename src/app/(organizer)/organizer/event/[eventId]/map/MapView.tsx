@@ -197,6 +197,9 @@ export function MapView({ eventId, eventName }: Props) {
 
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
+    // Mapbox GL JS requires client-side token for tile loading.
+    // Token is scoped (pk.*) and should be URL-restricted in Mapbox dashboard.
+    // Directions API calls are proxied server-side via /api/.../map-data.
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
     const map = new mapboxgl.Map({

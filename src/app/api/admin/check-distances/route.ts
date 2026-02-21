@@ -39,7 +39,7 @@ interface PairwiseDistance {
 
 export async function POST(request: NextRequest) {
   try {
-    const { event_id, max_distance_km = 5 } = await request.json();
+    const { event_id, max_distance_km = 2 } = await request.json();
     
     if (!event_id) {
       return NextResponse.json({ error: 'event_id required' }, { status: 400 });

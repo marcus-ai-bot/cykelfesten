@@ -223,7 +223,7 @@ export function calculateCentroid(coords: Coordinates[]): Coordinates {
  */
 export function findDistanceOutliers(
   addresses: { id: string; address: string; coordinates: Coordinates | null }[],
-  maxDistanceKm: number = 5
+  maxDistanceKm: number = 2
 ): { id: string; address: string; distanceKm: number }[] {
   // Filter addresses with coordinates
   const withCoords = addresses.filter(a => a.coordinates);
