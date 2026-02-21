@@ -51,6 +51,22 @@ export default async function OrganizerEventPage({ params }: Props) {
     .eq('event_id', eventId)
     .neq('cancelled', true);
 
+  // Get confirmed count
+  const { count: confirmedCount } = await supabase
+    .from('couples')
+    .select('*', { count: 'exact', head: true })
+    .eq('event_id', eventId)
+    .eq('confirmed', true)
+    .neq('cancelled', true);
+
+  // Get host count (from latest matching)
+  const { count: hostCount } = await supabase
+    .from('couples')
+    .select('*', { count: 'exact', head: true })
+    .eq('event_id', eventId)
+    .eq('role', 'host')
+    .neq('cancelled', true);
+
   const { data: matchPlan } = await supabase
     .from('match_plans')
     .select('id')
@@ -123,12 +139,12 @@ export default async function OrganizerEventPage({ params }: Props) {
           />
           <StatCard 
             label="Bekräftade" 
-            value="—"
+            value={confirmedCount || 0}
             icon="✅"
           />
           <StatCard 
             label="Värdar" 
-            value="—"
+            value={hostCount || 0}
             icon="🏠"
           />
         </div>
