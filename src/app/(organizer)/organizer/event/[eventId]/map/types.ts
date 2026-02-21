@@ -30,10 +30,14 @@ export interface RouteSegment {
   fromHostName: string | null; // null for starter (coming from home)
 }
 
+/** Outgoing route: coupleId → { geometry, to } per course */
+export type OutgoingRoutes = Record<string, Record<string, { geometry: [number, number][] | null; to: [number, number] }>>;
+
 export interface MapData {
   couples: MapCouple[];
   missingCoords: MissingCoords[];
   routes: Record<Course, RouteSegment[]> | null;
+  outgoingRoutes: OutgoingRoutes | null;
   eventTimes: Record<Course, string> | null;
 }
 

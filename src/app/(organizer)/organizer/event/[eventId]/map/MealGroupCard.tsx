@@ -349,7 +349,7 @@ function ExpandedContent({ group, cfg, onPrev, onNext, groupIndex, groupTotal }:
                       </div>
                       {dist != null && (
                         <div className="text-xs text-gray-500 mt-0.5">
-                          {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`} fågelvägen
+                          {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`} cykelväg
                           {minutes ? ` · ~${Math.max(1, minutes)} min` : ''}
                         </div>
                       )}

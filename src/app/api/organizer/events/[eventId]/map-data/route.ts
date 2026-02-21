@@ -168,6 +168,7 @@ export async function GET(request: Request, context: RouteContext) {
     };
 
     let routes: { starter: Segment[]; main: Segment[]; dessert: Segment[] } | null = null;
+    let outgoingRoutes: Record<string, Record<string, { geometry: [number, number][] | null; to: [number, number] }>> | null = null;
 
     if (latestPlan?.id) {
       const { data: pairings } = await supabase
@@ -239,17 +240,122 @@ export async function GET(request: Request, context: RouteContext) {
           });
       });
 
-      // Fetch real cycling routes from Mapbox Directions
+      // Build "outgoing" segments: from current host → next destination
+      // These are used for "Ska till" distances in the card
+      type OutgoingSegment = {
+        coupleId: string;
+        course: string;
+        from: [number, number];
+        to: [number, number];
+        geometry: [number, number][] | null;
+      };
+      const outgoingSegments: OutgoingSegment[] = [];
+
+      const courseNames = ['starter', 'main', 'dessert'];
+      for (let ci = 0; ci < courseNames.length; ci++) {
+        const course = courseNames[ci];
+        const nextCourse = courseNames[ci + 1];
+
+        // For each couple, find where they are NOW (at their host) and where they go NEXT
+        (pairings || [])
+          .filter((p: any) => p.course === course)
+          .forEach((p: any) => {
+            const host = byId.get(p.host_couple_id);
+            const guest = byId.get(p.guest_couple_id);
+            if (!host || !guest) return;
+
+            const fromCoords: [number, number] = [host.lng, host.lat];
+
+            if (nextCourse) {
+              // Where does this guest go in the next course?
+              const nextHostId = journeys.get(p.guest_couple_id)?.[nextCourse];
+              const nextHost = nextHostId ? byId.get(nextHostId) : null;
+              if (nextHost) {
+                outgoingSegments.push({
+                  coupleId: p.guest_couple_id,
+                  course,
+                  from: fromCoords,
+                  to: [nextHost.lng, nextHost.lat],
+                  geometry: null,
+                });
+              } else {
+                // Guest is HOST in next course → goes home
+                outgoingSegments.push({
+                  coupleId: p.guest_couple_id,
+                  course,
+                  from: fromCoords,
+                  to: [guest.lng, guest.lat],
+                  geometry: null,
+                });
+              }
+            } else {
+              // After dessert → everyone goes home
+              outgoingSegments.push({
+                coupleId: p.guest_couple_id,
+                course,
+                from: fromCoords,
+                to: [guest.lng, guest.lat],
+                geometry: null,
+              });
+            }
+          });
+
+        // Also: where does each HOST go next?
+        const hostIds = new Set<string>();
+        (pairings || [])
+          .filter((p: any) => p.course === course)
+          .forEach((p: any) => {
+            if (hostIds.has(p.host_couple_id)) return;
+            hostIds.add(p.host_couple_id);
+            const host = byId.get(p.host_couple_id);
+            if (!host) return;
+
+            const fromCoords: [number, number] = [host.lng, host.lat];
+
+            if (nextCourse) {
+              const nextHostId = journeys.get(p.host_couple_id)?.[nextCourse];
+              const nextHost = nextHostId ? byId.get(nextHostId) : null;
+              if (nextHost) {
+                outgoingSegments.push({
+                  coupleId: p.host_couple_id,
+                  course,
+                  from: fromCoords,
+                  to: [nextHost.lng, nextHost.lat],
+                  geometry: null,
+                });
+              }
+              // If host is also host in next course → stays home, no route needed
+            } else {
+              // Dessert host → stays home, no route needed
+            }
+          });
+      }
+
+      // Fetch real cycling routes from Mapbox Directions (incoming + outgoing)
       const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-      if (mapboxToken && allSegments.length > 0) {
-        const geometries = await batchFetchRoutes(
-          allSegments.map((s) => ({ from: s.from, to: s.to })),
-          mapboxToken,
-          5
-        );
-        geometries.forEach((geo, i) => {
-          allSegments[i].geometry = geo;
-        });
+      if (mapboxToken) {
+        // Incoming routes
+        if (allSegments.length > 0) {
+          const geometries = await batchFetchRoutes(
+            allSegments.map((s) => ({ from: s.from, to: s.to })),
+            mapboxToken,
+            5
+          );
+          geometries.forEach((geo, i) => {
+            allSegments[i].geometry = geo;
+          });
+        }
+        // Outgoing routes
+        if (outgoingSegments.length > 0) {
+          const outGeos = await batchFetchRoutes(
+            outgoingSegments.map((s) => ({ from: s.from, to: s.to })),
+            mapboxToken,
+            5
+          );
+          outGeos.forEach((geo, i) => {
+            outgoingSegments[i].geometry = geo;
+          });
+        }
       }
 
       routes = { starter: [], main: [], dessert: [] };
@@ -259,12 +365,21 @@ export async function GET(request: Request, context: RouteContext) {
         if (course === 'main') routes!.main.push(segment);
         if (course === 'dessert') routes!.dessert.push(segment);
       });
+
+      // Attach outgoing route data to response
+      const outgoing: Record<string, Record<string, { geometry: [number, number][] | null; to: [number, number] }>> = {};
+      outgoingSegments.forEach((s) => {
+        if (!outgoing[s.course]) outgoing[s.course] = {};
+        outgoing[s.course][s.coupleId] = { geometry: s.geometry, to: s.to };
+      });
+      outgoingRoutes = outgoing;
     }
 
     return NextResponse.json({
       couples: withCoords,
       missingCoords,
       routes,
+      outgoingRoutes,
       eventTimes: event ? {
         starter: event.starter_time?.slice(0, 5) || '17:30',
         main: event.main_time?.slice(0, 5) || '19:00',

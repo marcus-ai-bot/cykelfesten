@@ -38,7 +38,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null, eventTimes: null });
+  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null, outgoingRoutes: null, eventTimes: null });
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [selectedGroupHostId, setSelectedGroupHostId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,19 +164,24 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
         }
 
         // Where does each guest go next?
+        const courseOutgoing = data.outgoingRoutes?.[course] || {};
         for (const guest of group.guests) {
           const guestNext = nextDestFor.get(guest.id);
+          // Get cycling distance from outgoing routes
+          const outRoute = courseOutgoing[guest.id];
+          const cyclingDist = outRoute?.geometry ? routeDistanceKm(outRoute.geometry) : null;
+
           if (guestNext) {
             guest.toAddress = guestNext.address;
             guest.toHostName = guestNext.isHome ? null : guestNext.name;
             guest.toCoords = guestNext.coords;
-            guest.toDistanceKm = haversineKm(group.hostCoords, guestNext.coords);
+            guest.toDistanceKm = cyclingDist ?? haversineKm(group.hostCoords, guestNext.coords);
           } else {
             // No next course or not found → home
             guest.toAddress = guest.address;
             guest.toHostName = null;
             guest.toCoords = guest.coords;
-            guest.toDistanceKm = haversineKm(group.hostCoords, guest.coords);
+            guest.toDistanceKm = cyclingDist ?? haversineKm(group.hostCoords, guest.coords);
           }
         }
       }
