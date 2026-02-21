@@ -24,36 +24,39 @@ interface Props {
   groupTotal: number;
 }
 
-/* ── Desktop Card ───────────────────────────────── */
-
 export function MealGroupCard(props: Props) {
   return (
     <>
-      {/* Desktop: left panel */}
       <div className="hidden md:block absolute top-4 left-4 z-10 w-80 max-h-[calc(100vh-180px)] overflow-y-auto">
         <FullCard {...props} />
       </div>
-      {/* Mobile: bottom drawer */}
       <MobileDrawer {...props} />
     </>
   );
 }
 
-/* ── Mobile Drawer with peek + swipe ────────────── */
+/* ── Mobile Drawer ──────────────────────────────── */
 
-const PEEK_HEIGHT = 96; // px shown in peek state
-const SNAP_THRESHOLD = 60; // px drag to trigger snap
+const PEEK_HEIGHT = 96;
+const SNAP_THRESHOLD = 40;
 
 function MobileDrawer(props: Props) {
   const { group, cfg, onClose } = props;
   const [expanded, setExpanded] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [dragY, setDragY] = useState(0);
   const [pulsed, setPulsed] = useState(false);
-  const startY = useRef(0);
-  const contentRef = useRef<HTMLDivElement>(null);
 
-  // Pulse animation on mount
+  // Direct DOM refs for buttery-smooth dragging
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<HTMLDivElement>(null);
+  const startYRef = useRef(0);
+  const currentYRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const expandedRef = useRef(false);
+
+  // Keep ref in sync
+  expandedRef.current = expanded;
+
+  // Reset on new group
   useEffect(() => {
     setPulsed(false);
     setExpanded(false);
@@ -61,43 +64,103 @@ function MobileDrawer(props: Props) {
     return () => clearTimeout(t);
   }, [group.hostId]);
 
-  // Touch handlers for swipe
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    startY.current = e.touches[0].clientY;
-    setDragging(true);
-    setDragY(0);
-  }, []);
+  // Touch handling directly on DOM for zero-lag
+  useEffect(() => {
+    const handle = handleRef.current;
+    if (!handle) return;
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!dragging) return;
-    const dy = e.touches[0].clientY - startY.current;
-    setDragY(dy);
-  }, [dragging]);
-
-  const handleTouchEnd = useCallback(() => {
-    setDragging(false);
-    if (!expanded && dragY < -SNAP_THRESHOLD) {
-      // Swipe up → expand
-      setExpanded(true);
-    } else if (expanded && dragY > SNAP_THRESHOLD) {
-      // Swipe down → collapse or close
-      setExpanded(false);
-    } else if (!expanded && dragY > SNAP_THRESHOLD) {
-      // Swipe down from peek → close
-      onClose();
+    function onTouchStart(e: TouchEvent) {
+      isDraggingRef.current = true;
+      startYRef.current = e.touches[0].clientY;
+      currentYRef.current = 0;
+      if (drawerRef.current) {
+        drawerRef.current.style.transition = 'none';
+      }
     }
-    setDragY(0);
-  }, [expanded, dragY, onClose]);
+
+    function onTouchMove(e: TouchEvent) {
+      if (!isDraggingRef.current) return;
+      e.preventDefault(); // Prevent scroll
+      const dy = e.touches[0].clientY - startYRef.current;
+      currentYRef.current = dy;
+
+      if (drawerRef.current) {
+        if (expandedRef.current) {
+          // When expanded: only allow dragging down (positive dy)
+          const clampedDy = Math.max(0, dy);
+          drawerRef.current.style.transform = `translateY(${clampedDy}px)`;
+        } else {
+          // When peeking: allow drag up (negative dy shows more) and down (positive hides)
+          // Clamp so we don't drag above fully expanded
+          const maxUp = -(window.innerHeight * 0.8 - PEEK_HEIGHT);
+          const clampedDy = Math.max(maxUp, dy);
+          drawerRef.current.style.transform = `translateY(calc(100% - ${PEEK_HEIGHT}px + ${clampedDy}px))`;
+        }
+      }
+    }
+
+    function onTouchEnd() {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      const dy = currentYRef.current;
+
+      if (drawerRef.current) {
+        drawerRef.current.style.transition = 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)';
+      }
+
+      if (expandedRef.current) {
+        if (dy > SNAP_THRESHOLD) {
+          // Swipe down from expanded → collapse to peek
+          setExpanded(false);
+        } else {
+          // Snap back to expanded
+          if (drawerRef.current) drawerRef.current.style.transform = 'translateY(0)';
+        }
+      } else {
+        if (dy < -SNAP_THRESHOLD) {
+          // Swipe up from peek → expand
+          setExpanded(true);
+        } else if (dy > SNAP_THRESHOLD * 2) {
+          // Big swipe down from peek → close
+          onClose();
+        } else {
+          // Snap back to peek
+          if (drawerRef.current) {
+            drawerRef.current.style.transform = `translateY(calc(100% - ${PEEK_HEIGHT}px))`;
+          }
+        }
+      }
+    }
+
+    handle.addEventListener('touchstart', onTouchStart, { passive: false });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      handle.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [onClose]);
+
+  // Snap to correct position when expanded state changes (from tap or swipe)
+  useEffect(() => {
+    if (!drawerRef.current) return;
+    drawerRef.current.style.transition = 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)';
+    if (expanded) {
+      drawerRef.current.style.transform = 'translateY(0)';
+    } else {
+      drawerRef.current.style.transform = `translateY(calc(100% - ${PEEK_HEIGHT}px))`;
+    }
+  }, [expanded]);
 
   return (
     <div
-      className={`md:hidden fixed bottom-0 left-0 right-0 z-20 transition-transform ${
-        dragging ? 'duration-0' : 'duration-300 ease-out'
-      }`}
+      ref={drawerRef}
+      className="md:hidden fixed bottom-0 left-0 right-0 z-20"
       style={{
-        transform: expanded
-          ? `translateY(${Math.max(0, dragY)}px)`
-          : `translateY(calc(100% - ${PEEK_HEIGHT}px + ${Math.min(0, dragY)}px))`,
+        transform: `translateY(calc(100% - ${PEEK_HEIGHT}px))`,
+        transition: 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
       }}
     >
       {/* Backdrop when expanded */}
@@ -108,15 +171,12 @@ function MobileDrawer(props: Props) {
         />
       )}
 
-      <div
-        ref={contentRef}
-        className="bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 max-h-[80vh] flex flex-col"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
+      <div className="bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 max-h-[80vh] flex flex-col">
+        {/* Drag handle — touch target */}
+        <div
+          ref={handleRef}
+          className="flex flex-col items-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none select-none"
+        >
           <div className={`w-10 h-1.5 rounded-full bg-gray-300 ${
             pulsed ? 'animate-pulse-once' : ''
           }`} />
@@ -139,7 +199,7 @@ function MobileDrawer(props: Props) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
+            <span className={`text-gray-400 text-xs transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
               ▲
             </span>
             <button
@@ -152,9 +212,9 @@ function MobileDrawer(props: Props) {
           </div>
         </div>
 
-        {/* Expanded content */}
-        <div className={`overflow-y-auto transition-all duration-300 ${
-          expanded ? 'max-h-[calc(80vh-96px)] opacity-100' : 'max-h-0 opacity-0'
+        {/* Expanded content — scrollable */}
+        <div className={`overflow-y-auto overscroll-contain transition-all duration-300 ease-out ${
+          expanded ? 'max-h-[calc(80vh-96px)] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
         }`}>
           <ExpandedContent {...props} />
         </div>
@@ -163,7 +223,7 @@ function MobileDrawer(props: Props) {
   );
 }
 
-/* ── Expanded content (shared between mobile expanded + desktop) ── */
+/* ── Expanded content (shared) ────────────────────── */
 
 function ExpandedContent({ group, cfg, onPrev, onNext, groupIndex, groupTotal }: Props) {
   const allAllergies = [
@@ -277,7 +337,6 @@ function FullCard(props: Props) {
 
   return (
     <div className="bg-white shadow-xl border border-gray-100 rounded-2xl overflow-hidden">
-      {/* Header */}
       <div className="px-5 py-3 border-b border-gray-100" style={{ backgroundColor: `${cfg.color}08` }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -300,7 +359,6 @@ function FullCard(props: Props) {
           </button>
         </div>
       </div>
-
       <ExpandedContent {...props} />
     </div>
   );
