@@ -117,11 +117,38 @@ export default function SettingsPage() {
           <EditableField label="Beskrivning" value={event.description || ''} onSave={(v) => saveSettings({ description: v })} saving={saving} />
         </Section>
 
-        {/* Times */}
+        {/* Times with ±5 min adjustment */}
         <Section title="🕐 Tider">
-          <EditableField label="Förrätt" value={event.starter_time?.slice(0, 5) || '17:30'} type="time" onSave={(v) => saveSettings({ starter_time: v + ':00' })} saving={saving} />
-          <EditableField label="Huvudrätt" value={event.main_time?.slice(0, 5) || '19:00'} type="time" onSave={(v) => saveSettings({ main_time: v + ':00' })} saving={saving} />
-          <EditableField label="Dessert" value={event.dessert_time?.slice(0, 5) || '20:30'} type="time" onSave={(v) => saveSettings({ dessert_time: v + ':00' })} saving={saving} />
+          {[
+            { label: 'Förrätt', icon: '🥗', field: 'starter_time', value: event.starter_time },
+            { label: 'Huvudrätt', icon: '🍖', field: 'main_time', value: event.main_time },
+            { label: 'Dessert', icon: '🍰', field: 'dessert_time', value: event.dessert_time },
+          ].map(({ label, icon, field, value }) => {
+            const time = value?.slice(0, 5) || '00:00';
+            const adjustTime = (minutes: number) => {
+              const [h, m] = time.split(':').map(Number);
+              const total = h * 60 + m + minutes;
+              const newH = Math.floor(((total % 1440) + 1440) % 1440 / 60);
+              const newM = ((total % 60) + 60) % 60;
+              const newTime = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+              saveSettings({ [field]: newTime + ':00' });
+            };
+            return (
+              <div key={field} className="flex items-center justify-between py-2.5 border-b border-gray-50">
+                <span className="text-sm text-gray-700">{icon} {label}</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => adjustTime(-5)} disabled={saving}
+                    className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 disabled:opacity-50 text-sm font-bold">−</button>
+                  <button onClick={() => { const val = prompt(`Ny tid för ${label}:`, time); if (val) saveSettings({ [field]: val + ':00' }); }}
+                    className="text-sm font-mono font-semibold text-gray-900 hover:text-indigo-600 cursor-pointer min-w-[3rem] text-center">
+                    {time}
+                  </button>
+                  <button onClick={() => adjustTime(5)} disabled={saving}
+                    className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 text-sm font-bold">+</button>
+                </div>
+              </div>
+            );
+          })}
         </Section>
 
         {/* Envelope Controls */}
