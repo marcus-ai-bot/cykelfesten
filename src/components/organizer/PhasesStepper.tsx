@@ -217,7 +217,10 @@ export function PhasesStepper({
                 `}
               >
                 <span className="text-base leading-none">{phase.icon}</span>
-                <span className="hidden sm:inline">{phase.name}</span>
+                {phase.key === 'settings'
+                  ? <span className="hidden sm:inline">{phase.name}</span>
+                  : <span className="text-xs sm:text-sm">{phase.name}</span>
+                }
                 {showStatus && (
                   <StatusDot status={phase.status} size="sm" />
                 )}
