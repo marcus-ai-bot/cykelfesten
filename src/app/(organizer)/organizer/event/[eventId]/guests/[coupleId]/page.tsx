@@ -183,6 +183,24 @@ export default function CoupleDetailPage() {
         {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4">{error}</div>}
         {success && <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-4">{success}</div>}
 
+        {/* Matching Preferences */}
+        <div className="mb-4">
+          <Link
+            href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`}
+            className="block bg-indigo-50 border-2 border-indigo-200 rounded-xl p-5 hover:bg-indigo-100 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-indigo-900">🎯 Matchningspreferenser</h3>
+                <p className="text-sm text-indigo-600 mt-1">
+                  Ställ in vilka par som ska/inte ska mötas vid middagen
+                </p>
+              </div>
+              <span className="text-indigo-400 text-2xl">→</span>
+            </div>
+          </Link>
+        </div>
+
         {/* Invited Person */}
         <Section title="👤 Anmälare">
           <Field label="Namn" field="invited_name" form={form} setForm={setForm} editing={editing} />
@@ -259,24 +277,6 @@ export default function CoupleDetailPage() {
             <p>Status: {couple.cancelled ? '❌ Avhoppad' : couple.confirmed ? '✅ Bekräftad' : '⏳ Ej bekräftad'}</p>
           </div>
         </Section>
-
-        {/* Matching Preferences */}
-        <div className="mt-6">
-          <Link
-            href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`}
-            className="block bg-indigo-50 border-2 border-indigo-200 rounded-xl p-5 hover:bg-indigo-100 transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-indigo-900">🎯 Matchningspreferenser</h3>
-                <p className="text-sm text-indigo-600 mt-1">
-                  Ställ in vilka par som ska/inte ska mötas vid middagen
-                </p>
-              </div>
-              <span className="text-indigo-400 text-2xl">→</span>
-            </div>
-          </Link>
-        </div>
 
         {/* Danger Zone */}
         <div className="mt-8 border border-red-200 rounded-xl p-6">
