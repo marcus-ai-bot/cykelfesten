@@ -96,20 +96,12 @@ export default async function OrganizerEventPage({ params }: Props) {
 
   // Post-matching stats (only query if matching exists)
   let envelopeCount = 0;
-  let distanceWarnings = 0;
   if (matchPlan) {
     const { count: envCount } = await supabase
       .from('envelopes')
       .select('*', { count: 'exact', head: true })
       .eq('match_plan_id', matchPlan.id);
     envelopeCount = envCount || 0;
-
-    const { count: distCount } = await supabase
-      .from('assignments')
-      .select('*', { count: 'exact', head: true })
-      .eq('match_plan_id', matchPlan.id)
-      .gt('cycling_distance_km', 2);
-    distanceWarnings = distCount || 0;
   }
   
   const eventDateObj = new Date(event.event_date);
@@ -166,7 +158,7 @@ export default async function OrganizerEventPage({ params }: Props) {
           geocodedCount={geocodedCount || 0}
           hostCount={hostCount || 0}
           envelopeCount={envelopeCount}
-          distanceWarnings={distanceWarnings}
+          daysUntilEvent={Math.ceil((eventDateObj.getTime() - Date.now()) / (1000 * 60 * 60 * 24))}
           maxCouples={event.max_couples}
           eventDate={eventDateObj}
           hasMatching={!!matchPlan}
@@ -210,7 +202,7 @@ interface DashboardStatsProps {
   geocodedCount: number;
   hostCount: number;
   envelopeCount: number;
-  distanceWarnings: number;
+  daysUntilEvent: number;
   maxCouples: number | null;
   eventDate: Date;
   hasMatching: boolean;
@@ -221,9 +213,9 @@ interface DashboardStatsProps {
 
 function DashboardStats(props: DashboardStatsProps) {
   const phase = getPhase(props);
-  const { couplesCount, pairsCount, singlesCount, geocodedCount, hostCount, envelopeCount, distanceWarnings, maxCouples, eventDate } = props;
+  const { couplesCount, pairsCount, singlesCount, geocodedCount, hostCount, envelopeCount, daysUntilEvent, maxCouples, eventDate } = props;
 
-  const daysUntil = Math.ceil((eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const daysUntil = daysUntilEvent;
   const daysLabel = daysUntil === 0 ? 'Idag!' : daysUntil === 1 ? 'Imorgon!' : daysUntil > 0 ? `${daysUntil} dagar` : 'Avslutad';
   const missingGeo = couplesCount - geocodedCount;
 
@@ -257,10 +249,9 @@ function DashboardStats(props: DashboardStatsProps) {
           { icon: '🏠', label: 'Värdar', value: String(hostCount), subtitle: 'tilldelade' },
           { icon: '✉️', label: 'Kuvert', value: String(envelopeCount) },
           {
-            icon: '🚴', label: 'Avstånd',
-            value: distanceWarnings === 0 ? '0 varningar' : `${distanceWarnings} > 2km`,
-            variant: distanceWarnings === 0 ? 'success' as const : 'warning' as const,
-            subtitle: distanceWarnings === 0 ? 'alla inom 2 km ✅' : '⚠️ kolla kartan',
+            icon: '📅', label: 'Dagar kvar',
+            value: daysLabel,
+            variant: daysUntil <= 7 && daysUntil > 0 ? 'warning' as const : 'default' as const,
           },
         ];
 
