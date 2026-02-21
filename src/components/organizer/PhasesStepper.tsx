@@ -115,14 +115,13 @@ export function PhasesStepper({
               )}
               {couplesCount > 0 && (
                 <>
-                  <div className={isEventLocked ? 'pointer-events-none opacity-50' : ''}>
-                    <ActionCard
-                      href={`/organizer/event/${eventId}/matching`}
-                      title={isEventLocked ? '🔒 Matchning låst' : 'Kör matchning'}
-                      description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
-                      icon="🔀"
-                    />
-                  </div>
+                  <ActionCard
+                    href={`/organizer/event/${eventId}/matching`}
+                    title={isEventLocked ? '🔒 Matchning låst' : 'Kör matchning'}
+                    description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
+                    icon="🔀"
+                    disabled={isEventLocked}
+                  />
                   <ActionCard
                     href={`/organizer/event/${eventId}/map`}
                     title="Karta"
