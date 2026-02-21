@@ -202,7 +202,7 @@ type Phase = 'invite' | 'matched' | 'active' | 'past';
 function getPhase(opts: { hasMatching: boolean; isPast: boolean; isToday: boolean; status: string }): Phase {
   if (opts.isPast || opts.status === 'completed') return 'past';
   if (opts.isToday || opts.status === 'active') return 'active';
-  if (opts.hasMatching) return 'matched';
+  if (opts.status === 'matched' || opts.status === 'locked') return 'matched';
   return 'invite';
 }
 
