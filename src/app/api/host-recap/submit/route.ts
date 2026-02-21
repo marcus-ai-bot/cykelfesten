@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { verifyToken } from '@/lib/tokens';
+import { verifyCoupleToken } from '@/lib/tokens';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Verify token
-    const payload = verifyToken(token);
+    const payload = verifyCoupleToken(token);
     if (!payload) {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
     }

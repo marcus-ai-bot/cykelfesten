@@ -147,7 +147,7 @@ export default function PartnerPage() {
       if (updateError) throw updateError;
       
       setSaved(true);
-      setTimeout(() => router.push(`/e/${slug}/my`), 2000);
+      setTimeout(() => router.replace(`/e/${slug}/my`), 2000);
       
     } catch (err) {
       setError('Kunde inte spara. Försök igen.');

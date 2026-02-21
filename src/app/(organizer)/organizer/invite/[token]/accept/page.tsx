@@ -24,7 +24,7 @@ export default function AcceptInvitePage() {
           setEventName(data.event_name || '');
           setStatus('success');
           // Redirect to dashboard after 2s
-          setTimeout(() => router.push('/organizer'), 2000);
+          setTimeout(() => router.replace('/organizer'), 2000);
         } else {
           setErrorMsg(data.error || 'Kunde inte acceptera inbjudan');
           setStatus('error');

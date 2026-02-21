@@ -27,7 +27,7 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Något gick fel');
       }
       
-      router.push('/organizer');
+      router.replace('/organizer');
     } catch (err: any) {
       setError(err.message);
     } finally {

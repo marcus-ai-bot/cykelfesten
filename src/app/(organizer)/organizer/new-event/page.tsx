@@ -33,7 +33,7 @@ export default function NewEventPage() {
       if (!res.ok) {
         // If not logged in, redirect to login
         if (res.status === 401) {
-          router.push('/login');
+          router.replace('/login');
           return;
         }
         throw new Error(data.error || 'Något gick fel');

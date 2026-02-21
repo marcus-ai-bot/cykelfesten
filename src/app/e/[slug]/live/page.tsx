@@ -87,7 +87,7 @@ export default function LiveEnvelopePage() {
     // Update URL without reload
     const url = new URL(window.location.href);
     url.searchParams.set('coupleId', couple.id);
-    window.history.pushState({}, '', url.toString());
+    window.history.replaceState({}, '', url.toString());
   };
   
   if (loading) {

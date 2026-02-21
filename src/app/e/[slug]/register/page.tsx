@@ -164,7 +164,7 @@ function RegisterForm() {
       }
       
       // Redirect to success page
-      router.push(`/e/${slug}/registered`);
+      router.replace(`/e/${slug}/registered`);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Något gick fel');

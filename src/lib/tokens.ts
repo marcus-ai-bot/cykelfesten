@@ -16,6 +16,7 @@ if (!TOKEN_SECRET) {
 }
 const TOKEN_SIGNING_SECRET = TOKEN_SECRET || '';
 const TOKEN_EXPIRY_DAYS = 30; // Tokens valid for 30 days
+const SESSION_TOKEN_EXPIRY_DAYS = 7; // Guest/organizer session tokens
 
 function sign(data: string): string {
   return createHmac('sha256', TOKEN_SIGNING_SECRET)
@@ -27,6 +28,12 @@ function sign(data: string): string {
 export interface TokenPayload {
   coupleId: string;
   personType: 'invited' | 'partner';
+  timestamp: number;
+}
+
+export interface SessionTokenPayload {
+  email: string;
+  type: 'guest' | 'organizer';
   timestamp: number;
 }
 
@@ -44,10 +51,62 @@ export function createToken(coupleId: string, personType: 'invited' | 'partner' 
 }
 
 /**
- * Verify and decode a signed token
+ * Create a signed session token for guests/organizers
+ */
+export function signToken(payload: { email: string; type: 'guest' | 'organizer' }): string {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const data = `${payload.type}:${payload.email}:${timestamp}`;
+  const signature = sign(data);
+  return Buffer.from(`${data}:${signature}`).toString('base64url');
+}
+
+/**
+ * Verify and decode a signed session token
  * Returns null if invalid or expired
  */
-export function verifyToken(token: string): TokenPayload | null {
+export function verifyToken(token: string): SessionTokenPayload | null {
+  try {
+    const decoded = Buffer.from(token, 'base64url').toString('utf-8');
+    const parts = decoded.split(':');
+
+    if (parts.length !== 4) {
+      return null;
+    }
+
+    const [type, email, timestampStr, signature] = parts;
+    if (type !== 'guest' && type !== 'organizer') {
+      return null;
+    }
+
+    const timestamp = parseInt(timestampStr, 10);
+    if (!timestamp || !email) {
+      return null;
+    }
+
+    const data = `${type}:${email}:${timestamp}`;
+    const expectedSignature = sign(data);
+    if (signature !== expectedSignature) {
+      return null;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const expirySeconds = SESSION_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+    if (now - timestamp > expirySeconds) {
+      return null;
+    }
+
+    return { email, type: type as 'guest' | 'organizer', timestamp };
+  } catch (error) {
+    console.log('Token decode error:', error);
+    return null;
+  }
+}
+
+/**
+ * Verify and decode a signed couple/person token
+ * Returns null if invalid or expired
+ */
+export function verifyCoupleToken(token: string): TokenPayload | null {
   try {
     // Decode base64url
     const decoded = Buffer.from(token, 'base64url').toString('utf-8');
@@ -109,7 +168,7 @@ export function getAccessFromParams(
   // Try signed token first
   const token = searchParams.get('token');
   if (token) {
-    const payload = verifyToken(token);
+    const payload = verifyCoupleToken(token);
     if (payload) {
       return {
         coupleId: payload.coupleId,
