@@ -472,12 +472,18 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-opacity',
         ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 1, 0.12]);
 
-      // Zoom to group
+      // Zoom to group — mobile needs bottom padding for drawer peek
       const bounds = new mapboxgl.LngLatBounds();
       bounds.extend(selectedGroup.hostCoords);
       selectedGroup.guests.forEach((g) => bounds.extend(g.coords));
+      const isMobile = window.innerWidth < 768;
       map.fitBounds(bounds, {
-        padding: { top: 80, bottom: 80, left: window.innerWidth >= 768 ? 380 : 80, right: 80 },
+        padding: {
+          top: 80,
+          bottom: isMobile ? 140 : 80,  // Room for drawer peek
+          left: isMobile ? 40 : 380,
+          right: 40,
+        },
         duration: 500,
         maxZoom: 16,
       });

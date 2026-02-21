@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useState, useEffect, useCallback } from 'react';
 import type { MealGroup, CourseConfig } from './types';
 
 /** Haversine between two [lng,lat] points */
@@ -10,15 +11,6 @@ function haversineKm(a: [number, number], b: [number, number]): number {
   const x = Math.sin(dLat / 2) ** 2 +
     Math.cos(a[1] * Math.PI / 180) * Math.cos(b[1] * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
-/** Total length of a polyline [[lng,lat], ...] in km */
-function polylineKm(coords: [number, number][]): number {
-  let total = 0;
-  for (let i = 1; i < coords.length; i++) {
-    total += haversineKm(coords[i - 1], coords[i]);
-  }
-  return total;
 }
 
 interface Props {
@@ -32,7 +24,148 @@ interface Props {
   groupTotal: number;
 }
 
-export function MealGroupCard({ group, cfg, courseName, onClose, onPrev, onNext, groupIndex, groupTotal }: Props) {
+/* ── Desktop Card ───────────────────────────────── */
+
+export function MealGroupCard(props: Props) {
+  return (
+    <>
+      {/* Desktop: left panel */}
+      <div className="hidden md:block absolute top-4 left-4 z-10 w-80 max-h-[calc(100vh-180px)] overflow-y-auto">
+        <FullCard {...props} />
+      </div>
+      {/* Mobile: bottom drawer */}
+      <MobileDrawer {...props} />
+    </>
+  );
+}
+
+/* ── Mobile Drawer with peek + swipe ────────────── */
+
+const PEEK_HEIGHT = 96; // px shown in peek state
+const SNAP_THRESHOLD = 60; // px drag to trigger snap
+
+function MobileDrawer(props: Props) {
+  const { group, cfg, onClose } = props;
+  const [expanded, setExpanded] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [pulsed, setPulsed] = useState(false);
+  const startY = useRef(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Pulse animation on mount
+  useEffect(() => {
+    setPulsed(false);
+    setExpanded(false);
+    const t = setTimeout(() => setPulsed(true), 100);
+    return () => clearTimeout(t);
+  }, [group.hostId]);
+
+  // Touch handlers for swipe
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    startY.current = e.touches[0].clientY;
+    setDragging(true);
+    setDragY(0);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!dragging) return;
+    const dy = e.touches[0].clientY - startY.current;
+    setDragY(dy);
+  }, [dragging]);
+
+  const handleTouchEnd = useCallback(() => {
+    setDragging(false);
+    if (!expanded && dragY < -SNAP_THRESHOLD) {
+      // Swipe up → expand
+      setExpanded(true);
+    } else if (expanded && dragY > SNAP_THRESHOLD) {
+      // Swipe down → collapse or close
+      setExpanded(false);
+    } else if (!expanded && dragY > SNAP_THRESHOLD) {
+      // Swipe down from peek → close
+      onClose();
+    }
+    setDragY(0);
+  }, [expanded, dragY, onClose]);
+
+  return (
+    <div
+      className={`md:hidden fixed bottom-0 left-0 right-0 z-20 transition-transform ${
+        dragging ? 'duration-0' : 'duration-300 ease-out'
+      }`}
+      style={{
+        transform: expanded
+          ? `translateY(${Math.max(0, dragY)}px)`
+          : `translateY(calc(100% - ${PEEK_HEIGHT}px + ${Math.min(0, dragY)}px))`,
+      }}
+    >
+      {/* Backdrop when expanded */}
+      {expanded && (
+        <div
+          className="fixed inset-0 bg-black/20 -z-10"
+          onClick={() => setExpanded(false)}
+        />
+      )}
+
+      <div
+        ref={contentRef}
+        className="bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 max-h-[80vh] flex flex-col"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
+          <div className={`w-10 h-1.5 rounded-full bg-gray-300 ${
+            pulsed ? 'animate-pulse-once' : ''
+          }`} />
+        </div>
+
+        {/* Peek content — always visible */}
+        <div
+          className="px-5 py-2 flex items-center justify-between"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-xl">{cfg.emoji}</span>
+            <div className="min-w-0">
+              <div className="font-semibold text-gray-900 text-sm truncate">
+                Hos {group.hostName}
+              </div>
+              <div className="text-xs text-gray-500">
+                {group.totalPeople} pers · {group.guests.length} gästpar · {cfg.time}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
+              ▲
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
+              aria-label="Stäng"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Expanded content */}
+        <div className={`overflow-y-auto transition-all duration-300 ${
+          expanded ? 'max-h-[calc(80vh-96px)] opacity-100' : 'max-h-0 opacity-0'
+        }`}>
+          <ExpandedContent {...props} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Expanded content (shared between mobile expanded + desktop) ── */
+
+function ExpandedContent({ group, cfg, onPrev, onNext, groupIndex, groupTotal }: Props) {
   const allAllergies = [
     ...group.hostAllergies,
     ...group.guests.flatMap((g) => g.allergies),
@@ -41,70 +174,8 @@ export function MealGroupCard({ group, cfg, courseName, onClose, onPrev, onNext,
 
   return (
     <>
-      {/* Desktop: left panel */}
-      <div className="hidden md:block absolute top-4 left-4 z-10 w-80 max-h-[calc(100vh-180px)] overflow-y-auto">
-        <CardContent
-          group={group} cfg={cfg} courseName={courseName}
-          onClose={onClose} onPrev={onPrev} onNext={onNext}
-          groupIndex={groupIndex} groupTotal={groupTotal}
-          uniqueAllergies={uniqueAllergies}
-        />
-      </div>
-      {/* Mobile: bottom sheet */}
-      <div className="md:hidden absolute bottom-0 left-0 right-0 z-10 max-h-[60vh] overflow-y-auto">
-        <CardContent
-          group={group} cfg={cfg} courseName={courseName}
-          onClose={onClose} onPrev={onPrev} onNext={onNext}
-          groupIndex={groupIndex} groupTotal={groupTotal}
-          uniqueAllergies={uniqueAllergies}
-          mobile
-        />
-      </div>
-    </>
-  );
-}
-
-function CardContent({
-  group, cfg, courseName, onClose, onPrev, onNext,
-  groupIndex, groupTotal, uniqueAllergies, mobile,
-}: Props & { uniqueAllergies: string[]; mobile?: boolean }) {
-  return (
-    <div className={`bg-white shadow-xl border border-gray-100 overflow-hidden ${
-      mobile ? 'rounded-t-2xl' : 'rounded-2xl'
-    }`}>
-      {/* Drag handle (mobile) */}
-      {mobile && (
-        <div className="flex justify-center pt-2 pb-1">
-          <div className="w-10 h-1 rounded-full bg-gray-300" />
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="px-5 py-3 border-b border-gray-100" style={{ backgroundColor: `${cfg.color}08` }}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">{cfg.emoji}</span>
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wide" style={{ color: cfg.color }}>
-                {courseName} · {cfg.time}
-              </div>
-              <div className="font-semibold text-gray-900 text-sm mt-0.5">
-                Hos {group.hostName}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition"
-            aria-label="Stäng"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-
       {/* Host */}
-      <div className="px-5 py-3 border-b border-gray-50">
+      <div className="px-5 py-3 border-t border-gray-100">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm mt-0.5" style={{ backgroundColor: cfg.color }}>
             🏠
@@ -112,14 +183,9 @@ function CardContent({
           <div className="flex-1 min-w-0">
             <div className="font-medium text-gray-900 text-sm">{group.hostName}</div>
             <div className="text-xs text-gray-500 mt-0.5">{group.hostAddress}</div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium text-white" style={{ backgroundColor: cfg.color }}>
-                Värd
-              </span>
-              <span className="text-xs text-gray-400">
-                {group.totalPeople} pers totalt
-              </span>
-            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium text-white mt-1 inline-block" style={{ backgroundColor: cfg.color }}>
+              Värd · {group.totalPeople} pers
+            </span>
           </div>
         </div>
       </div>
@@ -135,7 +201,7 @@ function CardContent({
             const birdDist = haversineKm(guest.fromCoords, group.hostCoords);
             const dist = routeDist ?? birdDist;
             const isRoute = routeDist != null;
-            const minutes = Math.round(dist / 0.25); // ~15 km/h
+            const minutes = Math.round(dist / 0.25);
             const fromLabel = guest.fromHostName
               ? `Från ${guest.fromHostName.split(' & ')[0]}`
               : 'Hemifrån';
@@ -200,6 +266,42 @@ function CardContent({
           Nästa →
         </button>
       </div>
+    </>
+  );
+}
+
+/* ── Full Card (Desktop) ─────────────────────────── */
+
+function FullCard(props: Props) {
+  const { group, cfg, courseName, onClose } = props;
+
+  return (
+    <div className="bg-white shadow-xl border border-gray-100 rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-3 border-b border-gray-100" style={{ backgroundColor: `${cfg.color}08` }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{cfg.emoji}</span>
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wide" style={{ color: cfg.color }}>
+                {courseName} · {cfg.time}
+              </div>
+              <div className="font-semibold text-gray-900 text-sm mt-0.5">
+                Hos {group.hostName}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition"
+            aria-label="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <ExpandedContent {...props} />
     </div>
   );
 }
