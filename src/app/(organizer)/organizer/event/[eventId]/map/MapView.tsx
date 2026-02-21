@@ -346,6 +346,39 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
     return () => { alive = false; };
   }, [eventId]);
 
+  /* ── Auto-select course based on current time ───── */
+
+  useEffect(() => {
+    if (!data.routes || !data.eventTimes || activeCourse) return;
+
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+
+    function toMinutes(timeStr: string): number {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    }
+
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const times = data.eventTimes!;
+    const starterMin = toMinutes(times.starter);
+    const mainMin = toMinutes(times.main);
+    const dessertMin = toMinutes(times.dessert);
+
+    // Auto-select: current time falls within course window (+15 min grace)
+    if (nowMin <= starterMin + 15) {
+      setActiveCourse('starter');
+    } else if (nowMin <= mainMin + 15) {
+      setActiveCourse('main');
+    } else if (nowMin <= dessertMin + 15) {
+      setActiveCourse('dessert');
+    } else {
+      // Past all courses — show dessert
+      setActiveCourse('dessert');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.routes, data.eventTimes]);
+
   /* ── Init map ───────────────────────────────────── */
 
   useEffect(() => {
