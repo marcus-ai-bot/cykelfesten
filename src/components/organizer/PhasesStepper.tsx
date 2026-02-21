@@ -167,8 +167,8 @@ export function PhasesStepper({
             />
             <ActionCard
               href={`/organizer/event/${eventId}/messages`}
-              title="Meddelanden"
-              description="Skicka info till gästerna"
+              title="Kuvertmeddelanden"
+              description="Texter som visas i kuvertet"
               icon="💬"
               disabled={!hasMatching}
             />

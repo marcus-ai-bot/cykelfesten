@@ -90,7 +90,15 @@ export default function MessagesEditorPage() {
       <div className="max-w-3xl mx-auto">
         <div className="mb-6">
           <Link href={`/organizer/event/${eventId}/settings`} className="text-indigo-600 hover:text-indigo-700 text-sm mb-2 inline-block">← Inställningar</Link>
-          <h1 className="text-2xl font-bold text-gray-900">💬 Kuvert-meddelanden</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">💬 Kuvertmeddelanden</h1>
+            <span className="group relative">
+              <span className="w-5 h-5 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-500 text-xs cursor-help">?</span>
+              <span className="absolute left-6 top-0 w-72 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
+                Kuvertmeddelanden är de texter som gästerna ser inuti sina digitala kuvert under kvällen. Här anpassar du tonen — roliga, mystiska eller personliga hälsningar beroende på situation.
+              </span>
+            </span>
+          </div>
           <p className="text-gray-600">{eventName}</p>
         </div>
 
