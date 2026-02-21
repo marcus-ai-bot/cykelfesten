@@ -25,6 +25,26 @@ function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng:
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
+/**
+ * Get cycling distance via Mapbox Directions (same as map view + check-distances)
+ */
+async function getCyclingMeters(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+): Promise<number> {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return haversineMeters(from, to);
+  try {
+    const url = `https://api.mapbox.com/directions/v5/mapbox/cycling/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&access_token=${token}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    return data.routes?.[0]?.distance ?? haversineMeters(from, to);
+  } catch {
+    return haversineMeters(from, to);
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -88,22 +108,42 @@ export async function POST(
       coupleAssignments.get(a.couple_id)!.push(a.host_couple_id);
     });
 
+    // Build all legs, then batch with concurrency limit
+    const legs: Array<{ coupleId: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }> = [];
+    
     for (const [coupleId, hostIds] of coupleAssignments) {
       const home = coupleCoords.get(coupleId);
       if (!home) continue;
 
-      let totalDist = 0;
       let prev = home;
-
       for (const hostId of hostIds) {
         const hostCoords = coupleCoords.get(hostId);
         if (!hostCoords) continue;
-        totalDist += haversineMeters(prev, hostCoords);
+        legs.push({ coupleId, from: prev, to: hostCoords });
         prev = hostCoords;
       }
       // Return home
-      totalDist += haversineMeters(prev, home);
-      coupleRouteDistances.set(coupleId, totalDist);
+      legs.push({ coupleId, from: prev, to: home });
+    }
+
+    // Fetch cycling distances with concurrency limit
+    const BATCH = 10;
+    const legDistances: Array<{ coupleId: string; meters: number }> = [];
+    
+    for (let i = 0; i < legs.length; i += BATCH) {
+      const chunk = legs.slice(i, i + BATCH);
+      const results = await Promise.all(
+        chunk.map(async (leg) => ({
+          coupleId: leg.coupleId,
+          meters: await getCyclingMeters(leg.from, leg.to),
+        }))
+      );
+      legDistances.push(...results);
+    }
+
+    // Sum per couple
+    for (const { coupleId, meters } of legDistances) {
+      coupleRouteDistances.set(coupleId, (coupleRouteDistances.get(coupleId) || 0) + meters);
     }
   }
 
