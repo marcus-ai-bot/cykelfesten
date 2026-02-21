@@ -59,14 +59,16 @@ export default async function OrganizerEventPage({ params }: Props) {
     .limit(1)
     .maybeSingle();
   
-  const eventDate = new Date(event.event_date).toLocaleDateString('sv-SE', {
+  const eventDateObj = new Date(event.event_date);
+  const today = new Date();
+  const eventDate = eventDateObj.toLocaleDateString('sv-SE', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
-  
-  const isPast = new Date(event.event_date) < new Date();
+  const isPast = eventDateObj < today && eventDateObj.toDateString() !== today.toDateString();
+  const isToday = eventDateObj.toDateString() === today.toDateString();
   const isFounder = access.role === 'founder';
   
   return (
@@ -136,6 +138,7 @@ export default async function OrganizerEventPage({ params }: Props) {
           eventSlug={event.slug}
           couplesCount={couplesCount || 0}
           isPast={isPast}
+          isToday={isToday}
           hasMatching={!!matchPlan}
           organizers={organizers || []}
           isFounder={isFounder}

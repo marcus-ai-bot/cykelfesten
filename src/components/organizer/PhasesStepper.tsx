@@ -27,6 +27,7 @@ interface Props {
   eventSlug: string;
   couplesCount: number;
   isPast: boolean;
+  isToday: boolean;
   hasMatching: boolean;
   organizers: OrganizerRow[];
   isFounder: boolean;
@@ -48,16 +49,18 @@ export function PhasesStepper({
   eventSlug,
   couplesCount,
   isPast,
+  isToday,
   hasMatching,
   organizers,
   isFounder,
   currentOrganizerId,
 }: Props) {
   const defaultPhaseIndex = useMemo(() => {
-    if (isPast) return 2;
-    if (hasMatching) return 1;
-    return 0;
-  }, [hasMatching, isPast]);
+    if (isPast) return 2;            // Dagen efter
+    if (isToday) return 1;           // Event är idag → Middag (live management)
+    if (hasMatching) return 1;       // Matchning klar → Middag
+    return 0;                        // Inbjudan
+  }, [hasMatching, isPast, isToday]);
 
   const [activePhaseIndex, setActivePhaseIndex] = useState(defaultPhaseIndex);
 
