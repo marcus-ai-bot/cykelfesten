@@ -99,7 +99,7 @@ export function PhasesStepper({
               target="_blank"
             />
           </div>
-          {eventStatus === 'open' && <InviteLinkSection eventId={eventId} />}
+          <InviteLinkSection eventId={eventId} />
           <div id="invite-team" className="scroll-mt-24">
             <InviteTeamSection
               eventId={eventId}
