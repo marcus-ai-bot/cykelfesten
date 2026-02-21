@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
@@ -61,13 +61,21 @@ export function PhasesStepper({
   currentOrganizerId,
 }: Props) {
   const defaultPhaseIndex = useMemo(() => {
-    if (isPast) return 2;            // Dagen efter
-    if (isToday) return 1;           // Event är idag → Middag (live management)
-    if (hasMatching) return 1;       // Matchning klar → Middag
-    return 0;                        // Inbjudan
-  }, [hasMatching, isPast, isToday]);
+    if (isPast || eventStatus === 'completed') return 2;
+    if (isToday || eventStatus === 'active') return 1;
+    if (eventStatus === 'matched' || eventStatus === 'locked') return 1;
+    return 0; // draft, open → Inbjudan
+  }, [eventStatus, isPast, isToday]);
 
   const [activePhaseIndex, setActivePhaseIndex] = useState(defaultPhaseIndex);
+  const [manuallySelected, setManuallySelected] = useState(false);
+
+  // Follow status-driven default unless user manually picked a tab
+  useEffect(() => {
+    if (!manuallySelected) {
+      setActivePhaseIndex(defaultPhaseIndex);
+    }
+  }, [defaultPhaseIndex, manuallySelected]);
 
   const phases: Phase[] = [
     {
@@ -241,7 +249,7 @@ export function PhasesStepper({
               <button
                 key={phase.key}
                 type="button"
-                onClick={() => setActivePhaseIndex(index)}
+                onClick={() => { setActivePhaseIndex(index); setManuallySelected(true); }}
                 className={`
                   flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-2
                   text-sm font-semibold whitespace-nowrap
