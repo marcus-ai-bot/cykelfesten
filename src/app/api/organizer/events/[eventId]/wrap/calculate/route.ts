@@ -81,9 +81,9 @@ export async function POST(
 
   const matchPlanId = event?.active_match_plan_id;
 
-  const { data: assignments } = matchPlanId
+  const { data: envelopes } = matchPlanId
     ? await supabase
-        .from('assignments')
+        .from('envelopes')
         .select('couple_id, host_couple_id, course')
         .eq('match_plan_id', matchPlanId)
     : { data: [] };
@@ -104,9 +104,9 @@ export async function POST(
   const courseOrder = ['starter', 'main', 'dessert'] as const;
   const coupleHosts = new Map<string, Map<string, string>>(); // coupleId → course → hostCoupleId
   
-  assignments?.forEach((a: any) => {
-    if (!coupleHosts.has(a.couple_id)) coupleHosts.set(a.couple_id, new Map());
-    coupleHosts.get(a.couple_id)!.set(a.course, a.host_couple_id);
+  envelopes?.forEach((e: any) => {
+    if (!coupleHosts.has(e.couple_id)) coupleHosts.set(e.couple_id, new Map());
+    coupleHosts.get(e.couple_id)!.set(e.course, e.host_couple_id);
   });
 
   // Calculate ACTUAL route per couple
