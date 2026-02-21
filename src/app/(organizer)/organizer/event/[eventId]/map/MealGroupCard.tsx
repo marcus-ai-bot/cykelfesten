@@ -226,11 +226,14 @@ function MobileDrawer(props: Props) {
 /* ── Expanded content (shared) ────────────────────── */
 
 function ExpandedContent({ group, cfg, onPrev, onNext, groupIndex, groupTotal }: Props) {
+  const [direction, setDirection] = useState<'from' | 'to'>('from');
   const allAllergies = [
     ...group.hostAllergies,
     ...group.guests.flatMap((g) => g.allergies),
   ].filter(Boolean);
   const uniqueAllergies = [...new Set(allAllergies)];
+
+  const hasNextData = group.guests.some((g) => g.toAddress);
 
   return (
     <>
@@ -246,48 +249,119 @@ function ExpandedContent({ group, cfg, onPrev, onNext, groupIndex, groupTotal }:
             <span className="text-xs px-2 py-0.5 rounded-full font-medium text-white mt-1 inline-block" style={{ backgroundColor: cfg.color }}>
               Värd · {group.totalPeople} pers
             </span>
+            {direction === 'to' && group.hostNextHostName && (
+              <div className="text-xs text-gray-500 mt-1">
+                → Ska till {group.hostNextHostName}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Direction toggle */}
+      {hasNextData && (
+        <div className="px-5 py-2 border-t border-gray-50">
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setDirection('from')}
+              className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${
+                direction === 'from'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              ← Kommer från
+            </button>
+            <button
+              onClick={() => setDirection('to')}
+              className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${
+                direction === 'to'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Ska till →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Guests */}
       <div className="px-5 py-3">
-        <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-          🚲 {group.guests[0]?.fromHostName ? 'Cyklar hit från föregående rätt' : 'Cyklar hit hemifrån'} ({group.guests.length} par)
-        </div>
-        <div className="space-y-2.5">
-          {group.guests.map((guest) => {
-            const routeDist = guest.routeDistanceKm;
-            const birdDist = haversineKm(guest.fromCoords, group.hostCoords);
-            const dist = routeDist ?? birdDist;
-            const isRoute = routeDist != null;
-            const minutes = Math.round(dist / 0.25);
-            const fromLabel = guest.fromHostName
-              ? `Från ${guest.fromHostName.split(' & ')[0]}`
-              : 'Hemifrån';
-            return (
-              <div key={guest.id} className="flex items-start gap-3 py-1">
-                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs mt-0.5 shrink-0">
-                  🚲
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-800">{guest.name}</div>
-                  <div className="text-xs text-gray-400 truncate">
-                    {fromLabel} · {guest.fromAddress}
+        {direction === 'from' ? (
+          <>
+            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
+              🚲 {group.guests[0]?.fromHostName ? 'Cyklar hit från föregående rätt' : 'Cyklar hit hemifrån'} ({group.guests.length} par)
+            </div>
+            <div className="space-y-2.5">
+              {group.guests.map((guest) => {
+                const routeDist = guest.routeDistanceKm;
+                const birdDist = haversineKm(guest.fromCoords, group.hostCoords);
+                const dist = routeDist ?? birdDist;
+                const isRoute = routeDist != null;
+                const minutes = Math.round(dist / 0.25);
+                const fromLabel = guest.fromHostName
+                  ? `Från ${guest.fromHostName.split(' & ')[0]}`
+                  : 'Hemifrån';
+                return (
+                  <div key={guest.id} className="flex items-start gap-3 py-1">
+                    <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs mt-0.5 shrink-0">
+                      🚲
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800">{guest.name}</div>
+                      <div className="text-xs text-gray-400 truncate">
+                        {fromLabel} · {guest.fromAddress}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`}
+                        {isRoute ? ' cykelväg' : ' fågelvägen'}
+                        {' · ~'}{Math.max(1, minutes)} min
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`}
-                    {isRoute ? ' cykelväg' : ' fågelvägen'}
-                    {' · ~'}{Math.max(1, minutes)} min
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
+              🚲 Cyklar härifrån till nästa rätt ({group.guests.length} par)
+            </div>
+            <div className="space-y-2.5">
+              {group.guests.map((guest) => {
+                const dist = guest.toDistanceKm;
+                const toLabel = guest.toHostName
+                  ? `Till ${guest.toHostName.split(' & ')[0]}`
+                  : 'Hem';
+                const minutes = dist ? Math.round(dist / 0.25) : null;
+                return (
+                  <div key={guest.id} className="flex items-start gap-3 py-1">
+                    <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs mt-0.5 shrink-0">
+                      🚲
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800">{guest.name}</div>
+                      <div className="text-xs text-gray-400 truncate">
+                        {toLabel}{guest.toAddress ? ` · ${guest.toAddress}` : ''}
+                      </div>
+                      {dist != null && (
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`} fågelvägen
+                          {minutes ? ` · ~${Math.max(1, minutes)} min` : ''}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-          {group.guests.length === 0 && (
-            <div className="text-xs text-gray-400 italic py-2">Inga gäster tilldelade</div>
-          )}
-        </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {group.guests.length === 0 && (
+          <div className="text-xs text-gray-400 italic py-2">Inga gäster tilldelade</div>
+        )}
       </div>
 
       {/* Allergies */}

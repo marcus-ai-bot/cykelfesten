@@ -54,7 +54,15 @@ export interface MealGroup {
     fromAddress: string;
     fromHostName: string | null;
     fromCoords: [number, number];
+    /** Where they're going NEXT (next host, or home for dessert) */
+    toAddress: string | null;
+    toHostName: string | null;
+    toCoords: [number, number] | null;
+    toDistanceKm: number | null;
   }>;
+  /** Where the host goes next */
+  hostNextAddress: string | null;
+  hostNextHostName: string | null;
   totalPeople: number;
 }
 

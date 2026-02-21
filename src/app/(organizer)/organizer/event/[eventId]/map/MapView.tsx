@@ -64,6 +64,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
     const byId = new Map(data.couples.map((c) => [c.id, c]));
 
+    // First pass: build groups per course
     COURSES.forEach((course) => {
       const groupMap = new Map<string, MealGroup>();
       (data.routes![course] || []).forEach((seg) => {
@@ -79,6 +80,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
             hostCoords: [host.lng, host.lat],
             hostAllergies: host.allergies || [],
             guests: [],
+            hostNextAddress: null,
+            hostNextHostName: null,
             totalPeople: host.personCount,
           });
         }
@@ -94,12 +97,70 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
             fromAddress: seg.fromAddress || guest.address,
             fromHostName: seg.fromHostName || null,
             fromCoords: seg.from,
+            toAddress: null,
+            toHostName: null,
+            toCoords: null,
+            toDistanceKm: null,
           });
           g.totalPeople += guest.personCount;
         }
       });
       result[course] = Array.from(groupMap.values()).sort((a, b) => a.hostName.localeCompare(b.hostName));
     });
+
+    // Second pass: fill in "next destination" from the following course's routes
+    const courseOrder: Course[] = ['starter', 'main', 'dessert'];
+    for (let ci = 0; ci < courseOrder.length; ci++) {
+      const course = courseOrder[ci];
+      const nextCourse = courseOrder[ci + 1]; // undefined for dessert
+      
+      // Build lookup: coupleId → { hostName, hostAddress, hostCoords } in next course
+      const nextHostFor = new Map<string, { name: string; address: string; coords: [number, number] }>();
+      if (nextCourse && data.routes![nextCourse]) {
+        for (const seg of data.routes![nextCourse]) {
+          const host = byId.get(seg.hostId);
+          if (host) {
+            // Guest goes to this host next
+            nextHostFor.set(seg.guestId, { name: host.name, address: host.address, coords: [host.lng, host.lat] });
+            // Host also goes somewhere — check if host is a guest in next course
+          }
+        }
+        // Also find where each host goes in the next course (they're a guest somewhere)
+        for (const seg of data.routes![nextCourse]) {
+          const host = byId.get(seg.hostId);
+          if (host) nextHostFor.set(seg.guestId, { name: host.name, address: host.address, coords: [host.lng, host.lat] });
+        }
+      }
+
+      for (const group of result[course]) {
+        // Where does the host go next?
+        const hostNext = nextHostFor.get(group.hostId);
+        if (hostNext) {
+          group.hostNextAddress = hostNext.address;
+          group.hostNextHostName = hostNext.name;
+        } else if (!nextCourse) {
+          group.hostNextAddress = group.hostAddress; // Dessert → home
+          group.hostNextHostName = null;
+        }
+
+        // Where does each guest go next?
+        for (const guest of group.guests) {
+          const guestNext = nextHostFor.get(guest.id);
+          if (guestNext) {
+            guest.toAddress = guestNext.address;
+            guest.toHostName = guestNext.name;
+            guest.toCoords = guestNext.coords;
+            guest.toDistanceKm = haversineKm(group.hostCoords, guestNext.coords);
+          } else if (!nextCourse) {
+            // After dessert → home
+            guest.toAddress = guest.address;
+            guest.toHostName = null;
+            guest.toCoords = guest.coords;
+            guest.toDistanceKm = haversineKm(group.hostCoords, guest.coords);
+          }
+        }
+      }
+    }
     return result;
   }, [data]);
 
