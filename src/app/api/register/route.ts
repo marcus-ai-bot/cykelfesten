@@ -155,8 +155,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Geocode address if provided (non-blocking, best-effort)
+    // Use event location as proximity hint for better accuracy
     if (clean.address && !clean.coordinates) {
-      const coords = await geocodeAddress(clean.address as string);
+      // Get event location for proximity bias
+      const { data: eventDetails } = await supabase
+        .from('events')
+        .select('location, coordinates')
+        .eq('id', event.id)
+        .single();
+
+      const proximity = eventDetails?.coordinates
+        ? (() => {
+            const m = String(eventDetails.coordinates).match(/\(([^,]+),([^)]+)\)/);
+            return m ? { lng: parseFloat(m[1]), lat: parseFloat(m[2]) } : undefined;
+          })()
+        : undefined;
+
+      const city = eventDetails?.location || undefined;
+
+      const coords = await geocodeAddress(clean.address as string, { proximity, city });
       if (coords) {
         clean.coordinates = coords;
       }

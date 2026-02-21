@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { geocodeAddress } from '@/lib/geo';
+import { geocodeAddressDetailed } from '@/lib/geocode';
 import { requireEventAccess } from '@/lib/auth';
 
 // POST /api/admin/geocode-addresses
 // Geocodes all addresses for couples in an event that don't have coordinates yet
+// Uses Mapbox v6 (rooftop accuracy) with Nominatim fallback
+
+function parsePoint(point: unknown): { lat: number; lng: number } | undefined {
+  if (!point) return undefined;
+  if (typeof point === 'string') {
+    const m = point.match(/\(([^,]+),([^)]+)\)/);
+    if (m) return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+  }
+  return undefined;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +31,16 @@ export async function POST(request: NextRequest) {
     }
     
     const supabase = await createClient();
+
+    // Get event location for proximity bias
+    const { data: event } = await supabase
+      .from('events')
+      .select('location, coordinates')
+      .eq('id', eventId)
+      .single();
+
+    const proximity = event?.coordinates ? parsePoint(event.coordinates) : undefined;
+    const city = event?.location || undefined;
     
     // Get couples without coordinates
     const { data: couples, error: fetchError } = await supabase
@@ -44,38 +64,45 @@ export async function POST(request: NextRequest) {
     const results = {
       geocoded: 0,
       failed: 0,
-      errors: [] as string[],
+      details: [] as Array<{ id: string; address: string; source?: string; accuracy?: string; error?: string }>,
     };
     
     for (const couple of couples) {
       if (!couple.address) continue;
       
       try {
-        const coords = await geocodeAddress(couple.address);
+        const result = await geocodeAddressDetailed(couple.address, { proximity, city });
         
-        if (coords) {
+        if (result) {
+          const pointValue = `(${result.coordinates.lng},${result.coordinates.lat})`;
           const { error: updateError } = await supabase
             .from('couples')
-            .update({ coordinates: coords })
+            .update({ coordinates: pointValue })
             .eq('id', couple.id);
           
           if (updateError) {
             results.failed++;
-            results.errors.push(`${couple.id}: Update failed`);
+            results.details.push({ id: couple.id, address: couple.address, error: 'DB update failed' });
           } else {
             results.geocoded++;
+            results.details.push({
+              id: couple.id,
+              address: couple.address,
+              source: result.source,
+              accuracy: result.accuracy,
+            });
           }
         } else {
           results.failed++;
-          results.errors.push(`${couple.id}: Could not geocode "${couple.address}"`);
+          results.details.push({ id: couple.id, address: couple.address, error: 'No geocode match' });
         }
         
-        // Rate limit: Nominatim allows 1 req/sec
-        await new Promise(resolve => setTimeout(resolve, 1100));
+        // Small delay between requests (Mapbox is fast, but be nice)
+        await new Promise(resolve => setTimeout(resolve, 200));
         
-      } catch (err: any) {
+      } catch (err: unknown) {
         results.failed++;
-        results.errors.push(`${couple.id}: ${err.message}`);
+        results.details.push({ id: couple.id, address: couple.address, error: String(err) });
       }
     }
     
