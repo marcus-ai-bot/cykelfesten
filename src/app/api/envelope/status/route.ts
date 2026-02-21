@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   
   if (!eventId || !access) {
     return NextResponse.json(
-      { error: 'Missing eventId or valid token/coupleId' },
+      { error: 'Kunde inte identifiera deltagare. Välj ditt par först.' },
       { status: 400 }
     );
   }

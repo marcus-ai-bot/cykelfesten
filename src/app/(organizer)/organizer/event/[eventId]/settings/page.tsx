@@ -44,7 +44,7 @@ export default function SettingsPage() {
     finally { setSaving(false); }
   }
 
-  async function delayEnvelopes(minutes: number) {
+  async function adjustEnvelopeTimes(minutes: number) {
     setDelaying(true);
     try {
       const res = await fetch('/api/admin/delay-envelopes', {
@@ -52,8 +52,12 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event_id: eventId, delay_minutes: minutes }),
       });
-      if (res.ok) { await loadData(); setSuccess(`Kuverttider skjutna fram ${minutes} min`); setTimeout(() => setSuccess(''), 3000); }
-      else setError('Kunde inte skjuta upp tider');
+      if (res.ok) {
+        await loadData();
+        const direction = minutes > 0 ? 'fram' : 'tillbaka';
+        setSuccess(`Kuverttider skjutna ${direction} ${Math.abs(minutes)} min`);
+        setTimeout(() => setSuccess(''), 3000);
+      } else setError('Kunde inte justera tider');
     } finally { setDelaying(false); }
   }
 
@@ -105,25 +109,12 @@ export default function SettingsPage() {
         {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4">{error}</div>}
         {success && <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-4">{success}</div>}
 
-        {/* Event Info */}
+        {/* Event Info — no Status dropdown (use header dropdown instead) */}
         <Section title="📋 Eventinfo">
           <EditableField label="Namn" value={event.name} onSave={(v) => saveSettings({ name: v })} saving={saving} />
           <EditableField label="Datum" value={event.event_date} type="date" onSave={(v) => saveSettings({ event_date: v })} saving={saving} />
           <EditableField label="Stad" value={event.city || ''} onSave={(v) => saveSettings({ city: v })} saving={saving} />
           <EditableField label="Beskrivning" value={event.description || ''} onSave={(v) => saveSettings({ description: v })} saving={saving} />
-          <div className="flex justify-between py-2 border-b border-gray-50">
-            <span className="text-sm text-gray-500">Status</span>
-            <select
-              value={event.status}
-              onChange={(e) => saveSettings({ status: e.target.value })}
-              className="text-sm border border-gray-300 rounded-lg px-2 py-1"
-            >
-              <option value="draft">📝 Utkast</option>
-              <option value="open">🟢 Öppen</option>
-              <option value="closed">🔴 Stängd</option>
-              <option value="completed">✅ Avslutad</option>
-            </select>
-          </div>
         </Section>
 
         {/* Times */}
@@ -136,19 +127,27 @@ export default function SettingsPage() {
         {/* Envelope Controls */}
         <Section title="✉️ Kuvertkontroller">
           <div className="mb-4">
-            <p className="text-sm text-gray-500 mb-2">Skjut upp återstående kuvert</p>
-            <div className="flex gap-2">
-              {[15, 30, 45].map(min => (
-                <button key={min} onClick={() => delayEnvelopes(min)} disabled={delaying}
+            <p className="text-sm text-gray-500 mb-2">Justera kuverttider</p>
+            <div className="flex gap-2 flex-wrap">
+              {[-15, -5].map(min => (
+                <button key={min} onClick={() => adjustEnvelopeTimes(min)} disabled={delaying}
+                  className="px-4 py-2 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 disabled:opacity-50 text-sm">
+                  {min} min
+                </button>
+              ))}
+              {[5, 15, 30].map(min => (
+                <button key={min} onClick={() => adjustEnvelopeTimes(min)} disabled={delaying}
                   className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 text-sm">
                   +{min} min
                 </button>
               ))}
             </div>
           </div>
-          {event.time_offset_minutes > 0 && (
-            <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg mb-4">
-              ⚠️ Tiderna är skjutna fram <strong>{event.time_offset_minutes} minuter</strong>
+          {event.time_offset_minutes !== 0 && event.time_offset_minutes != null && (
+            <div className={`text-sm p-3 rounded-lg mb-4 ${event.time_offset_minutes > 0 ? 'text-amber-600 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>
+              {event.time_offset_minutes > 0
+                ? `⏩ Tiderna är skjutna fram ${event.time_offset_minutes} minuter`
+                : `⏪ Tiderna är skjutna tillbaka ${Math.abs(event.time_offset_minutes)} minuter`}
             </div>
           )}
           <div>
@@ -182,7 +181,7 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        {/* Advanced */}
+        {/* Advanced Links */}
         <Section title="🔧 Avancerat">
           <div className="grid grid-cols-2 gap-3">
             {[
