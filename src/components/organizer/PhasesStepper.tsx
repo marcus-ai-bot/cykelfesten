@@ -109,25 +109,33 @@ export function PhasesStepper({
           </div>
           <InviteLinkSection eventId={eventId} />
           {/* Matchning */}
-          {couplesCount > 0 && (
-            <div className="border-t pt-6">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Matchning</h3>
-              <div className="grid md:grid-cols-2 gap-6">
-                <ActionCard
-                  href={`/organizer/event/${eventId}/matching`}
-                  title="Kör matchning"
-                  description="Koppla ihop gäster med värdar"
-                  icon="🔀"
-                />
-                <ActionCard
-                  href={`/organizer/event/${eventId}/map`}
-                  title="Karta"
-                  description="Se matchade grupper på kartan"
-                  icon="🗺️"
-                />
+          {couplesCount > 0 && (() => {
+            const isLocked = eventStatus === 'locked' || eventStatus === 'active' || eventStatus === 'completed';
+            return (
+              <div className={"border-t pt-6"}>
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Matchning</h3>
+                  {isLocked && <span className="text-sm" title="Matchningen är låst">🔒</span>}
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className={isLocked ? 'pointer-events-none opacity-50' : ''}>
+                    <ActionCard
+                      href={`/organizer/event/${eventId}/matching`}
+                      title={isLocked ? 'Matchning låst' : 'Kör matchning'}
+                      description={isLocked ? 'Lås upp eventet för att ändra' : 'Koppla ihop gäster med värdar'}
+                      icon={isLocked ? '🔒' : '🔀'}
+                    />
+                  </div>
+                  <ActionCard
+                    href={`/organizer/event/${eventId}/map`}
+                    title="Karta"
+                    description="Se matchade grupper på kartan"
+                    icon="🗺️"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           <div id="invite-team" className="scroll-mt-24 border-t pt-6">
             <InviteTeamSection
               eventId={eventId}
