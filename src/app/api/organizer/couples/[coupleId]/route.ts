@@ -15,7 +15,7 @@ export async function GET(
 
   const { data: couple, error } = await supabase
     .from('couples')
-    .select('*, events(id, name, slug)')
+    .select('*, events(id, name, slug, coordinates)')
     .eq('id', coupleId)
     .single();
 
@@ -86,6 +86,14 @@ export async function PATCH(
   const filtered: Record<string, any> = {};
   for (const key of allowed) {
     if (key in updates) filtered[key] = updates[key];
+  }
+
+  // Handle coordinates from address autocomplete
+  if (updates.address_coordinates && typeof updates.address_coordinates === 'object') {
+    const { lat, lng } = updates.address_coordinates;
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      filtered.coordinates = `(${lng},${lat})`;
+    }
   }
 
   const { data, error } = await supabase

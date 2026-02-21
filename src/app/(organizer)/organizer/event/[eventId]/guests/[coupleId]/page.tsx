@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 interface Couple {
   id: string;
@@ -31,7 +32,7 @@ interface Couple {
   confirmed: boolean;
   cancelled: boolean;
   created_at: string;
-  events: { id: string; name: string; slug: string };
+  events: { id: string; name: string; slug: string; coordinates?: string };
 }
 
 export default function CoupleDetailPage() {
@@ -47,6 +48,7 @@ export default function CoupleDetailPage() {
   const [form, setForm] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [eventCenter, setEventCenter] = useState<{ lat: number; lng: number } | undefined>();
 
   useEffect(() => {
     fetch(`/api/organizer/couples/${coupleId}`)
@@ -62,6 +64,14 @@ export default function CoupleDetailPage() {
       .catch(() => setError('Kunde inte ladda data'))
       .finally(() => setLoading(false));
   }, [coupleId]);
+
+  // Extract event center from couple data for proximity bias
+  useEffect(() => {
+    if (couple?.events?.coordinates) {
+      const m = String(couple.events.coordinates).match(/\(([^,]+),([^)]+)\)/);
+      if (m) setEventCenter({ lng: parseFloat(m[1]), lat: parseFloat(m[2]) });
+    }
+  }, [couple]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -224,7 +234,26 @@ export default function CoupleDetailPage() {
 
         {/* Shared Info */}
         <Section title="🏠 Gemensamt">
-          <Field label="Adress" field="address" form={form} setForm={setForm} editing={editing} />
+          {editing ? (
+            <div className="flex items-center gap-3 py-1.5">
+              <label className="text-sm text-gray-500 w-32 shrink-0">Adress</label>
+              <AddressAutocomplete
+                value={form.address || ''}
+                onChange={(address, coordinates) => {
+                  setForm((prev: any) => ({
+                    ...prev,
+                    address,
+                    ...(coordinates ? { address_coordinates: coordinates } : {}),
+                  }));
+                }}
+                proximity={eventCenter}
+                placeholder="Storgatan 12, Piteå"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          ) : (
+            <Field label="Adress" field="address" form={form} setForm={setForm} editing={editing} />
+          )}
           <Field label="Lägenhet/port" field="address_unit" form={form} setForm={setForm} editing={editing} />
           <Field label="Adressnotering" field="address_notes" form={form} setForm={setForm} editing={editing} />
           <SelectField label="Rättsönskemål" field="course_preference" form={form} setForm={setForm} editing={editing}
