@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
 import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
+import { AfterPartyPreview } from '@/components/organizer/AfterPartyPreview';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
 
 /* ── Types ─────────────────────────────────────────────── */
@@ -194,6 +195,7 @@ export function PhasesStepper({
               ⏳ Dessa funktioner blir tillgängliga efter eventet. Du kan förbereda Awards och Wrap-inställningar redan nu.
             </div>
           )}
+          {hasMatching && <AfterPartyPreview eventId={eventId} slug={eventSlug} />}
           <div className="grid md:grid-cols-2 gap-6">
             <ActionCard
               href={`/organizer/event/${eventId}/wrap`}
