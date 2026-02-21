@@ -7,49 +7,58 @@ interface Props {
   slug: string;
 }
 
+interface CoupleOption {
+  id: string;
+  invited_name: string;
+  partner_name: string | null;
+}
+
 export function GuestPreviewSection({ eventId, slug }: Props) {
   const [previewTime, setPreviewTime] = useState('');
   const [selectedCoupleId, setSelectedCoupleId] = useState('');
   const [eventDate, setEventDate] = useState('');
-  
-  // Fetch event date on mount
+  const [couples, setCouples] = useState<CoupleOption[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    fetch(`/api/organizer/events/${eventId}/settings`)
-      .then(r => r.json())
-      .then(d => { if (d.event?.event_date) setEventDate(d.event.event_date); })
-      .catch(() => {});
+    // Fetch event date + couples for preview
+    Promise.all([
+      fetch(`/api/organizer/events/${eventId}/settings`).then(r => r.json()),
+      fetch(`/api/organizer/events/${eventId}/couples?limit=200`).then(r => r.json()).catch(() => ({ couples: [] })),
+    ]).then(([settingsData, couplesData]) => {
+      if (settingsData.event?.event_date) setEventDate(settingsData.event.event_date);
+      if (couplesData.couples) {
+        setCouples(couplesData.couples);
+        if (couplesData.couples.length > 0) setSelectedCoupleId(couplesData.couples[0].id);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [eventId]);
-  
-  // Build full ISO datetime from event date + selected time
+
   const simulateTimeParam = previewTime && eventDate
     ? `&simulateTime=${eventDate}T${previewTime}:00`
     : '';
-  
-  // Base URL for preview
+
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  
-  // Preview URLs with time override
-  const previewUrls = {
-    envelope: `${baseUrl}/e/${slug}/live?coupleId=${selectedCoupleId || 'demo'}${simulateTimeParam}`,
-    wrap: `${baseUrl}/e/${slug}/wrap?coupleId=${selectedCoupleId || 'demo'}&person=invited${simulateTimeParam}`,
-    memories: `${baseUrl}/e/${slug}/memories`,
-  };
-  
+  const previewUrl = selectedCoupleId
+    ? `${baseUrl}/e/${slug}/live?coupleId=${selectedCoupleId}${simulateTimeParam}`
+    : '#';
+
   return (
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-2">
         👁️ Gästperspektiv
       </h2>
       <p className="text-gray-600 text-sm mb-4">
-        Se hur gästerna upplever appen vid olika tidpunkter.
+        Se hur gästerna upplever kuvertet vid olika tidpunkter.
       </p>
-      
+
       {/* Time Picker */}
       <div className="bg-white rounded-xl p-4 mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Simulera tidpunkt
         </label>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-3 items-center flex-wrap">
           <input
             type="time"
             value={previewTime}
@@ -57,57 +66,58 @@ export function GuestPreviewSection({ eventId, slug }: Props) {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
           />
           <span className="text-gray-500 text-sm">
-            {previewTime 
-              ? `Visar hur det ser ut kl ${previewTime}` 
+            {previewTime
+              ? `Visar kl ${previewTime} på eventdagen`
               : 'Aktuell tid används'}
           </span>
           {previewTime && (
-            <button
-              onClick={() => setPreviewTime('')}
-              className="text-gray-400 hover:text-gray-600 text-sm"
-            >
+            <button onClick={() => setPreviewTime('')} className="text-gray-400 hover:text-gray-600 text-sm">
               ✕ Återställ
             </button>
           )}
         </div>
       </div>
-      
-      {/* Preview Links */}
-      <div className="grid md:grid-cols-3 gap-3">
-        <PreviewLink
-          href={previewUrls.envelope}
-          title="📬 Kuvert"
-          description="Animerat kuvert med ledtrådar"
-        />
-        <PreviewLink
-          href={previewUrls.wrap}
-          title="🎁 Wrap"
-          description="Personlig sammanfattning"
-        />
-        <PreviewLink
-          href={previewUrls.memories}
-          title="📸 Memories"
-          description="Gemensam statistik"
-        />
+
+      {/* Couple Picker */}
+      <div className="bg-white rounded-xl p-4 mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Visa som
+        </label>
+        {loading ? (
+          <p className="text-gray-400 text-sm">Laddar par...</p>
+        ) : (
+          <select
+            value={selectedCoupleId}
+            onChange={(e) => setSelectedCoupleId(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+          >
+            {couples.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.invited_name}{c.partner_name ? ` & ${c.partner_name}` : ''}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
-      
-      <p className="text-xs text-gray-500 mt-4">
-        💡 Tips: Ändra tiden för att se hur kuvertet ser ut vid olika tidpunkter under kvällen.
+
+      {/* Single preview button */}
+      <a
+        href={previewUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`block w-full text-center py-3 rounded-xl font-medium transition-colors ${
+          selectedCoupleId
+            ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+        }`}
+        onClick={(e) => { if (!selectedCoupleId) e.preventDefault(); }}
+      >
+        📬 Förhandsgranska kuvert
+      </a>
+
+      <p className="text-xs text-gray-500 mt-3">
+        💡 Ändra tiden för att se hur kuvertet avslöjas steg för steg under kvällen.
       </p>
     </div>
-  );
-}
-
-function PreviewLink({ href, title, description }: { href: string; title: string; description: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block bg-white rounded-lg p-4 hover:shadow-md transition-shadow border border-transparent hover:border-indigo-200"
-    >
-      <div className="font-medium text-gray-900 mb-1">{title}</div>
-      <div className="text-sm text-gray-500">{description}</div>
-    </a>
   );
 }
