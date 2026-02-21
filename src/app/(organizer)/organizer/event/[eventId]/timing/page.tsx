@@ -91,7 +91,15 @@ export default function TimingEditorPage() {
           distance_adjustment_enabled: timing.distance_adjustment_enabled,
         }),
       });
-      if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+      if (res.ok) {
+        // Recalc envelope times with new timing
+        await fetch('/api/admin/recalc-envelope-times', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: eventId }),
+        });
+        setSaved(true); setTimeout(() => setSaved(false), 3000);
+      }
       else { const d = await res.json(); setError(d.error || 'Kunde inte spara'); }
     } catch { setError('Nätverksfel'); }
     finally { setSaving(false); }

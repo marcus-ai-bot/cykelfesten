@@ -38,7 +38,22 @@ export default function SettingsPage() {
         body: JSON.stringify(updates),
       });
       const data = await res.json();
-      if (res.ok) { setEvent(data.event); setSuccess('Sparat!'); setTimeout(() => setSuccess(''), 2000); }
+      if (res.ok) {
+        setEvent(data.event);
+        // Recalc envelope times if course times changed
+        const timeFields = ['starter_time', 'main_time', 'dessert_time'];
+        if (timeFields.some(f => f in updates)) {
+          await fetch('/api/admin/recalc-envelope-times', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_id: eventId }),
+          });
+          setSuccess('Tider + kuvert uppdaterade!');
+        } else {
+          setSuccess('Sparat!');
+        }
+        setTimeout(() => setSuccess(''), 2000);
+      }
       else setError(data.error || 'Kunde inte spara');
     } catch { setError('Nätverksfel'); }
     finally { setSaving(false); }
