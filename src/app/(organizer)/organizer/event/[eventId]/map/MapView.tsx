@@ -387,12 +387,12 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
         map.on('mouseleave', `host-${course}-fill`, () => { map.getCanvas().style.cursor = ''; });
       });
 
-      // Background click — deselect, but only if nothing else was clicked
+      // Background click — deselect and zoom back to all pins
       map.on('click', () => {
         // Delay to let layer handlers set clickHandled
         setTimeout(() => {
           if (!clickHandled) {
-            setSelectedGroupHostId(null);
+            clearSelection();
           }
           clickHandled = false;
         }, 0);
