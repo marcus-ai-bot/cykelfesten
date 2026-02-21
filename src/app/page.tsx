@@ -134,7 +134,7 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-4 pb-12" data-reveal>
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {[
             {
               icon: '✉️',
@@ -150,6 +150,11 @@ export default function Home() {
               icon: '🥗',
               title: 'Allergier & preferenser',
               text: 'Vi håller koll på specialkost, antal gäster och önskade rätter.',
+            },
+            {
+              icon: '🎁',
+              title: 'Wraps & efterfest',
+              text: 'Avsluta med en gemensam final — vi håller koll på tiderna.',
             },
           ].map((feature) => (
             <div key={feature.title} className="bg-white rounded-2xl shadow-lg p-6 border border-amber-100">
