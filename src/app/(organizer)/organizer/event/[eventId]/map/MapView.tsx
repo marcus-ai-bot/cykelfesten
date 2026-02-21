@@ -14,6 +14,24 @@ import { COURSES, DEFAULT_COURSE_CONFIG } from './types';
 const DEFAULT_CENTER: [number, number] = [18.06, 59.33];
 const DEFAULT_TIMES: Record<Course, string> = { starter: '17:30', main: '19:00', dessert: '20:30' };
 
+/** Haversine between two [lng,lat] */
+function haversineKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = (b[1] - a[1]) * Math.PI / 180;
+  const dLon = (b[0] - a[0]) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[1] * Math.PI / 180) * Math.cos(b[1] * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+/** Total length of route geometry in km */
+function routeDistanceKm(geometry: [number, number][] | null): number | null {
+  if (!geometry || geometry.length < 2) return null;
+  let total = 0;
+  for (let i = 1; i < geometry.length; i++) total += haversineKm(geometry[i - 1], geometry[i]);
+  return total;
+}
+
 /* ── Component ─────────────────────────────────────── */
 
 export function MapView({ eventId, eventName }: { eventId: string; eventName: string }) {
@@ -72,6 +90,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
             address: guest.address,
             coords: [guest.lng, guest.lat],
             allergies: guest.allergies || [],
+            routeDistanceKm: routeDistanceKm(seg.geometry),
           });
           g.totalPeople += guest.personCount;
         }

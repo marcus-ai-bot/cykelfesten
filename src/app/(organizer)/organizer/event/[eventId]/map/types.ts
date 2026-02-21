@@ -47,6 +47,7 @@ export interface MealGroup {
     address: string;
     coords: [number, number];
     allergies: string[];
+    routeDistanceKm: number | null; // actual cycling distance from route geometry
   }>;
   totalPeople: number;
 }

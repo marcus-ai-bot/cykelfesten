@@ -2,6 +2,7 @@
 
 import type { MealGroup, CourseConfig } from './types';
 
+/** Haversine between two [lng,lat] points */
 function haversineKm(a: [number, number], b: [number, number]): number {
   const R = 6371;
   const dLat = (b[1] - a[1]) * Math.PI / 180;
@@ -9,6 +10,15 @@ function haversineKm(a: [number, number], b: [number, number]): number {
   const x = Math.sin(dLat / 2) ** 2 +
     Math.cos(a[1] * Math.PI / 180) * Math.cos(b[1] * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+/** Total length of a polyline [[lng,lat], ...] in km */
+function polylineKm(coords: [number, number][]): number {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += haversineKm(coords[i - 1], coords[i]);
+  }
+  return total;
 }
 
 interface Props {
@@ -121,8 +131,12 @@ function CardContent({
         </div>
         <div className="space-y-2.5">
           {group.guests.map((guest) => {
-            const dist = haversineKm(guest.coords, group.hostCoords);
-            const minutes = Math.round(dist / 0.25);
+            // Prefer actual cycling route distance, fallback to bird-flight
+            const routeDist = guest.routeDistanceKm;
+            const birdDist = haversineKm(guest.coords, group.hostCoords);
+            const dist = routeDist ?? birdDist;
+            const isRoute = routeDist != null;
+            const minutes = Math.round(dist / 0.25); // ~15 km/h
             return (
               <div key={guest.id} className="flex items-start gap-3 py-1">
                 <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs mt-0.5 shrink-0">
@@ -132,7 +146,9 @@ function CardContent({
                   <div className="text-sm font-medium text-gray-800">{guest.name}</div>
                   <div className="text-xs text-gray-400 truncate">{guest.address}</div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`} · ~{Math.max(1, minutes)} min
+                    {dist < 0.1 ? '< 100 m' : `${dist.toFixed(1)} km`}
+                    {isRoute ? ' cykelväg' : ' fågelvägen'}
+                    {' · ~'}{Math.max(1, minutes)} min
                   </div>
                 </div>
               </div>
