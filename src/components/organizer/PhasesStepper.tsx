@@ -86,12 +86,16 @@ export function PhasesStepper({
         : hasMatching ? 'complete'
         : couplesCount === 0 ? 'not_started'
         : 'in_progress',
-      content: (
-        <div className="space-y-6">
-          {(eventStatus === 'matched' || eventStatus === 'locked') && (
-            <InviteLockedBanner eventId={eventId} />
-          )}
-          <div className="grid md:grid-cols-2 gap-6">
+      content: (() => {
+        const isEventLocked = eventStatus === 'locked' || eventStatus === 'active' || eventStatus === 'completed';
+        const isInviteOpen = eventStatus === 'draft' || eventStatus === 'open';
+        return (
+          <div className="space-y-6">
+            {(eventStatus === 'matched' || eventStatus === 'locked') && (
+              <InviteLockedBanner eventId={eventId} />
+            )}
+
+            {/* Gästlista — alltid synlig */}
             <ActionCard
               href={`/organizer/event/${eventId}/guests`}
               title="Gästlista"
@@ -99,31 +103,33 @@ export function PhasesStepper({
               icon="👥"
               count={couplesCount}
             />
-            <ActionCard
-              href={`/e/${eventSlug}`}
-              title="Förhandsgranska"
-              description="Se gästsidan som dina gäster"
-              icon="👁️"
-              target="_blank"
-            />
-          </div>
-          <InviteLinkSection eventId={eventId} />
-          {/* Matchning */}
-          {couplesCount > 0 && (() => {
-            const isLocked = eventStatus === 'locked' || eventStatus === 'active' || eventStatus === 'completed';
-            return (
-              <div className={"border-t pt-6"}>
-                <div className="flex items-center gap-2 mb-4">
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Matchning</h3>
-                  {isLocked && <span className="text-sm" title="Matchningen är låst">🔒</span>}
-                </div>
+
+            {/* Inbjudningslänk + Förhandsgranska — bara vid öppen/utkast */}
+            {isInviteOpen && (
+              <>
                 <div className="grid md:grid-cols-2 gap-6">
-                  <div className={isLocked ? 'pointer-events-none opacity-50' : ''}>
+                  <ActionCard
+                    href={`/e/${eventSlug}`}
+                    title="Förhandsgranska"
+                    description="Se gästsidan som dina gäster"
+                    icon="👁️"
+                    target="_blank"
+                  />
+                </div>
+                <InviteLinkSection eventId={eventId} />
+              </>
+            )}
+
+            {/* Matchning */}
+            {couplesCount > 0 && (
+              <div className="border-t pt-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className={isEventLocked ? 'pointer-events-none opacity-50' : ''}>
                     <ActionCard
                       href={`/organizer/event/${eventId}/matching`}
-                      title={isLocked ? 'Matchning låst' : 'Kör matchning'}
-                      description={isLocked ? 'Lås upp eventet för att ändra' : 'Koppla ihop gäster med värdar'}
-                      icon={isLocked ? '🔒' : '🔀'}
+                      title={isEventLocked ? '🔒 Matchning låst' : 'Kör matchning'}
+                      description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
+                      icon="🔀"
                     />
                   </div>
                   <ActionCard
@@ -134,18 +140,20 @@ export function PhasesStepper({
                   />
                 </div>
               </div>
-            );
-          })()}
-          <div id="invite-team" className="scroll-mt-24 border-t pt-6">
-            <InviteTeamSection
-              eventId={eventId}
-              organizers={organizers}
-              isFounder={isFounder}
-              currentOrganizerId={currentOrganizerId}
-            />
+            )}
+
+            {/* Arrangörsteam */}
+            <div id="invite-team" className="scroll-mt-24 border-t pt-6">
+              <InviteTeamSection
+                eventId={eventId}
+                organizers={organizers}
+                isFounder={isFounder}
+                currentOrganizerId={currentOrganizerId}
+              />
+            </div>
           </div>
-        </div>
-      ),
+        );
+      })(),
     },
     {
       key: 'dinner',
