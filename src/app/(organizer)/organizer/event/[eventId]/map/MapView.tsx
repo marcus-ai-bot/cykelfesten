@@ -264,6 +264,12 @@ export function MapView({ eventId, eventName }: Props) {
     setSelectedGroup(null);
   }, []);
 
+  // Refs for stable map click handlers
+  const selectCoupleRef = useRef(selectCouple);
+  selectCoupleRef.current = selectCouple;
+  const clearSelectionRef = useRef(clearSelection);
+  clearSelectionRef.current = clearSelection;
+
   /* ── Fetch data ─────────────────────────────────── */
 
   useEffect(() => {
@@ -400,7 +406,7 @@ export function MapView({ eventId, eventName }: Props) {
         const f = e.features?.[0];
         if (!f) return;
         const { id } = f.properties as any;
-        selectCouple(id);
+        selectCoupleRef.current(id);
       });
 
       // Click: host markers
@@ -409,7 +415,7 @@ export function MapView({ eventId, eventName }: Props) {
           const f = e.features?.[0];
           if (!f) return;
           const { hostId } = f.properties as any;
-          selectCouple(hostId);
+          selectCoupleRef.current(hostId);
         });
         map.on('mouseenter', `host-${course}-fill`, () => { map.getCanvas().style.cursor = 'pointer'; });
         map.on('mouseleave', `host-${course}-fill`, () => { map.getCanvas().style.cursor = ''; });
@@ -419,7 +425,7 @@ export function MapView({ eventId, eventName }: Props) {
       map.on('click', (e) => {
         const layers = ['unclustered-point', 'clusters', ...COURSES.flatMap(c => [`route-${c}-line`, `host-${c}-fill`])];
         const features = map.queryRenderedFeatures(e.point, { layers });
-        if (features.length === 0) clearSelection();
+        if (features.length === 0) clearSelectionRef.current();
       });
 
       ['clusters', 'unclustered-point'].forEach((layer) => {
@@ -434,31 +440,7 @@ export function MapView({ eventId, eventName }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep selectCouple/clearSelection in sync with map click handlers
-  const selectCoupleRef = useRef(selectCouple);
-  const clearSelectionRef = useRef(clearSelection);
-  selectCoupleRef.current = selectCouple;
-  clearSelectionRef.current = clearSelection;
-
-  // Re-bind click handlers when callbacks change
-  useEffect(() => {
-    if (!mapRef.current || !mapLoaded) return;
-    const map = mapRef.current;
-
-    const handlePinClick = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.MapboxGeoJSONFeature[] }) => {
-      const f = e.features?.[0];
-      if (f) selectCoupleRef.current(f.properties?.id);
-    };
-
-    const handleBgClick = (e: mapboxgl.MapMouseEvent) => {
-      const layers = ['unclustered-point', 'clusters', ...COURSES.flatMap(c => [`route-${c}-line`, `host-${c}-fill`])];
-      const features = map.queryRenderedFeatures(e.point, { layers });
-      if (features.length === 0) clearSelectionRef.current();
-    };
-
-    // These override the ones set in init — mapbox stacks handlers
-    // We handle it via refs instead
-  }, [mapLoaded, selectCouple, clearSelection]);
+  // Refs updated above, click handlers use refs via init useEffect
 
   /* ── Sync data → map ────────────────────────────── */
 
