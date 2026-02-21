@@ -98,12 +98,6 @@ export function PhasesStepper({
               icon="👁️"
               target="_blank"
             />
-            <ActionCard
-              href={`/organizer/event/${eventId}/map`}
-              title="Karta"
-              description="Se var gästerna bor"
-              icon="🗺️"
-            />
           </div>
           {eventStatus === 'open' && <InviteLinkSection eventId={eventId} />}
           <div id="invite-team" className="scroll-mt-24">
@@ -114,6 +108,26 @@ export function PhasesStepper({
               currentOrganizerId={currentOrganizerId}
             />
           </div>
+          {/* Matchning — sista steget i inbjudanfasen */}
+          {couplesCount > 0 && (
+            <div className="border-t pt-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Matchning</h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                <ActionCard
+                  href={`/organizer/event/${eventId}/matching`}
+                  title="Kör matchning"
+                  description="Koppla ihop gäster med värdar"
+                  icon="🔀"
+                />
+                <ActionCard
+                  href={`/organizer/event/${eventId}/map`}
+                  title="Karta"
+                  description="Se matchade grupper på kartan"
+                  icon="🗺️"
+                />
+              </div>
+            </div>
+          )}
         </div>
       ),
     },
@@ -126,26 +140,28 @@ export function PhasesStepper({
         <div className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             <ActionCard
-              href={`/organizer/event/${eventId}/matching`}
-              title="Matchning"
-              description="Koppla ihop gäster med värdar"
-              icon="🔀"
-              disabled={!couplesCount}
-            />
-            <ActionCard
               href={`/organizer/event/${eventId}/timing`}
               title="Kuvert & Timing"
               description="Justera tider och kuvert"
               icon="⏰"
+              disabled={!hasMatching}
             />
             <ActionCard
               href={`/organizer/event/${eventId}/messages`}
               title="Meddelanden"
               description="Skicka info till gästerna"
               icon="💬"
+              disabled={!hasMatching}
+            />
+            <ActionCard
+              href={`/organizer/event/${eventId}/map`}
+              title="Live-karta"
+              description="Följ middagen i realtid"
+              icon="🗺️"
+              disabled={!hasMatching}
             />
           </div>
-          <GuestPreviewSection eventId={eventId} slug={eventSlug} />
+          {hasMatching && <GuestPreviewSection eventId={eventId} slug={eventSlug} />}
         </div>
       ),
     },
