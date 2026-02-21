@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
     const allDistances = new Map<string, number>();
     for (const e of envelopes ?? []) {
       const current = allDistances.get(e.couple_id) || 0;
-      allDistances.set(e.couple_id, current + (e.cycling_minutes ?? 0));
+      allDistances.set(e.couple_id, current + Math.min(e.cycling_minutes ?? 0, 60));
     }
     const maxDistance = Math.max(...Array.from(allDistances.values()));
     const isLongestRider = allDistances.get(coupleId) === maxDistance;
