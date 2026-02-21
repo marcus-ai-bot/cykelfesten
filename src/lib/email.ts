@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM = 'Cykelfesten <noreply@cykelfesten.se>';
-// Fallback if no custom domain
+// NOTE: The cykelfesten.se domain must be verified in Resend (DNS setup) before this sender will work.
 const FROM_FALLBACK = 'Cykelfesten <onboarding@resend.dev>';
 
 export async function sendEmail(opts: {
@@ -12,7 +12,7 @@ export async function sendEmail(opts: {
   html: string;
   replyTo?: string;
 }) {
-  const from = process.env.RESEND_FROM || FROM_FALLBACK;
+  const from = process.env.RESEND_FROM || FROM || FROM_FALLBACK;
   return resend.emails.send({
     from,
     to: opts.to,

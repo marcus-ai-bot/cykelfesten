@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { Course } from '@/types/database';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
@@ -28,6 +29,7 @@ function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [hasPartner, setHasPartner] = useState(true);
   const [accessGranted, setAccessGranted] = useState<boolean | null>(null); // null = checking
+  const [eventStatus, setEventStatus] = useState<string | null>(null);
   
   const [form, setForm] = useState({
     invited_name: '',
@@ -80,8 +82,11 @@ function RegisterForm() {
       return;
     }
     fetch(`/api/register/verify-invite?slug=${slug}&invite=${inviteToken}`)
-      .then(r => r.json())
-      .then(data => setAccessGranted(data.valid === true))
+      .then(async (r) => {
+        const data = await r.json();
+        setEventStatus(data.status ?? null);
+        setAccessGranted(r.ok && data.valid === true);
+      })
       .catch(() => setAccessGranted(false));
   }, [slug, inviteToken]);
 
@@ -178,6 +183,31 @@ function RegisterForm() {
     return (
       <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 flex items-center justify-center">
         <div className="text-amber-700 text-lg">Verifierar inbjudan...</div>
+      </main>
+    );
+  }
+
+  // Registration closed or not yet open
+  if (eventStatus && eventStatus !== 'open') {
+    const statusMessage = eventStatus === 'draft'
+      ? 'Anmälan har inte öppnat ännu'
+      : 'Anmälan är stängd';
+
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="text-5xl mb-4">⏳</div>
+          <h1 className="text-2xl font-bold text-amber-900 mb-2">{statusMessage}</h1>
+          <p className="text-amber-700 mb-6">
+            Välkommen tillbaka till eventsidan för mer information.
+          </p>
+          <Link
+            href={`/e/${slug}`}
+            className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-white font-semibold shadow hover:bg-amber-600 transition-colors"
+          >
+            Tillbaka till eventet
+          </Link>
+        </div>
       </main>
     );
   }
