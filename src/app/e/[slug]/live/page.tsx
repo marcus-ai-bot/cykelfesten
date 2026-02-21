@@ -182,6 +182,7 @@ export default function LiveEnvelopePage() {
             eventId={eventId}
             coupleId={coupleId}
             pollInterval={30000}
+            simulateTime={searchParams.get('simulateTime') || undefined}
           />
         )}
         

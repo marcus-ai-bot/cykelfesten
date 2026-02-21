@@ -55,7 +55,10 @@ export async function GET(request: NextRequest) {
   const { coupleId } = access;
   
   const supabase = await createClient();
-  const now = new Date();
+  
+  // Allow organizers to simulate time for preview
+  const simulateTime = searchParams.get('simulateTime');
+  const now = simulateTime ? new Date(simulateTime) : new Date();
   
   try {
     // 1. Verify couple exists and belongs to event

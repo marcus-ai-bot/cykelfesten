@@ -17,12 +17,14 @@ interface EnvelopeContainerProps {
   eventId: string;
   coupleId: string;
   pollInterval?: number; // ms, default 30s
+  simulateTime?: string; // ISO datetime for organizer preview
 }
 
 export function EnvelopeContainer({ 
   eventId, 
   coupleId, 
-  pollInterval = 30000 
+  pollInterval = 30000,
+  simulateTime,
 }: EnvelopeContainerProps) {
   const [data, setData] = useState<EnvelopeStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +35,9 @@ export function EnvelopeContainer({
   const fetchStatus = useCallback(async () => {
     if (!eventId || !coupleId) return;
     try {
+      const timeParam = simulateTime ? `&simulateTime=${encodeURIComponent(simulateTime)}` : '';
       const res = await fetch(
-        `/api/envelope/status?eventId=${eventId}&coupleId=${coupleId}`
+        `/api/envelope/status?eventId=${eventId}&coupleId=${coupleId}${timeParam}`
       );
       
       if (!res.ok) {

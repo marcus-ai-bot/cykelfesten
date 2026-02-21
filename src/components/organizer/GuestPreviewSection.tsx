@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Props {
   eventId: string;
@@ -10,14 +10,28 @@ interface Props {
 export function GuestPreviewSection({ eventId, slug }: Props) {
   const [previewTime, setPreviewTime] = useState('');
   const [selectedCoupleId, setSelectedCoupleId] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  
+  // Fetch event date on mount
+  useEffect(() => {
+    fetch(`/api/organizer/events/${eventId}/settings`)
+      .then(r => r.json())
+      .then(d => { if (d.event?.event_date) setEventDate(d.event.event_date); })
+      .catch(() => {});
+  }, [eventId]);
+  
+  // Build full ISO datetime from event date + selected time
+  const simulateTimeParam = previewTime && eventDate
+    ? `&simulateTime=${eventDate}T${previewTime}:00`
+    : '';
   
   // Base URL for preview
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   
   // Preview URLs with time override
   const previewUrls = {
-    envelope: `${baseUrl}/e/${slug}/live?coupleId=${selectedCoupleId || 'demo'}${previewTime ? `&previewTime=${previewTime}` : ''}`,
-    wrap: `${baseUrl}/e/${slug}/wrap?coupleId=${selectedCoupleId || 'demo'}&person=invited${previewTime ? `&previewTime=${previewTime}` : ''}`,
+    envelope: `${baseUrl}/e/${slug}/live?coupleId=${selectedCoupleId || 'demo'}${simulateTimeParam}`,
+    wrap: `${baseUrl}/e/${slug}/wrap?coupleId=${selectedCoupleId || 'demo'}&person=invited${simulateTimeParam}`,
     memories: `${baseUrl}/e/${slug}/memories`,
   };
   
