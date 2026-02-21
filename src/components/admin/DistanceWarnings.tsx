@@ -109,8 +109,7 @@ export function DistanceWarnings({ eventId }: Props) {
           
           {result.distance_source === 'haversine' && (
             <div className="text-sm text-yellow-700 bg-yellow-50 p-3 rounded-lg">
-              💡 För cykelvägsavstånd: lägg till <code className="bg-yellow-100 px-1 rounded">OPENROUTESERVICE_API_KEY</code> i .env.local 
-              <a href="https://openrouteservice.org/dev/#/signup" target="_blank" className="text-amber-600 underline ml-1">(gratis)</a>
+              💡 Avstånden beräknas som fågelvägen. Cykelvägsavstånd aktiveras snart!
             </div>
           )}
           
