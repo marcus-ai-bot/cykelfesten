@@ -54,15 +54,16 @@ export function EnvelopeContainer({
     } finally {
       setLoading(false);
     }
-  }, [eventId, coupleId]);
+  }, [eventId, coupleId, simulateTime]);
 
   // Initial fetch
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
 
-  // Polling
+  // Polling (skip if pollInterval is 0 or falsy)
   useEffect(() => {
+    if (!pollInterval) return;
     const interval = setInterval(fetchStatus, pollInterval);
     return () => clearInterval(interval);
   }, [fetchStatus, pollInterval]);
@@ -79,8 +80,9 @@ export function EnvelopeContainer({
     return Math.min(...nextReveals);
   };
 
-  // Adaptive poll: faster when close to reveal
+  // Adaptive poll: faster when close to reveal (skip in preview/no-poll mode)
   useEffect(() => {
+    if (!pollInterval) return;
     const nextSeconds = getNextEventSeconds();
     if (nextSeconds === null) return;
     
@@ -89,7 +91,7 @@ export function EnvelopeContainer({
       const fastPoll = setInterval(fetchStatus, 10000); // 10s
       return () => clearInterval(fastPoll);
     }
-  }, [data, fetchStatus]);
+  }, [data, fetchStatus, pollInterval]);
 
   if (loading) {
     return (
