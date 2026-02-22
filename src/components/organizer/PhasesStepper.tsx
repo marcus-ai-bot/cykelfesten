@@ -129,19 +129,13 @@ export function PhasesStepper({
             {/* Inbjudningslänk — överst */}
             {isInviteOpen && <InviteLinkSection eventId={eventId} />}
 
-            {/* Quick actions — compact buttons */}
+            {/* Quick action — map */}
             {couplesCount > 0 && (
               <div className="flex flex-wrap gap-2">
                 <QuickAction
                   href={`/organizer/event/${eventId}/map`}
                   icon="🗺️"
                   label="Karta"
-                />
-                <QuickAction
-                  href={`/organizer/event/${eventId}/matching`}
-                  icon="🔀"
-                  label={isEventLocked ? 'Matchning 🔒' : 'Matchning'}
-                  disabled={isEventLocked}
                 />
               </div>
             )}
@@ -157,9 +151,18 @@ export function PhasesStepper({
       name: 'Middag',
       icon: '🍽️',
       status: !hasMatching ? 'not_started' : isPast ? 'complete' : 'in_progress',
-      content: (
+      content: (() => {
+        const isEventLocked = eventStatus === 'locked' || eventStatus === 'active' || eventStatus === 'completed';
+        return (
         <div className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
+            <ActionCard
+              href={`/organizer/event/${eventId}/matching`}
+              title={isEventLocked ? 'Matchning 🔒' : 'Matchning'}
+              description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
+              icon="🔀"
+              disabled={isEventLocked}
+            />
             <ActionCard
               href={`/organizer/event/${eventId}/timing`}
               title="Kuvert & Timing"
@@ -184,7 +187,8 @@ export function PhasesStepper({
           </div>
           {hasMatching && <GuestPreviewSection eventId={eventId} slug={eventSlug} />}
         </div>
-      ),
+        );
+      })(),
     },
     {
       key: 'after',
