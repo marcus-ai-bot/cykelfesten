@@ -509,7 +509,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.addSource('afterparty-point', { type: 'geojson', data: empty });
       map.addLayer({
         id: 'afterparty-marker', type: 'symbol', source: 'afterparty-point',
-        layout: { 'text-field': '🎉', 'text-size': 28, 'text-allow-overlap': true, visibility: 'none' },
+        layout: { 'text-field': '🎉', 'text-size': 28, 'text-allow-overlap': true, visibility: 'visible' },
       });
 
       // --- Click handlers (use closure-safe pattern) ---
@@ -633,7 +633,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
     // Afterparty layers
     const apVis = activeCourse === 'afterparty' ? 'visible' : 'none';
     if (map.getLayer('afterparty-routes-line')) map.setLayoutProperty('afterparty-routes-line', 'visibility', apVis);
-    if (map.getLayer('afterparty-marker')) map.setLayoutProperty('afterparty-marker', 'visibility', apVis);
+    // Afterparty pin always visible (routes only when tab active)
+    if (map.getLayer('afterparty-marker')) map.setLayoutProperty('afterparty-marker', 'visibility', 'visible');
 
     if (selectedGroup && activeCourse) {
       // === STATE: Group selected ===
