@@ -32,12 +32,10 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
         </div>
       );
 
-    case 'dinner': {
-      const isActive = eventStatus === 'active';
-      // Workflow: Matchning → Kuvert & Timing → Livekontroll + Live-karta
+    case 'matching': {
+      // Pre-event preparation: Matchning → Karta → Kuvert & Timing → Efterfesten
       const matchingStatus: StepStatus = hasMatching ? 'done' : isEventLocked ? 'locked' : 'active';
-      const envelopeStatus: StepStatus = isActive ? 'done' : hasMatching ? 'active' : 'todo';
-      const liveStatus: StepStatus = isActive ? 'active' : 'todo';
+      const envelopeStatus: StepStatus = hasMatching ? 'active' : 'todo';
 
       return (
         <div className="space-y-4">
@@ -50,31 +48,58 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
             step={matchingStatus}
           />
           <ActionCard
+            href={`/organizer/event/${eventId}/map`}
+            title="Karta"
+            description="Registrerade adresser och matchade rutter"
+            icon="🗺️"
+            disabled={!hasMatching}
+          />
+          <ActionCard
             href={`/organizer/event/${eventId}/envelopes`}
             title="Kuvert & Timing"
-            description="Tider, reveals, texter och utskick"
+            description="Reveal-tider, texter och utskick"
             icon="✉️"
             disabled={!hasMatching}
             step={envelopeStatus}
           />
-          {hasMatching && (
-            <LiveControlPanel eventId={eventId} isActive={isActive} />
+          <AfterPartyEditCard eventId={eventId} />
+        </div>
+      );
+    }
+
+    case 'live': {
+      const isActive = eventStatus === 'active';
+
+      return (
+        <div className="space-y-4">
+          {!isActive && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+              ⏳ Live-vyn aktiveras automatiskt när eventet sätts till &quot;Pågår&quot;.
+            </div>
           )}
-          {hasMatching && (
-            <GuestMessagePanel eventId={eventId} isActive={isActive} />
-          )}
+          <LiveControlPanel eventId={eventId} isActive={isActive} />
+          <GuestMessagePanel eventId={eventId} isActive={isActive} />
           <ActionCard
             href={`/organizer/event/${eventId}/map`}
             title="Live-karta"
             description="Följ middagen i realtid"
             icon="🗺️"
             disabled={!hasMatching}
-            step={liveStatus}
           />
+          <div className="rounded-xl shadow-sm border border-gray-100 bg-white p-5">
+            <div className="flex items-center gap-4">
+              <span className="text-3xl">🔍</span>
+              <div>
+                <h3 className="font-semibold text-gray-900">Hjälp en gäst</h3>
+                <p className="text-sm text-gray-500">Välj en person och se deras kuvert som de ser det just nu</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">🚧 Kommer snart</p>
+          </div>
           <ActionCard
             href={`/organizer/event/${eventId}/afterparty`}
             title="Efterfesten"
-            description="Samlingsplats efter middagen"
+            description="Så här ser gästerna efterfest-infon"
             icon="🎉"
           />
         </div>
@@ -109,6 +134,137 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
     default:
       return null;
   }
+}
+
+/* ── AfterPartyEditCard ────────────────────────────────── */
+
+function AfterPartyEditCard({ eventId }: { eventId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [form, setForm] = useState({
+    afterparty_title: '',
+    afterparty_location: '',
+    afterparty_time: '',
+    afterparty_description: '',
+  });
+
+  const loadData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/settings`);
+      const data = await res.json();
+      if (res.ok && data.event) {
+        setForm({
+          afterparty_title: data.event.afterparty_title || '',
+          afterparty_location: data.event.afterparty_location || '',
+          afterparty_time: data.event.afterparty_time?.slice(0, 5) || '',
+          afterparty_description: data.event.afterparty_description || '',
+        });
+      }
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [eventId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  async function handleSave() {
+    setSaving(true); setMessage('');
+    try {
+      const body: Record<string, string> = { ...form };
+      if (body.afterparty_time) body.afterparty_time = body.afterparty_time + ':00';
+      const res = await fetch(`/api/organizer/events/${eventId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setMessage('✅ Sparat');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('❌ Kunde inte spara');
+      }
+    } catch { setMessage('❌ Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="rounded-xl shadow-sm border border-gray-100 bg-white overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-3 p-5 w-full text-left hover:bg-gray-50/50 transition"
+      >
+        <span className="text-2xl">🎉</span>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900">Efterfesten</h3>
+          <p className="text-xs text-gray-500">Rubrik, plats, tid och beskrivning</p>
+        </div>
+        <span className={`text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
+          {loading ? (
+            <p className="text-sm text-gray-400">Laddar...</p>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs text-gray-500 font-medium">Rubrik</label>
+                <input
+                  type="text"
+                  value={form.afterparty_title}
+                  onChange={e => setForm(f => ({ ...f, afterparty_title: e.target.value }))}
+                  placeholder="t.ex. Efterfest på Lalloos!"
+                  className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium">Plats</label>
+                <input
+                  type="text"
+                  value={form.afterparty_location}
+                  onChange={e => setForm(f => ({ ...f, afterparty_location: e.target.value }))}
+                  placeholder="t.ex. Garvargatan 2, Piteå"
+                  className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium">Tid</label>
+                <input
+                  type="time"
+                  value={form.afterparty_time}
+                  onChange={e => setForm(f => ({ ...f, afterparty_time: e.target.value }))}
+                  className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium">Beskrivning</label>
+                <textarea
+                  value={form.afterparty_description}
+                  onChange={e => setForm(f => ({ ...f, afterparty_description: e.target.value }))}
+                  placeholder="Berätta vad som händer på efterfesten..."
+                  rows={3}
+                  className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                />
+              </div>
+              {message && (
+                <div className={`text-sm p-2 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {message}
+                </div>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold rounded-xl transition text-sm"
+              >
+                {saving ? 'Sparar...' : '💾 Spara efterfest-info'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ── LiveControlPanel ──────────────────────────────────── */
