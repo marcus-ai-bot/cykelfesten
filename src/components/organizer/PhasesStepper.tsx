@@ -68,7 +68,7 @@ export function PhasesStepper({
     return 0; // draft, open → Inbjudan
   }, [eventStatus, isPast, isToday]);
 
-  const phaseKeys = ['invite', 'dinner', 'after', 'settings'];
+  const phaseKeys = ['invite', 'dinner', 'after'];
   const [activePhaseIndex, setActivePhaseIndexRaw] = useState(() => {
     if (typeof window !== 'undefined') {
       const urlPhase = new URLSearchParams(window.location.search).get('phase');
@@ -243,22 +243,6 @@ export function PhasesStepper({
         </div>
       ),
     },
-    {
-      key: 'settings',
-      name: 'Inställningar',
-      icon: '⚙️',
-      status: 'not_started',
-      content: (
-        <div className="grid md:grid-cols-2 gap-6">
-          <ActionCard
-            href={`/organizer/event/${eventId}/settings`}
-            title="Eventinställningar"
-            description="Datum, tider och kuvert"
-            icon="⚙️"
-          />
-        </div>
-      ),
-    },
   ];
 
   const activePhase = phases[activePhaseIndex];
@@ -296,10 +280,7 @@ export function PhasesStepper({
                 `}
               >
                 <span className="text-base leading-none">{phase.icon}</span>
-                {phase.key === 'settings'
-                  ? <span className="hidden sm:inline">{phase.name}</span>
-                  : <span className="text-xs sm:text-sm">{phase.name}</span>
-                }
+                <span className="text-xs sm:text-sm">{phase.name}</span>
                 {phase.status === 'locked' && (
                   <span className="text-xs">🔒</span>
                 )}
@@ -319,7 +300,7 @@ export function PhasesStepper({
           <h2 className="text-lg font-semibold text-gray-900">
             {activePhase.name}
           </h2>
-          {activePhase.key !== 'settings' && activePhase.status !== 'not_started' && (
+          {activePhase.status !== 'not_started' && (
             <StatusDot status={activePhase.status} size="md" />
           )}
         </div>
