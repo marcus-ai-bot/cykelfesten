@@ -60,6 +60,9 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
           {hasMatching && (
             <LiveControlPanel eventId={eventId} isActive={isActive} />
           )}
+          {hasMatching && (
+            <GuestMessagePanel eventId={eventId} isActive={isActive} />
+          )}
           <ActionCard
             href={`/organizer/event/${eventId}/map`}
             title="Live-karta"
@@ -105,6 +108,7 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
 /* ── LiveControlPanel ──────────────────────────────────── */
 
 function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: boolean }) {
+  const [expanded, setExpanded] = useState(false);
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -123,7 +127,9 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  async function saveTime(field: string, value: string) {
+  async function saveTime(field: string, value: string, oldTime: string) {
+    const label = field === 'starter_time' ? 'Förrätt' : field === 'main_time' ? 'Huvudrätt' : 'Dessert';
+    const newTime = value.slice(0, 5);
     setSaving(true); setMessage('');
     try {
       const res = await fetch(`/api/organizer/events/${eventId}/settings`, {
@@ -134,13 +140,15 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
       if (res.ok) {
         const data = await res.json();
         setEvent(data.event);
-        await fetch('/api/admin/recalc-envelope-times', {
+        const recalcRes = await fetch('/api/admin/recalc-envelope-times', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ event_id: eventId }),
         });
-        setMessage('✅ Tid uppdaterad');
-        setTimeout(() => setMessage(''), 2000);
+        const recalcData = await recalcRes.json().catch(() => ({}));
+        const count = recalcData.updated || '';
+        setMessage(`✅ ${label}: ${oldTime} → ${newTime}${count ? ` (${count} kuverttider uppdaterade)` : ''}`);
+        setTimeout(() => setMessage(''), 4000);
       }
     } catch { setMessage('❌ Nätverksfel'); }
     finally { setSaving(false); }
@@ -192,85 +200,211 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
     <div className={`rounded-xl shadow-sm border overflow-hidden ${
       isActive ? 'bg-white border-2 border-orange-200' : 'bg-gray-50 border-gray-100 opacity-60'
     }`}>
-      {/* Header */}
-      <div className="flex items-center gap-3 p-5 pb-0">
+      {/* Collapsed header — always visible */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-3 p-5 w-full text-left hover:bg-gray-50/50 transition"
+      >
         <span className="text-2xl">🎛️</span>
-        <div>
-          <h3 className="font-semibold text-gray-900">Livekontroll</h3>
-          <p className="text-xs text-gray-500">Justera tider och aktivera kuvert under middagen</p>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900">Live control</h3>
+          <p className="text-xs text-gray-500">Kuverttider • Aktivera manuellt</p>
         </div>
-      </div>
+        <span className={`text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
+          ▼
+        </span>
+      </button>
 
       {message && (
-        <div className={`text-sm px-5 py-2 mx-5 mt-3 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+        <div className={`text-sm px-5 py-2 mx-5 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
           {message}
         </div>
       )}
 
-      <div className="p-5 space-y-5">
-        {/* Course times with ±5 min */}
-        {!loading && event && (
-          <div>
-            <p className="text-xs text-gray-500 font-medium mb-2">🕐 Tider</p>
-            <div className="space-y-1">
-              {courses.map(({ label, icon, field, value }) => {
-                const time = value?.slice(0, 5) || '00:00';
-                const adjust = (min: number) => {
-                  const [h, m] = time.split(':').map(Number);
-                  const total = h * 60 + m + min;
-                  const newH = Math.floor(((total % 1440) + 1440) % 1440 / 60);
-                  const newM = ((total % 60) + 60) % 60;
-                  saveTime(field, `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:00`);
-                };
-                return (
-                  <div key={field} className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-700">{icon} {label}</span>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => adjust(-5)} disabled={saving}
-                        className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">−</button>
-                      <span className="text-sm font-mono font-semibold text-gray-900 min-w-[3rem] text-center">{time}</span>
-                      <button onClick={() => adjust(5)} disabled={saving}
-                        className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">+</button>
+      {/* Expandable content */}
+      {expanded && (
+        <div className="px-5 pb-5 space-y-5 border-t border-gray-100 pt-4">
+          {/* Course times with ±5 min */}
+          {!loading && event && (
+            <div>
+              <p className="text-xs text-gray-500 font-medium mb-2">🕐 Tider</p>
+              <div className="space-y-1">
+                {courses.map(({ label, icon, field, value }) => {
+                  const time = value?.slice(0, 5) || '00:00';
+                  const adjust = (min: number) => {
+                    const [h, m] = time.split(':').map(Number);
+                    const total = h * 60 + m + min;
+                    const newH = Math.floor(((total % 1440) + 1440) % 1440 / 60);
+                    const newM = ((total % 60) + 60) % 60;
+                    const newTime = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:00`;
+                    saveTime(field, newTime, time);
+                  };
+                  return (
+                    <div key={field} className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-700">{icon} {label}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => adjust(-5)} disabled={saving}
+                          className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">−</button>
+                        <span className="text-sm font-mono font-semibold text-gray-900 min-w-[3rem] text-center">{time}</span>
+                        <button onClick={() => adjust(5)} disabled={saving}
+                          className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">+</button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Shift all envelope times */}
+          <div>
+            <p className="text-xs text-gray-500 font-medium mb-2">⏱️ Justera alla kuverttider</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {[-15, -5, 5, 15, 30].map(min => (
+                <button key={min} onClick={() => adjustAllTimes(min)} disabled={delaying || !isActive}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-40 ${
+                    min < 0 ? 'bg-orange-50 text-orange-700 hover:bg-orange-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  }`}>
+                  {min > 0 ? '+' : ''}{min} min
+                </button>
+              ))}
             </div>
           </div>
-        )}
 
-        {/* Shift all envelope times */}
-        <div>
-          <p className="text-xs text-gray-500 font-medium mb-2">⏱️ Justera alla kuverttider</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {[-15, -5, 5, 15, 30].map(min => (
-              <button key={min} onClick={() => adjustAllTimes(min)} disabled={delaying || !isActive}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-40 ${
-                  min < 0 ? 'bg-orange-50 text-orange-700 hover:bg-orange-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                }`}>
-                {min > 0 ? '+' : ''}{min} min
-              </button>
-            ))}
+          {/* Manual activation */}
+          <div>
+            <p className="text-xs text-gray-500 font-medium mb-2">📤 Aktivera kuvert manuellt</p>
+            <div className="flex gap-2">
+              {[
+                { course: 'starter', label: '🥗 Förrätt' },
+                { course: 'main', label: '🍖 Huvudrätt' },
+                { course: 'dessert', label: '🍰 Efterrätt' },
+              ].map(({ course, label }) => (
+                <button key={course} onClick={() => activateCourse(course)} disabled={!!activating || !isActive}
+                  className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-40 text-sm font-medium transition">
+                  {activating === course ? '...' : label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
 
-        {/* Manual activation */}
-        <div>
-          <p className="text-xs text-gray-500 font-medium mb-2">📤 Aktivera kuvert manuellt</p>
-          <div className="flex gap-2">
-            {[
-              { course: 'starter', label: '🥗 Förrätt' },
-              { course: 'main', label: '🍖 Huvudrätt' },
-              { course: 'dessert', label: '🍰 Efterrätt' },
-            ].map(({ course, label }) => (
-              <button key={course} onClick={() => activateCourse(course)} disabled={!!activating || !isActive}
-                className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-40 text-sm font-medium transition">
-                {activating === course ? '...' : label}
-              </button>
-            ))}
-          </div>
+/* ── GuestMessagePanel ─────────────────────────────────── */
+
+function GuestMessagePanel({ eventId, isActive }: { eventId: string; isActive: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const [audience, setAudience] = useState<'all' | 'starter' | 'main' | 'dessert'>('all');
+  const [messageText, setMessageText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  async function handleSend() {
+    if (!messageText.trim()) return;
+    if (!confirm(`Skicka meddelande till ${audience === 'all' ? 'alla gäster' : audience === 'starter' ? 'förrätt-gäster' : audience === 'main' ? 'huvudrätt-gäster' : 'dessert-gäster'}?`)) return;
+    setSending(true); setFeedback('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/guest-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audience, message: messageText.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFeedback(`✅ Skickat till ${data.sent || '?'} gäster`);
+        setMessageText('');
+        setTimeout(() => setFeedback(''), 5000);
+      } else {
+        setFeedback(`❌ ${data.error || 'Kunde inte skicka'}`);
+      }
+    } catch { setFeedback('❌ Nätverksfel'); }
+    finally { setSending(false); }
+  }
+
+  const audiences = [
+    { id: 'all' as const, label: 'Alla', icon: '👥' },
+    { id: 'starter' as const, label: 'Förrätt', icon: '🥗' },
+    { id: 'main' as const, label: 'Huvudrätt', icon: '🍖' },
+    { id: 'dessert' as const, label: 'Dessert', icon: '🍰' },
+  ];
+
+  return (
+    <div className={`rounded-xl shadow-sm border overflow-hidden ${
+      isActive ? 'bg-white border border-amber-200' : 'bg-gray-50 border-gray-100 opacity-60'
+    }`}>
+      {/* Collapsed header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-3 p-5 w-full text-left hover:bg-gray-50/50 transition"
+      >
+        <span className="text-2xl">📢</span>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900">Meddelande till gäster</h3>
+          <p className="text-xs text-gray-500">Skicka viktiga meddelanden under middagen</p>
         </div>
-      </div>
+        <span className={`text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
+          ▼
+        </span>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
+          {feedback && (
+            <div className={`text-sm p-2 rounded-lg ${feedback.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {feedback}
+            </div>
+          )}
+
+          {/* Audience selector */}
+          <div>
+            <p className="text-xs text-gray-500 font-medium mb-2">Mottagare</p>
+            <div className="flex gap-2 flex-wrap">
+              {audiences.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => setAudience(a.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                    audience === a.id
+                      ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {a.icon} {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Message input */}
+          <div>
+            <p className="text-xs text-gray-500 font-medium mb-2">Meddelande</p>
+            <textarea
+              value={messageText}
+              onChange={e => setMessageText(e.target.value)}
+              placeholder="Skriv ditt meddelande här..."
+              rows={3}
+              className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+            />
+          </div>
+
+          {/* Send button */}
+          <button
+            onClick={handleSend}
+            disabled={sending || !messageText.trim() || !isActive}
+            className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold rounded-xl transition text-sm"
+          >
+            {sending ? 'Skickar...' : `📢 Skicka till ${audience === 'all' ? 'alla' : audiences.find(a => a.id === audience)?.label.toLowerCase()}`}
+          </button>
+
+          <p className="text-xs text-gray-400">
+            💡 Meddelandet skickas via email. Push-notiser kommer i framtiden.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
