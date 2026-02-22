@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       .select('award_id')
       .eq('couple_id', coupleId)
       .eq('person_type', personType)
-      .single();
+      .maybeSingle();
     
     // Calculate person-specific data
     const personName = personType === 'partner' ? couple.partner_name : couple.invited_name;
