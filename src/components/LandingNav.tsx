@@ -9,20 +9,12 @@ export function LandingNav() {
           <span>Cykelfesten</span>
         </Link>
 
-        <div className="flex items-center gap-2 sm:gap-3 text-sm font-medium">
-          <Link
-            href="/guest"
-            className="text-amber-700 hover:text-amber-900 transition px-2 py-1.5 text-xs sm:text-sm"
-          >
-            Jag är inbjuden
-          </Link>
-          <Link
-            href="/organizer/login"
-            className="rounded-full bg-amber-500 text-white px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm shadow-sm hover:bg-amber-600 transition"
-          >
-            Skapa event
-          </Link>
-        </div>
+        <Link
+          href="/organizer/login"
+          className="text-amber-700 hover:text-amber-900 text-sm font-medium transition"
+        >
+          Logga in
+        </Link>
       </div>
     </nav>
   );

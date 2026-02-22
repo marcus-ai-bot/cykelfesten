@@ -134,40 +134,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features */}
-      <section className="max-w-6xl mx-auto px-4 pb-10 sm:pb-12" data-reveal>
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-          {[
-            {
-              icon: '✉️',
-              title: 'Digitala kuvert',
-              text: 'Animerade kuvert som öppnas när det är dags att cykla vidare.',
-            },
-            {
-              icon: '🧠',
-              title: 'Smart matchning',
-              text: 'Algoritmen ser till att ni möter nya personer vid varje rätt.',
-            },
-            {
-              icon: '🥗',
-              title: 'Allergier & preferenser',
-              text: 'Vi håller koll på specialkost, antal gäster och önskade rätter.',
-            },
-            {
-              icon: '🎁',
-              title: 'Wraps & efterfest',
-              text: 'Avsluta med en gemensam final - vi håller koll på tiderna.',
-            },
-          ].map((feature) => (
-            <div key={feature.title} className="bg-white rounded-2xl shadow-md p-4 sm:p-6 border border-amber-100">
-              <div className="text-2xl sm:text-3xl mb-2 sm:mb-3">{feature.icon}</div>
-              <h3 className="text-sm sm:text-lg font-semibold text-amber-900 mb-1 sm:mb-2">{feature.title}</h3>
-              <p className="text-amber-700 text-xs sm:text-sm leading-relaxed">{feature.text}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* How it works */}
       <section className="max-w-6xl mx-auto px-4 py-10 sm:py-12" data-reveal>
         <div className="bg-white rounded-3xl shadow-lg p-5 sm:p-8 border border-amber-100">
@@ -215,25 +181,17 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Use cases + testimonial */}
-      <section className="max-w-6xl mx-auto px-4 pb-10 sm:pb-12" data-reveal>
-        <div className="space-y-6 lg:grid lg:grid-cols-[1.1fr_0.9fr] lg:gap-6 lg:space-y-0 lg:items-center">
-          <div className="space-y-3">
-            <h2 className="text-2xl sm:text-3xl font-bold text-amber-900">Perfekt för föreningar, kvarter och vängrupper</h2>
-            <p className="text-sm sm:text-base text-amber-700">
-              Cykelfesten skapar gemenskap där du bor. Enkelt, tryggt och inspirerande.
-            </p>
-            <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-amber-700">
-              <span className="rounded-full bg-amber-100 px-3 py-1">🏘️ Kvartersfest</span>
-              <span className="rounded-full bg-amber-100 px-3 py-1">🤝 Föreningar</span>
-              <span className="rounded-full bg-amber-100 px-3 py-1">🎈 Vängrupper</span>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-md p-5 border border-amber-100">
-            <p className="text-amber-700 text-sm italic">
-              "Vi fick 36 grannar att mötas på en kväll, utan att behöva Excel eller utskrifter."
-            </p>
-            <p className="text-amber-500 text-xs mt-3">- Testimonial kommer snart</p>
+      {/* Testimonial */}
+      <section className="max-w-3xl mx-auto px-4 pb-10 sm:pb-12" data-reveal>
+        <div className="bg-white rounded-2xl shadow-md p-6 sm:p-8 border border-amber-100 text-center">
+          <p className="text-amber-800 text-base sm:text-lg italic leading-relaxed">
+            "Vi fick 36 grannar att mötas på en kväll, utan att behöva Excel eller utskrifter."
+          </p>
+          <p className="text-amber-500 text-sm mt-3">- Testimonial kommer snart</p>
+          <div className="flex flex-wrap justify-center gap-2 mt-4 text-xs sm:text-sm text-amber-700">
+            <span className="rounded-full bg-amber-100 px-3 py-1">🏘️ Kvarter</span>
+            <span className="rounded-full bg-amber-100 px-3 py-1">🤝 Föreningar</span>
+            <span className="rounded-full bg-amber-100 px-3 py-1">🎈 Vängrupper</span>
           </div>
         </div>
       </section>
