@@ -338,18 +338,8 @@ function TiderTab({ eventId }: { eventId: string }) {
             )}
           </div>
 
-          {/* Timeline preview */}
-          <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-200">
-            <h2 className="font-semibold text-indigo-800 mb-3">📅 Förhandsvisning (ex. förrätt 18:00)</h2>
-            <div className="space-y-2 text-sm">
-              <TimelineItem time={fmtTime(18*60 - timing.teasing_minutes_before)} label="Nyfiken? 🤫" />
-              <TimelineItem time={fmtTime(18*60 - timing.clue_1_minutes_before)} label="Ledtråd 1" />
-              <TimelineItem time={fmtTime(18*60 - timing.clue_2_minutes_before)} label="Ledtråd 2" />
-              <TimelineItem time={fmtTime(18*60 - timing.street_minutes_before)} label="Gatunamn" />
-              <TimelineItem time={fmtTime(18*60 - timing.number_minutes_before)} label="Husnummer" />
-              <TimelineItem time="18:00" label="🎉 Full reveal!" highlight />
-            </div>
-          </div>
+          {/* Live timeline preview from DB */}
+          <LiveTimeline eventId={eventId} />
 
           <button onClick={saveTiming} disabled={saving}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-3 rounded-xl transition-colors">
@@ -597,6 +587,69 @@ function SkickaTab({ eventId }: { eventId: string }) {
 }
 
 /* ── Shared components ──────────────────────── */
+
+/* ── Live Timeline: shows actual envelope times from DB ── */
+function LiveTimeline({ eventId }: { eventId: string }) {
+  const [couples, setCouples] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedCouple, setSelectedCouple] = useState('');
+  const [times, setTimes] = useState<Array<{ label: string; display: string; course: string; state: string }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/organizer/events/${eventId}/couples`)
+      .then(r => r.json())
+      .then(data => {
+        const list = (data.couples || [])
+          .filter((c: any) => !c.cancelled)
+          .map((c: any) => ({ id: c.id, name: c.invited_name + (c.partner_name ? ` & ${c.partner_name}` : '') }));
+        setCouples(list);
+        if (list.length && !selectedCouple) setSelectedCouple(list[0].id);
+      });
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!selectedCouple) return;
+    setLoading(true);
+    fetch(`/api/organizer/events/${eventId}/envelope-times?coupleId=${selectedCouple}`)
+      .then(r => r.json())
+      .then(data => { setTimes(data.times || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [eventId, selectedCouple]);
+
+  const courseColors: Record<string, string> = {
+    starter: 'text-green-700', main: 'text-orange-700', dessert: 'text-pink-700', '': 'text-gray-400',
+  };
+  const courseIcons: Record<string, string> = { starter: '🥗', main: '🍖', dessert: '🍰' };
+
+  return (
+    <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-200">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-indigo-800">📅 Kuverttider (live från DB)</h2>
+      </div>
+      <select value={selectedCouple} onChange={e => setSelectedCouple(e.target.value)}
+        className="w-full mb-3 px-3 py-2 border border-indigo-200 rounded-lg text-sm bg-white">
+        {couples.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      {loading ? (
+        <p className="text-sm text-indigo-400">Laddar...</p>
+      ) : times.length === 0 ? (
+        <p className="text-sm text-indigo-400">Inga kuvert — kör matchning först</p>
+      ) : (
+        <div className="space-y-1.5 text-sm">
+          {times.map((t, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="font-mono text-indigo-800 w-12 text-right">{t.display}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+              <span className={`${courseColors[t.course] || 'text-gray-600'}`}>
+                {courseIcons[t.course] ? `${courseIcons[t.course]} ` : ''}{t.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function TimingRow({ label, value, onChange, options }: { label: string; value: number; onChange: (v: number) => void; options: number[] }) {
   return (
