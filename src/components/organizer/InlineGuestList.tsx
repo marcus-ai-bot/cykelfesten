@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 
 const RegistrationMap = lazy(() => import('./RegistrationMap').then(m => ({ default: m.RegistrationMap })));
 
@@ -82,6 +83,21 @@ export function InlineGuestList({ eventId }: Props) {
       });
       const data = await res.json();
       if (res.ok) { setMessage(`✅ ${data.message || 'Klart!'}`); setSelected(new Set()); loadData(); }
+      else setMessage(`❌ ${data.error}`);
+    } catch { setMessage('❌ Nätverksfel'); }
+    finally { setActing(false); }
+  }
+
+  async function singleAction(coupleId: string, action: string) {
+    setActing(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/guests/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, couple_ids: [coupleId] }),
+      });
+      const data = await res.json();
+      if (res.ok) { setMessage(`✅ ${data.message || 'Klart!'}`); loadData(); }
       else setMessage(`❌ ${data.error}`);
     } catch { setMessage('❌ Nätverksfel'); }
     finally { setActing(false); }
@@ -285,7 +301,8 @@ export function InlineGuestList({ eventId }: Props) {
         <div className="space-y-2">
           {filtered.map(c => (
             <GuestRow key={c.id} couple={c} eventId={eventId}
-              selected={selected.has(c.id)} onToggle={() => toggleSelect(c.id)} />
+              selected={selected.has(c.id)} onToggle={() => toggleSelect(c.id)}
+              onAction={(action) => singleAction(c.id, action)} />
           ))}
         </div>
       )}
@@ -297,10 +314,14 @@ export function InlineGuestList({ eventId }: Props) {
 
 /* ── GuestRow ──────────────────────────────────────────── */
 
-function GuestRow({ couple: c, eventId, selected, onToggle }: {
+function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
   couple: Couple; eventId: string; selected: boolean; onToggle: () => void;
+  onAction: (action: string) => void;
 }) {
+  const [swipeMode, setSwipeMode] = useState<'approve' | 'reject' | 'context' | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
   const hasAddress = !!c.address && !!c.coordinates;
   const hasInvitedFf = !!(c.invited_fun_facts && c.invited_fun_facts.length > 0);
   const hasPartnerFf = !c.partner_name || !!(c.partner_fun_facts && c.partner_fun_facts.length > 0);
@@ -318,53 +339,143 @@ function GuestRow({ couple: c, eventId, selected, onToggle }: {
     statusBadge = { text: 'Godkänd', color: 'bg-green-100 text-green-700' };
   }
 
+  const SWIPE_THRESHOLD = 80;
+
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const absX = Math.abs(info.offset.x);
+    const absY = Math.abs(info.offset.y);
+    if (absX > SWIPE_THRESHOLD && absX > absY) {
+      if (info.offset.x > 0) setSwipeMode('approve');
+      else setSwipeMode('reject');
+    }
+  };
+
+  const handleTouchStart = () => {
+    longPressTimer.current = setTimeout(() => setSwipeMode('context'), 500);
+  };
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+  };
+
+  const handleAction = (action: string) => {
+    setSwipeMode(null);
+    onAction(action);
+  };
+
   return (
-    <div className={`bg-white rounded-lg border p-3 flex items-start gap-3 ${selected ? 'ring-2 ring-indigo-300' : ''} ${c.cancelled ? 'opacity-50' : ''}`}>
-      <input type="checkbox" checked={selected} onChange={onToggle}
-        className="w-4 h-4 rounded mt-1 shrink-0" />
-
-      <Link href={`/organizer/event/${eventId}/guests/${c.id}`} className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm text-gray-900 truncate">
-            {c.invited_name}
-            {c.partner_name && <span className="text-gray-400 font-normal"> & {c.partner_name}</span>}
-          </span>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadge.color}`}>{statusBadge.text}</span>
-        </div>
-
-        <div className="flex flex-wrap gap-1.5 mt-1.5">
-          <Badge ok={hasAddress} label="📍 Adress" />
-          <Badge ok={hasFf} label="🎉 Fun facts" />
-          {allergies.length > 0 && <span className="text-xs text-orange-600">⚠️ {allergies.join(', ')}</span>}
-          {!c.partner_name && <span className="text-xs text-gray-400">Solo</span>}
-        </div>
-
-        {c.invited_email && (
-          <p className="text-xs text-gray-400 mt-1 truncate">{c.invited_email}</p>
+    <div className={`relative rounded-lg ${swipeMode ? 'z-20' : ''}`}>
+      {/* Swipe action panels */}
+      <AnimatePresence>
+        {swipeMode === 'approve' && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="absolute inset-x-0 -top-1 bg-white border border-green-200 rounded-lg shadow-lg p-2 z-30">
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleAction('approve')}
+                className="flex-1 px-3 py-2 text-sm bg-green-500 text-white rounded-lg font-medium hover:bg-green-600">
+                ✅ Godkänn
+              </button>
+              <button onClick={() => setSwipeMode(null)}
+                className="px-2 py-2 text-sm text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+          </motion.div>
         )}
-      </Link>
-
-      {/* Row menu */}
-      <div className="relative shrink-0">
-        <button onClick={() => setMenuOpen(!menuOpen)}
-          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <circle cx="8" cy="3" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="8" cy="13" r="1.2" />
-          </svg>
-        </button>
-        {menuOpen && (
-          <RowMenu
-            eventId={eventId}
-            coupleId={c.id}
-            onClose={() => setMenuOpen(false)}
-          />
+        {swipeMode === 'reject' && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="absolute inset-x-0 -top-1 bg-white border border-red-200 rounded-lg shadow-lg p-2 z-30">
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleAction('reject')}
+                className="flex-1 px-3 py-2 text-sm bg-red-500 text-white rounded-lg font-medium hover:bg-red-600">
+                ❌ Neka
+              </button>
+              <button onClick={() => handleAction('cancel')}
+                className="flex-1 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                🚫 Avboka
+              </button>
+              <button onClick={() => setSwipeMode(null)}
+                className="px-2 py-2 text-sm text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+          </motion.div>
         )}
-      </div>
+        {swipeMode === 'context' && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="absolute inset-x-0 -top-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30">
+            <div className="flex flex-col gap-1">
+              <button onClick={() => handleAction('approve')}
+                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">✅ Godkänn</button>
+              <button onClick={() => handleAction('reject')}
+                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">❌ Neka</button>
+              <button onClick={() => handleAction('remind_address')}
+                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">📍 Påminn om adress</button>
+              <button onClick={() => handleAction('remind_ff')}
+                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">🎉 Påminn om fun facts</button>
+              <div className="border-t border-gray-100 my-1" />
+              <Link href={`/organizer/event/${eventId}/guests/${c.id}`} onClick={() => setSwipeMode(null)}
+                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">✏️ Redigera</Link>
+              <Link href={`/organizer/event/${eventId}/guests/${c.id}/preferences`} onClick={() => setSwipeMode(null)}
+                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">🔀 Matchningspreferenser</Link>
+              <button onClick={() => setSwipeMode(null)}
+                className="w-full px-3 py-1.5 text-xs text-gray-400 text-center">Stäng</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Swipeable card content */}
+      <motion.div
+        drag
+        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        dragElastic={0.3}
+        onDragEnd={handleDragEnd}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        whileTap={{ scale: 0.98 }}
+        className={`bg-white rounded-lg border p-3 flex items-start gap-3 ${selected ? 'ring-2 ring-indigo-300' : ''} ${c.cancelled ? 'opacity-50' : ''}`}
+      >
+        <input type="checkbox" checked={selected} onChange={onToggle}
+          className="w-4 h-4 rounded mt-1 shrink-0" />
+
+        <Link href={`/organizer/event/${eventId}/guests/${c.id}`} className="flex-1 min-w-0"
+          onClick={e => { if (swipeMode) e.preventDefault(); }}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm text-gray-900 truncate">
+              {c.invited_name}
+              {c.partner_name && <span className="text-gray-400 font-normal"> & {c.partner_name}</span>}
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadge.color}`}>{statusBadge.text}</span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            <Badge ok={hasAddress} label="📍 Adress" />
+            <Badge ok={hasFf} label="🎉 Fun facts" />
+            {allergies.length > 0 && <span className="text-xs text-orange-600">⚠️ {allergies.join(', ')}</span>}
+            {!c.partner_name && <span className="text-xs text-gray-400">Solo</span>}
+          </div>
+
+          {c.invited_email && (
+            <p className="text-xs text-gray-400 mt-1 truncate">{c.invited_email}</p>
+          )}
+        </Link>
+
+        {/* Desktop: ⋮ menu */}
+        <div className="relative shrink-0 hidden md:block">
+          <button onClick={() => setMenuOpen(!menuOpen)}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="8" cy="3" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="8" cy="13" r="1.2" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <RowMenu eventId={eventId} coupleId={c.id} onClose={() => setMenuOpen(false)} onAction={handleAction} />
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }
 
-function RowMenu({ eventId, coupleId, onClose }: { eventId: string; coupleId: string; onClose: () => void }) {
+function RowMenu({ eventId, coupleId, onClose, onAction }: {
+  eventId: string; coupleId: string; onClose: () => void; onAction: (action: string) => void;
+}) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -376,7 +487,12 @@ function RowMenu({ eventId, coupleId, onClose }: { eventId: string; coupleId: st
   }, [onClose]);
 
   return (
-    <div ref={menuRef} className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-30">
+    <div ref={menuRef} className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-30">
+      <button onClick={() => { onAction('approve'); onClose(); }}
+        className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✅ Godkänn</button>
+      <button onClick={() => { onAction('reject'); onClose(); }}
+        className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">❌ Neka</button>
+      <div className="border-t border-gray-100 my-1" />
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}`} onClick={onClose}
         className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✏️ Redigera</Link>
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`} onClick={onClose}
