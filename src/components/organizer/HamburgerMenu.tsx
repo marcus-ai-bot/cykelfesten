@@ -44,7 +44,7 @@ export function HamburgerMenu({ eventId, eventSlug, activePhase, onPhaseChange }
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+        <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50 max-h-[70vh] overflow-y-auto">
           {/* Phase navigation */}
           {onPhaseChange && (
             <>
