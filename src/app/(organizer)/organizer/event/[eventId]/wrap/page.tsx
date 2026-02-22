@@ -27,6 +27,7 @@ interface WrapStats {
   couples_with_routes: number;
   distance_source: string;
   last_guest_departure: string | null;
+  wrap_approved_at: string | null;
   wrap_sent_at: string | null;
 }
 
@@ -50,6 +51,8 @@ export default function WrapPage() {
   const [activeTab, setActiveTab] = useState<Tab>('stats');
   const [previewPerson, setPreviewPerson] = useState('');
   const [lastDeparture, setLastDeparture] = useState('');
+  const [previewChecked, setPreviewChecked] = useState(false);
+  const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
 
   const eventSlug = event?.slug || '';
@@ -100,18 +103,58 @@ export default function WrapPage() {
     } catch { setMessage('❌ Nätverksfel'); }
   }
 
-  async function markWrapSent() {
+  async function approveWrap() {
     if (!stats) return;
-    const updated = { ...stats, wrap_sent_at: new Date().toISOString() };
+    const updated = { ...stats, wrap_approved_at: new Date().toISOString() };
     try {
       const res = await fetch(`/api/organizer/events/${eventId}/wrap`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wrap_stats: updated }),
       });
-      if (res.ok) { setStats(updated as WrapStats); setMessage('✅ Wrap markerad som skickad!'); }
+      if (res.ok) { setStats(updated as WrapStats); setMessage('✅ Utskick godkänt!'); }
       else { const d = await res.json(); setMessage(`❌ ${d.error}`); }
     } catch { setMessage('❌ Nätverksfel'); }
+  }
+
+  async function revokeApproval() {
+    if (!stats) return;
+    const updated = { ...stats, wrap_approved_at: null };
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/wrap`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wrap_stats: updated }),
+      });
+      if (res.ok) { setStats(updated as WrapStats); setMessage('Godkännande ångrat.'); }
+      else { const d = await res.json(); setMessage(`❌ ${d.error}`); }
+    } catch { setMessage('❌ Nätverksfel'); }
+  }
+
+  async function sendWraps() {
+    if (!stats?.wrap_approved_at) return;
+    setSending(true);
+    try {
+      const res = await fetch('/api/notify/send-wraps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const updated = { ...stats, wrap_sent_at: new Date().toISOString() };
+        await fetch(`/api/organizer/events/${eventId}/wrap`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wrap_stats: updated }),
+        });
+        setStats(updated as WrapStats);
+        setMessage(`✅ Wraps skickade till ${data.sent || stats.total_people} personer!`);
+      } else {
+        setMessage(`❌ ${data.error || 'Kunde inte skicka'}`);
+      }
+    } catch { setMessage('❌ Nätverksfel'); }
+    finally { setSending(false); }
   }
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-500">Laddar...</p></div>;
@@ -285,40 +328,101 @@ export default function WrapPage() {
         )}
 
         {/* 📧 Skicka */}
-        {activeTab === 'send' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-lg border p-4">
-              <h2 className="font-bold mb-1">Skicka Wrap till gästerna</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Varje gäst får en personlig wrap med sin statistik, cykelrutt och höjdpunkter från kvällen.
-              </p>
+        {activeTab === 'send' && (() => {
+          const hasStats = !!stats && stats.total_distance_km > 0;
+          const isApproved = !!stats?.wrap_approved_at;
+          const isSent = !!stats?.wrap_sent_at;
+          const allChecked = hasStats && previewChecked;
 
-              {stats?.wrap_sent_at ? (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-green-700 font-medium">✅ Wrap skickad</p>
+          return (
+            <div className="space-y-4">
+              {/* Already sent */}
+              {isSent && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+                  <span className="text-4xl block mb-2">✅</span>
+                  <p className="text-green-700 font-bold text-lg">Wraps skickade!</p>
                   <p className="text-green-600 text-sm mt-1">
-                    Markerad som skickad {new Date(stats.wrap_sent_at).toLocaleString('sv-SE')}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-                    💡 Tips: Förhandsgranska wrappen i Preview-tabben innan du skickar!
-                  </div>
-                  
-                  <button onClick={markWrapSent} disabled={!stats}
-                    className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">
-                    📧 Markera som skickad
-                  </button>
-                  
-                  <p className="text-xs text-gray-400 text-center">
-                    Just nu: markerar wrappen som skickad. Automatisk e-postutskick kommer snart.
+                    {new Date(stats!.wrap_sent_at!).toLocaleString('sv-SE')}
                   </p>
                 </div>
               )}
+
+              {!isSent && (
+                <>
+                  {/* Step 1: Förbered */}
+                  <div className="bg-white rounded-lg border p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${allChecked ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>1</span>
+                      <h2 className="font-bold">Förbered</h2>
+                    </div>
+                    
+                    <div className="space-y-3 ml-9">
+                      <CheckItem checked={hasStats} label="Statistik beräknad" sub={hasStats ? `${stats!.total_distance_km} km, ${stats!.total_people} personer` : 'Gå till Statistik-tabben'} />
+                      <CheckItem checked={previewChecked} label="Jag har förhandsgranskat wrappen" onClick={() => setPreviewChecked(!previewChecked)} interactive />
+                    </div>
+                  </div>
+
+                  {/* Step 2: Godkänn */}
+                  <div className={`bg-white rounded-lg border p-4 ${!allChecked ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${isApproved ? 'bg-green-500 text-white' : allChecked ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-500'}`}>2</span>
+                      <h2 className="font-bold">Godkänn utskick</h2>
+                    </div>
+
+                    <div className="ml-9">
+                      {isApproved ? (
+                        <div className="flex items-center justify-between">
+                          <p className="text-green-600 text-sm">✅ Godkänt {new Date(stats!.wrap_approved_at!).toLocaleString('sv-SE')}</p>
+                          <button onClick={revokeApproval} className="text-sm text-gray-400 hover:text-red-500">Ångra</button>
+                        </div>
+                      ) : (
+                        <button onClick={approveWrap} disabled={!allChecked}
+                          className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                          🔒 Godkänn utskick till {stats?.total_people || '?'} personer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 3: Skicka */}
+                  <div className={`bg-white rounded-lg border p-4 ${!isApproved ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${isSent ? 'bg-green-500 text-white' : isApproved ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-500'}`}>3</span>
+                      <h2 className="font-bold">Skicka</h2>
+                    </div>
+
+                    <div className="ml-9">
+                      <p className="text-sm text-gray-500 mb-3">
+                        Varje gäst får ett mail med en personlig länk till sin wrap.
+                      </p>
+                      <button onClick={sendWraps} disabled={!isApproved || sending}
+                        className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {sending ? '⏳ Skickar...' : '📧 Skicka wraps till alla gäster'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
+function CheckItem({ checked, label, sub, interactive, onClick }: { checked: boolean; label: string; sub?: string; interactive?: boolean; onClick?: () => void }) {
+  return (
+    <div
+      className={`flex items-start gap-3 ${interactive ? 'cursor-pointer' : ''}`}
+      onClick={interactive ? onClick : undefined}
+    >
+      <div className={`w-5 h-5 mt-0.5 rounded flex-shrink-0 flex items-center justify-center border-2 ${checked ? 'bg-green-500 border-green-500 text-white' : interactive ? 'border-gray-300 hover:border-indigo-400' : 'border-gray-200'}`}>
+        {checked && <span className="text-xs">✓</span>}
+      </div>
+      <div>
+        <p className={`text-sm font-medium ${checked ? 'text-green-700' : 'text-gray-700'}`}>{label}</p>
+        {sub && <p className="text-xs text-gray-400">{sub}</p>}
       </div>
     </div>
   );
