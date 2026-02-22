@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
@@ -105,11 +105,48 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
 /* ── LiveControlPanel ──────────────────────────────────── */
 
 function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: boolean }) {
+  const [event, setEvent] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [delaying, setDelaying] = useState(false);
   const [activating, setActivating] = useState<string | null>(null);
   const [message, setMessage] = useState('');
 
-  async function adjustTimes(minutes: number) {
+  const loadData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/settings`);
+      const data = await res.json();
+      if (res.ok) setEvent(data.event);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [eventId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  async function saveTime(field: string, value: string) {
+    setSaving(true); setMessage('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEvent(data.event);
+        await fetch('/api/admin/recalc-envelope-times', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: eventId }),
+        });
+        setMessage('✅ Tid uppdaterad');
+        setTimeout(() => setMessage(''), 2000);
+      }
+    } catch { setMessage('❌ Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
+  async function adjustAllTimes(minutes: number) {
     setDelaying(true); setMessage('');
     try {
       const res = await fetch('/api/admin/delay-envelopes', {
@@ -118,8 +155,9 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
         body: JSON.stringify({ event_id: eventId, delay_minutes: minutes }),
       });
       if (res.ok) {
+        await loadData();
         const dir = minutes > 0 ? 'fram' : 'tillbaka';
-        setMessage(`✅ Kuverttider skjutna ${dir} ${Math.abs(minutes)} min`);
+        setMessage(`✅ Alla kuverttider ${dir} ${Math.abs(minutes)} min`);
         setTimeout(() => setMessage(''), 3000);
       } else setMessage('❌ Kunde inte justera');
     } catch { setMessage('❌ Nätverksfel'); }
@@ -144,55 +182,93 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
     finally { setActivating(null); }
   }
 
+  const courses = [
+    { label: 'Förrätt', icon: '🥗', field: 'starter_time', value: event?.starter_time },
+    { label: 'Huvudrätt', icon: '🍖', field: 'main_time', value: event?.main_time },
+    { label: 'Dessert', icon: '🍰', field: 'dessert_time', value: event?.dessert_time },
+  ];
+
   return (
-    <div className={`rounded-xl p-5 shadow-sm border ${
+    <div className={`rounded-xl shadow-sm border overflow-hidden ${
       isActive ? 'bg-white border-2 border-orange-200' : 'bg-gray-50 border-gray-100 opacity-60'
     }`}>
-      <div className="flex items-center gap-3 mb-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 p-5 pb-0">
         <span className="text-2xl">🎛️</span>
         <div>
           <h3 className="font-semibold text-gray-900">Livekontroll</h3>
-          <p className="text-sm text-gray-500">Justera kuverttider och aktivera manuellt</p>
+          <p className="text-xs text-gray-500">Justera tider och aktivera kuvert under middagen</p>
         </div>
       </div>
 
       {message && (
-        <div className={`text-sm p-2 rounded-lg mb-3 ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+        <div className={`text-sm px-5 py-2 mx-5 mt-3 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
           {message}
         </div>
       )}
 
-      {/* Time adjustment */}
-      <div className="mb-4">
-        <p className="text-xs text-gray-500 font-medium mb-2">Justera kuverttider</p>
-        <div className="flex gap-2 flex-wrap">
-          {[-15, -5, 5, 15, 30].map(min => (
-            <button key={min} onClick={() => adjustTimes(min)} disabled={delaying || !isActive}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition disabled:opacity-40 ${
-                min < 0
-                  ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-              }`}>
-              {min > 0 ? '+' : ''}{min} min
-            </button>
-          ))}
-        </div>
-      </div>
+      <div className="p-5 space-y-5">
+        {/* Course times with ±5 min */}
+        {!loading && event && (
+          <div>
+            <p className="text-xs text-gray-500 font-medium mb-2">🕐 Tider</p>
+            <div className="space-y-1">
+              {courses.map(({ label, icon, field, value }) => {
+                const time = value?.slice(0, 5) || '00:00';
+                const adjust = (min: number) => {
+                  const [h, m] = time.split(':').map(Number);
+                  const total = h * 60 + m + min;
+                  const newH = Math.floor(((total % 1440) + 1440) % 1440 / 60);
+                  const newM = ((total % 60) + 60) % 60;
+                  saveTime(field, `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:00`);
+                };
+                return (
+                  <div key={field} className="flex items-center justify-between py-2">
+                    <span className="text-sm text-gray-700">{icon} {label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => adjust(-5)} disabled={saving}
+                        className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">−</button>
+                      <span className="text-sm font-mono font-semibold text-gray-900 min-w-[3rem] text-center">{time}</span>
+                      <button onClick={() => adjust(5)} disabled={saving}
+                        className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-      {/* Manual activation */}
-      <div>
-        <p className="text-xs text-gray-500 font-medium mb-2">Aktivera kuvert manuellt</p>
-        <div className="flex gap-2">
-          {[
-            { course: 'starter', label: '🥗 Förrätt' },
-            { course: 'main', label: '🍖 Huvudrätt' },
-            { course: 'dessert', label: '🍰 Efterrätt' },
-          ].map(({ course, label }) => (
-            <button key={course} onClick={() => activateCourse(course)} disabled={!!activating || !isActive}
-              className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-40 text-sm font-medium transition">
-              {activating === course ? '...' : label}
-            </button>
-          ))}
+        {/* Shift all envelope times */}
+        <div>
+          <p className="text-xs text-gray-500 font-medium mb-2">⏱️ Justera alla kuverttider</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {[-15, -5, 5, 15, 30].map(min => (
+              <button key={min} onClick={() => adjustAllTimes(min)} disabled={delaying || !isActive}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-40 ${
+                  min < 0 ? 'bg-orange-50 text-orange-700 hover:bg-orange-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                }`}>
+                {min > 0 ? '+' : ''}{min} min
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Manual activation */}
+        <div>
+          <p className="text-xs text-gray-500 font-medium mb-2">📤 Aktivera kuvert manuellt</p>
+          <div className="flex gap-2">
+            {[
+              { course: 'starter', label: '🥗 Förrätt' },
+              { course: 'main', label: '🍖 Huvudrätt' },
+              { course: 'dessert', label: '🍰 Efterrätt' },
+            ].map(({ course, label }) => (
+              <button key={course} onClick={() => activateCourse(course)} disabled={!!activating || !isActive}
+                className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-40 text-sm font-medium transition">
+                {activating === course ? '...' : label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
