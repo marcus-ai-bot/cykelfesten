@@ -1,0 +1,586 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+
+/* ── Tab type ─────────────────────────────── */
+type Tab = 'tider' | 'reveals' | 'texter' | 'skicka';
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'tider', label: 'Tider', icon: '🕐' },
+  { id: 'reveals', label: 'Reveal-inställningar', icon: '📬' },
+  { id: 'texter', label: 'Kuverttexter', icon: '💬' },
+  { id: 'skicka', label: 'Skicka ut', icon: '📤' },
+];
+
+export default function EnvelopesPage() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const eventId = params.eventId as string;
+
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const t = searchParams.get('tab') as Tab | null;
+    return t && TABS.some(tab => tab.id === t) ? t : 'tider';
+  });
+
+  function changeTab(tab: Tab) {
+    setActiveTab(tab);
+    const params = new URLSearchParams(window.location.search);
+    if (tab === 'tider') params.delete('tab');
+    else params.set('tab', tab);
+    const query = params.toString();
+    window.history.pushState(null, '', `${window.location.pathname}${query ? '?' + query : ''}`);
+  }
+
+  useEffect(() => {
+    function onPopState() {
+      const t = new URLSearchParams(window.location.search).get('tab') as Tab | null;
+      setActiveTab(t && TABS.some(tab => tab.id === t) ? t : 'tider');
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b">
+        <div className="max-w-3xl mx-auto px-4 py-4">
+          <Link href={`/organizer/event/${eventId}?phase=dinner`} className="text-gray-500 hover:text-gray-700 text-sm">← Middag</Link>
+          <h1 className="text-xl font-bold text-gray-900 mt-1">✉️ Kuvert & Timing</h1>
+        </div>
+      </header>
+
+      {/* Chrome-style tabs */}
+      <div className="bg-white border-b sticky top-0 z-30">
+        <div className="max-w-3xl mx-auto px-4">
+          <nav className="flex gap-0 overflow-x-auto scrollbar-hide">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => changeTab(tab.id)}
+                className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      <main className="max-w-3xl mx-auto px-4 py-6">
+        {activeTab === 'tider' && <TiderTab eventId={eventId} />}
+        {activeTab === 'reveals' && <RevealsTab eventId={eventId} />}
+        {activeTab === 'texter' && <TexterTab eventId={eventId} />}
+        {activeTab === 'skicka' && <SkickaTab eventId={eventId} />}
+      </main>
+
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   TAB 1: Tider — Course times with ±5 min
+   ══════════════════════════════════════════════ */
+
+function TiderTab({ eventId }: { eventId: string }) {
+  const [event, setEvent] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => { loadSettings(); }, [eventId]);
+
+  async function loadSettings() {
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/settings`);
+      const data = await res.json();
+      if (res.ok) setEvent(data.event);
+      else setError(data.error);
+    } catch { setError('Nätverksfel'); }
+    finally { setLoading(false); }
+  }
+
+  async function saveTime(field: string, value: string) {
+    setSaving(true); setError(''); setSuccess('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEvent(data.event);
+        // Recalc envelope times
+        await fetch('/api/admin/recalc-envelope-times', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: eventId }),
+        });
+        setSuccess('Sparat + kuverttider uppdaterade');
+        setTimeout(() => setSuccess(''), 2000);
+      }
+    } catch { setError('Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
+  if (loading) return <LoadingPlaceholder />;
+
+  const courses = [
+    { label: 'Förrätt', icon: '🥗', field: 'starter_time', value: event?.starter_time },
+    { label: 'Huvudrätt', icon: '🍖', field: 'main_time', value: event?.main_time },
+    { label: 'Dessert', icon: '🍰', field: 'dessert_time', value: event?.dessert_time },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Feedback success={success} error={error} onClearError={() => setError('')} />
+
+      <div className="bg-white rounded-xl shadow-sm p-5 border">
+        <h2 className="font-semibold text-gray-900 mb-4">🕐 Starttider per rätt</h2>
+        <p className="text-sm text-gray-500 mb-4">Kuverttider räknas automatiskt utifrån dessa.</p>
+        {courses.map(({ label, icon, field, value }) => {
+          const time = value?.slice(0, 5) || '00:00';
+          const adjustTime = (minutes: number) => {
+            const [h, m] = time.split(':').map(Number);
+            const total = h * 60 + m + minutes;
+            const newH = Math.floor(((total % 1440) + 1440) % 1440 / 60);
+            const newM = ((total % 60) + 60) % 60;
+            saveTime(field, `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:00`);
+          };
+          return (
+            <div key={field} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+              <span className="text-sm text-gray-700 font-medium">{icon} {label}</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => adjustTime(-5)} disabled={saving}
+                  className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 disabled:opacity-50 text-sm font-bold">−</button>
+                <button onClick={() => {
+                  const val = prompt(`Ny tid för ${label}:`, time);
+                  if (val) saveTime(field, val + ':00');
+                }}
+                  className="text-sm font-mono font-semibold text-gray-900 hover:text-indigo-600 cursor-pointer min-w-[3rem] text-center">
+                  {time}
+                </button>
+                <button onClick={() => adjustTime(5)} disabled={saving}
+                  className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 text-sm font-bold">+</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   TAB 2: Reveal-inställningar (from timing page)
+   ══════════════════════════════════════════════ */
+
+interface TimingSettings {
+  id: string;
+  event_id: string;
+  teasing_minutes_before: number;
+  clue_1_minutes_before: number;
+  clue_2_minutes_before: number;
+  street_minutes_before: number;
+  number_minutes_before: number;
+  during_meal_clue_interval_minutes: number;
+  distance_adjustment_enabled: boolean;
+}
+
+function RevealsTab({ eventId }: { eventId: string }) {
+  const [timing, setTiming] = useState<TimingSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => { loadTiming(); }, [eventId]);
+
+  async function loadTiming() {
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/timing`);
+      const data = await res.json();
+      if (res.ok) setTiming(data.timing);
+      else setError(data.error);
+    } catch { setError('Nätverksfel'); }
+    finally { setLoading(false); }
+  }
+
+  async function handleSave() {
+    if (!timing) return;
+    setSaving(true); setError(''); setSuccess('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/timing`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teasing_minutes_before: timing.teasing_minutes_before,
+          clue_1_minutes_before: timing.clue_1_minutes_before,
+          clue_2_minutes_before: timing.clue_2_minutes_before,
+          street_minutes_before: timing.street_minutes_before,
+          number_minutes_before: timing.number_minutes_before,
+          during_meal_clue_interval_minutes: timing.during_meal_clue_interval_minutes,
+          distance_adjustment_enabled: timing.distance_adjustment_enabled,
+        }),
+      });
+      if (res.ok) {
+        await fetch('/api/admin/recalc-envelope-times', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: eventId }),
+        });
+        setSuccess('Sparat!');
+        setTimeout(() => setSuccess(''), 2000);
+      } else { const d = await res.json(); setError(d.error); }
+    } catch { setError('Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
+  function handleChange(field: keyof TimingSettings, value: number | boolean) {
+    if (!timing) return;
+    setTiming({ ...timing, [field]: value });
+  }
+
+  if (loading) return <LoadingPlaceholder />;
+
+  return (
+    <div className="space-y-4">
+      <Feedback success={success} error={error} onClearError={() => setError('')} />
+
+      {timing && (
+        <>
+          <div className="bg-white rounded-xl p-5 shadow-sm border">
+            <h2 className="font-semibold text-gray-900 mb-4">📬 Kuvert-reveals (innan rätt startar)</h2>
+            <div className="space-y-4">
+              <TimingRow label="🤫 Nyfiken? (teasing)" value={timing.teasing_minutes_before} onChange={(v) => handleChange('teasing_minutes_before', v)} options={[180,240,300,360,420,480]} />
+              <TimingRow label="🔮 Ledtråd 1" value={timing.clue_1_minutes_before} onChange={(v) => handleChange('clue_1_minutes_before', v)} options={[60,90,120,150,180]} />
+              <TimingRow label="🔮 Ledtråd 2" value={timing.clue_2_minutes_before} onChange={(v) => handleChange('clue_2_minutes_before', v)} options={[15,20,30,45,60]} />
+              <TimingRow label="📍 Gatunamn" value={timing.street_minutes_before} onChange={(v) => handleChange('street_minutes_before', v)} options={[10,15,20,25,30]} />
+              <TimingRow label="🔢 Husnummer" value={timing.number_minutes_before} onChange={(v) => handleChange('number_minutes_before', v)} options={[3,5,8,10,15]} />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-5 shadow-sm border">
+            <h2 className="font-semibold text-gray-900 mb-4">🍽️ Under måltiden</h2>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-gray-700 text-sm">Max ledtrådar per måltid</span>
+              <select value={timing.during_meal_clue_interval_minutes} onChange={(e) => handleChange('during_meal_clue_interval_minutes', parseInt(e.target.value))}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                {[1,2,3,4].map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-5 shadow-sm border">
+            <h2 className="font-semibold text-gray-900 mb-4">🚴 Avståndsanpassning</h2>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={timing.distance_adjustment_enabled} onChange={(e) => handleChange('distance_adjustment_enabled', e.target.checked)}
+                className="w-5 h-5 rounded border-gray-300 text-indigo-500" />
+              <div>
+                <span className="text-gray-800 font-medium text-sm">Auto-justera för cykelavstånd</span>
+                <p className="text-gray-500 text-xs">Längre avstånd → tidigare gatunamn/nummer</p>
+              </div>
+            </label>
+          </div>
+
+          {/* Timeline preview */}
+          <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-200">
+            <h2 className="font-semibold text-indigo-800 mb-3">📅 Förhandsvisning (ex. förrätt 18:00)</h2>
+            <div className="space-y-2 text-sm">
+              <TimelineItem time={fmtTime(18*60 - timing.teasing_minutes_before)} label="Nyfiken? 🤫" />
+              <TimelineItem time={fmtTime(18*60 - timing.clue_1_minutes_before)} label="Ledtråd 1" />
+              <TimelineItem time={fmtTime(18*60 - timing.clue_2_minutes_before)} label="Ledtråd 2" />
+              <TimelineItem time={fmtTime(18*60 - timing.street_minutes_before)} label="Gatunamn" />
+              <TimelineItem time={fmtTime(18*60 - timing.number_minutes_before)} label="Husnummer" />
+              <TimelineItem time="18:00" label="🎉 Full reveal!" highlight />
+            </div>
+          </div>
+
+          <button onClick={handleSave} disabled={saving}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-3 rounded-xl transition-colors">
+            {saving ? 'Sparar...' : '💾 Spara inställningar'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   TAB 3: Kuverttexter (from messages page)
+   ══════════════════════════════════════════════ */
+
+interface Message { emoji: string; text: string; }
+interface MessagesData {
+  host_self_messages: Message[];
+  lips_sealed_messages: Message[];
+  mystery_host_messages: Message[];
+}
+
+const DEFAULT_MESSAGES: MessagesData = {
+  host_self_messages: [
+    { emoji: '👑', text: 'Psst... värden är faktiskt ganska fantastisk. (Det är du!)' },
+    { emoji: '🪞', text: 'Ledtråd: Värden tittar på dig i spegeln varje morgon.' },
+    { emoji: '🦸', text: 'Breaking news: Kvällens värd är en hjälte i förklädnad!' },
+  ],
+  lips_sealed_messages: [
+    { emoji: '🤫', text: 'Our lips are sealed — avslöjar vi en ledtråd kan ni gissa vem!' },
+    { emoji: '🤐', text: 'Tyst som en mus — vi kan inte säga mer utan att avslöja!' },
+  ],
+  mystery_host_messages: [
+    { emoji: '🎭', text: 'Dina värdar är ett mysterium! Vem kan det vara?' },
+    { emoji: '✨', text: 'Överraskning väntar — vi avslöjar inget!' },
+  ],
+};
+
+function TexterTab({ eventId }: { eventId: string }) {
+  const [messages, setMessages] = useState<MessagesData>(DEFAULT_MESSAGES);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => { loadMessages(); }, [eventId]);
+
+  async function loadMessages() {
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/messages`);
+      const data = await res.json();
+      if (res.ok) {
+        setMessages({
+          host_self_messages: data.host_self_messages?.length ? data.host_self_messages : DEFAULT_MESSAGES.host_self_messages,
+          lips_sealed_messages: data.lips_sealed_messages?.length ? data.lips_sealed_messages : DEFAULT_MESSAGES.lips_sealed_messages,
+          mystery_host_messages: data.mystery_host_messages?.length ? data.mystery_host_messages : DEFAULT_MESSAGES.mystery_host_messages,
+        });
+      }
+    } catch { setError('Nätverksfel'); }
+    finally { setLoading(false); }
+  }
+
+  async function handleSave() {
+    setSaving(true); setError(''); setSuccess('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/messages`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(messages),
+      });
+      if (res.ok) { setSuccess('Sparat!'); setTimeout(() => setSuccess(''), 2000); }
+      else { const d = await res.json(); setError(d.error); }
+    } catch { setError('Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
+  function updateMessage(category: keyof MessagesData, index: number, field: 'emoji' | 'text', value: string) {
+    setMessages(prev => ({ ...prev, [category]: prev[category].map((msg, i) => i === index ? { ...msg, [field]: value } : msg) }));
+  }
+  function addMessage(category: keyof MessagesData) {
+    setMessages(prev => ({ ...prev, [category]: [...prev[category], { emoji: '✨', text: 'Nytt meddelande...' }] }));
+  }
+  function removeMessage(category: keyof MessagesData, index: number) {
+    setMessages(prev => ({ ...prev, [category]: prev[category].filter((_, i) => i !== index) }));
+  }
+
+  if (loading) return <LoadingPlaceholder />;
+
+  const categories: { key: keyof MessagesData; title: string; desc: string; color: 'amber' | 'purple' | 'indigo' }[] = [
+    { key: 'host_self_messages', title: '👑 Du är värden!', desc: 'Visas när gästen själv är värd', color: 'amber' },
+    { key: 'lips_sealed_messages', title: '🤫 Lips Sealed', desc: 'Visas när vi inte kan avslöja fler ledtrådar', color: 'purple' },
+    { key: 'mystery_host_messages', title: '🎭 Mystisk värd', desc: 'Visas när värden saknar fun facts', color: 'indigo' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Feedback success={success} error={error} onClearError={() => setError('')} />
+
+      {categories.map(({ key, title, desc, color }) => {
+        const bg = { amber: 'bg-amber-50 border-amber-200', purple: 'bg-purple-50 border-purple-200', indigo: 'bg-indigo-50 border-indigo-200' };
+        const btn = { amber: 'bg-amber-100 hover:bg-amber-200 text-amber-700', purple: 'bg-purple-100 hover:bg-purple-200 text-purple-700', indigo: 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700' };
+        return (
+          <div key={key} className={`rounded-xl p-5 border ${bg[color]}`}>
+            <h3 className="font-semibold text-gray-800 mb-1">{title}</h3>
+            <p className="text-sm text-gray-600 mb-3">{desc}</p>
+            <div className="space-y-2">
+              {messages[key].map((msg, i) => (
+                <div key={i} className="flex items-start gap-2 bg-white rounded-lg p-3 border border-gray-100">
+                  <input type="text" value={msg.emoji} onChange={(e) => updateMessage(key, i, 'emoji', e.target.value)} className="w-10 text-center text-lg p-1 border border-gray-200 rounded" />
+                  <textarea value={msg.text} onChange={(e) => updateMessage(key, i, 'text', e.target.value)} className="flex-1 p-2 border border-gray-200 rounded text-sm resize-none" rows={2} />
+                  <button onClick={() => removeMessage(key, i)} className="text-red-400 hover:text-red-600 p-1">✕</button>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => addMessage(key)} className={`mt-2 px-3 py-1.5 rounded-lg text-sm font-medium ${btn[color]}`}>+ Lägg till</button>
+          </div>
+        );
+      })}
+
+      <button onClick={handleSave} disabled={saving}
+        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-3 rounded-xl transition-colors">
+        {saving ? 'Sparar...' : '💾 Spara meddelanden'}
+      </button>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   TAB 4: Skicka ut kuvertlänkar
+   ══════════════════════════════════════════════ */
+
+function SkickaTab({ eventId }: { eventId: string }) {
+  const [couples, setCouples] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<Set<string>>(new Set());
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    fetch(`/api/organizer/events/${eventId}/guests`)
+      .then(r => r.json())
+      .then(data => {
+        setCouples((data.couples || []).filter((c: any) => !c.cancelled && c.confirmed));
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [eventId]);
+
+  async function sendAll() {
+    if (!confirm(`Skicka kuvertlänk till ${couples.length} par via email?`)) return;
+    setSending(true); setError(''); setSuccess('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/send-envelopes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ couple_ids: couples.map(c => c.id) }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSent(new Set(couples.map(c => c.id)));
+        setSuccess(`✅ Kuvertlänkar skickade till ${data.sent || couples.length} par!`);
+      } else {
+        setError(data.error || 'Kunde inte skicka');
+      }
+    } catch { setError('Nätverksfel'); }
+    finally { setSending(false); }
+  }
+
+  if (loading) return <LoadingPlaceholder />;
+
+  const withEmail = couples.filter(c => c.invited_email);
+  const withoutEmail = couples.filter(c => !c.invited_email);
+
+  return (
+    <div className="space-y-4">
+      <Feedback success={success} error={error} onClearError={() => setError('')} />
+
+      <div className="bg-white rounded-xl p-5 shadow-sm border">
+        <h2 className="font-semibold text-gray-900 mb-2">📤 Skicka kuvertlänkar</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Varje par får en personlig länk till sitt digitala kuvert via email.
+          Kuvertet avslöjar steg för steg vart de ska under kvällen.
+        </p>
+
+        <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Par med email</span>
+            <span className="font-medium text-gray-900">{withEmail.length}</span>
+          </div>
+          {withoutEmail.length > 0 && (
+            <div className="flex justify-between text-amber-600">
+              <span>Par utan email</span>
+              <span className="font-medium">{withoutEmail.length} (kan inte skickas)</span>
+            </div>
+          )}
+          <div className="flex justify-between border-t border-gray-200 pt-2">
+            <span className="text-gray-600 font-medium">Totalt att skicka</span>
+            <span className="font-bold text-gray-900">{withEmail.length} st</span>
+          </div>
+        </div>
+
+        <button
+          onClick={sendAll}
+          disabled={sending || withEmail.length === 0 || sent.size > 0}
+          className={`w-full py-3 rounded-xl font-semibold transition-colors ${
+            sent.size > 0
+              ? 'bg-green-100 text-green-700 cursor-default'
+              : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white'
+          }`}
+        >
+          {sent.size > 0
+            ? '✅ Kuvertlänkar skickade!'
+            : sending
+            ? 'Skickar...'
+            : `📤 Skicka till ${withEmail.length} par`}
+        </button>
+      </div>
+
+      {/* Preview of what gets sent */}
+      <div className="bg-white rounded-xl p-5 shadow-sm border">
+        <h3 className="font-medium text-gray-900 mb-3 text-sm">Förhandsvisning av email</h3>
+        <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600 space-y-2">
+          <p><strong>Ämne:</strong> 📬 Ditt kuvert är redo!</p>
+          <p><strong>Innehåll:</strong> Hej [namn]! Kvällen närmar sig. Klicka på länken nedan för att öppna ditt personliga kuvert som steg för steg avslöjar vart du ska ikväll.</p>
+          <p className="text-indigo-600 underline">https://cykelfesten.vercel.app/e/[slug]/live?coupleId=[id]</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Shared components ──────────────────────── */
+
+function TimingRow({ label, value, onChange, options }: { label: string; value: number; onChange: (v: number) => void; options: number[] }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-gray-700 text-sm">{label}</span>
+      <select value={value} onChange={(e) => onChange(parseInt(e.target.value))} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+        {options.map(opt => <option key={opt} value={opt}>{opt < 60 ? `${opt} min` : `${Math.floor(opt/60)}h${opt%60 ? ` ${opt%60}m` : ''}`}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function TimelineItem({ time, label, highlight = false }: { time: string; label: string; highlight?: boolean }) {
+  return (
+    <div className={`flex items-center gap-3 ${highlight ? 'font-semibold text-indigo-800' : 'text-indigo-700'}`}>
+      <span className="font-mono w-14 text-sm">{time}</span>
+      <span className="flex-1 border-t border-indigo-200 border-dashed" />
+      <span className="text-sm">{label}</span>
+    </div>
+  );
+}
+
+function fmtTime(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60) % 24;
+  const m = totalMinutes % 60;
+  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+}
+
+function LoadingPlaceholder() {
+  return <div className="animate-pulse space-y-4"><div className="h-8 bg-gray-200 rounded w-1/3" /><div className="h-40 bg-gray-200 rounded" /></div>;
+}
+
+function Feedback({ success, error, onClearError }: { success: string; error: string; onClearError: () => void }) {
+  return (
+    <>
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{success}</div>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between">
+          {error}
+          <button onClick={onClearError} className="text-red-400">✕</button>
+        </div>
+      )}
+    </>
+  );
+}

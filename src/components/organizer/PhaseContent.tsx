@@ -3,7 +3,6 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
 import { InlineGuestList } from '@/components/organizer/InlineGuestList';
 
@@ -45,16 +44,9 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
               disabled={isEventLocked}
             />
             <ActionCard
-              href={`/organizer/event/${eventId}/timing`}
+              href={`/organizer/event/${eventId}/envelopes`}
               title="Kuvert & Timing"
-              description="Justera tider och kuvert"
-              icon="⏰"
-              disabled={!hasMatching}
-            />
-            <ActionCard
-              href={`/organizer/event/${eventId}/messages`}
-              title="Kuvertmeddelanden"
-              description="Texter som visas i kuvertet"
+              description="Tider, reveals, texter och utskick"
               icon="✉️"
               disabled={!hasMatching}
             />
@@ -66,7 +58,6 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
               disabled={!hasMatching}
             />
           </div>
-          {hasMatching && <GuestPreviewSection eventId={eventId} slug={eventSlug} />}
         </div>
       );
 

@@ -3,7 +3,6 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
 import { InlineGuestList } from '@/components/organizer/InlineGuestList';
 
@@ -174,7 +173,6 @@ export function PhasesStepper({
               disabled={!hasMatching}
             />
           </div>
-          {hasMatching && <GuestPreviewSection eventId={eventId} slug={eventSlug} />}
         </div>
         );
       })(),

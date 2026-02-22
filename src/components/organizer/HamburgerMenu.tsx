@@ -72,16 +72,13 @@ export function HamburgerMenu({ eventId, eventSlug, activePhase, onPhaseChange }
           >
             <span>⚙️</span> Inställningar
           </Link>
-          {eventSlug && (
-            <Link
-              href={`/e/${eventSlug}`}
-              target="_blank"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-            >
-              <span>👁️</span> Gästperspektiv
-            </Link>
-          )}
+          <Link
+            href={`/organizer/event/${eventId}/preview`}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+          >
+            <span>👁️</span> Gästperspektiv
+          </Link>
           <div className="border-t border-gray-100 my-1" />
           <Link
             href="/organizer"
