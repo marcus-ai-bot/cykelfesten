@@ -4,6 +4,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { PhasesStepper } from '@/components/organizer/PhasesStepper';
 import StatusDropdown from '@/components/organizer/StatusDropdown';
+import { HamburgerMenu } from '@/components/organizer/HamburgerMenu';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,10 +121,11 @@ export default async function OrganizerEventPage({ params }: Props) {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b">
-        <div className="max-w-5xl mx-auto px-4 py-4">
-          <Link href="/organizer" className="text-gray-500 hover:text-gray-700">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <Link href="/organizer" className="text-gray-500 hover:text-gray-700 text-sm">
             ← Alla fester
           </Link>
+          <HamburgerMenu eventId={eventId} />
         </div>
       </header>
       
