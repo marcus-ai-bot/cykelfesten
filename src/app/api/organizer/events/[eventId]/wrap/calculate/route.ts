@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
 
+// 228 Mapbox requests in batches of 10 = ~25 seconds needed
+export const maxDuration = 60;
+
 type Coord = { lat: number; lng: number };
 
 function parsePoint(point: unknown): Coord | null {
@@ -207,8 +210,8 @@ export async function POST(
     coupleRoutes.push({ coupleId: couple.id, name, legs, totalMeters: 0, hostingCourse });
   }
 
-  // Batch cycling distance calculation (10 concurrent)
-  const BATCH = 10;
+  // Batch cycling distance calculation (25 concurrent for speed)
+  const BATCH = 25;
   const legDistances = new Map<number, number>(); // index → meters
   
   for (let i = 0; i < allLegs.length; i += BATCH) {
