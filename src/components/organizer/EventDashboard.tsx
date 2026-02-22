@@ -18,54 +18,54 @@ interface Props {
   hasMatching: boolean;
 }
 
-const PHASE_KEYS = ['invite', 'dinner', 'after'];
-const PHASE_LABELS: Record<string, string> = { invite: 'Inbjudan', dinner: 'Middag', after: 'Efteråt' };
-const PHASE_ICONS: Record<string, string> = { invite: '📨', dinner: '🍽️', after: '🌅' };
+const VIEW_KEYS = ['invite', 'matching', 'live', 'after'];
+const VIEW_LABELS: Record<string, string> = { invite: 'Inbjudan', matching: 'Matchning & Kuvert', live: 'Live', after: 'Efteråt' };
+const VIEW_ICONS: Record<string, string> = { invite: '📨', matching: '🍽️', live: '🔴', after: '🎉' };
 
 export function EventDashboard({
   eventId, eventSlug, eventName, shortDate, eventStatus,
   couplesCount, isPast, isToday, hasMatching,
 }: Props) {
-  const defaultPhase = useMemo(() => {
+  const defaultView = useMemo(() => {
     if (isPast || eventStatus === 'completed') return 'after';
-    if (isToday || eventStatus === 'active') return 'dinner';
-    if (eventStatus === 'matched' || eventStatus === 'locked') return 'dinner';
+    if (isToday || eventStatus === 'active') return 'live';
+    if (eventStatus === 'matched' || eventStatus === 'locked') return 'matching';
     return 'invite';
   }, [eventStatus, isPast, isToday]);
 
-  const [activePhase, setActivePhase] = useState(() => {
+  const [activeView, setActiveView] = useState(() => {
     if (typeof window !== 'undefined') {
-      const p = new URLSearchParams(window.location.search).get('phase');
-      if (p && PHASE_KEYS.includes(p)) return p;
+      const v = new URLSearchParams(window.location.search).get('view');
+      if (v && VIEW_KEYS.includes(v)) return v;
     }
-    return defaultPhase;
+    return defaultView;
   });
 
   // URL sync
-  function changePhase(phase: string) {
-    setActivePhase(phase);
+  function changeView(view: string) {
+    setActiveView(view);
     const params = new URLSearchParams(window.location.search);
-    if (phase === defaultPhase) params.delete('phase');
-    else params.set('phase', phase);
+    if (view === defaultView) params.delete('view');
+    else params.set('view', view);
     const query = params.toString();
     window.history.pushState(null, '', `${window.location.pathname}${query ? '?' + query : ''}`);
   }
 
   useEffect(() => {
     function onPopState() {
-      const p = new URLSearchParams(window.location.search).get('phase');
-      setActivePhase(p && PHASE_KEYS.includes(p) ? p : defaultPhase);
+      const v = new URLSearchParams(window.location.search).get('view');
+      setActiveView(v && VIEW_KEYS.includes(v) ? v : defaultView);
     }
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [defaultPhase]);
+  }, [defaultView]);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="text-lg">{PHASE_ICONS[activePhase]}</span>
+            <span className="text-lg">{VIEW_ICONS[activeView]}</span>
             <div className="flex items-baseline gap-2 min-w-0">
               <h1 className="text-lg font-bold text-gray-900 truncate">{eventName}</h1>
               <span className="text-sm text-gray-400 shrink-0 hidden sm:inline">— {shortDate}</span>
@@ -76,18 +76,18 @@ export function EventDashboard({
             <HamburgerMenu
               eventId={eventId}
               eventSlug={eventSlug}
-              activePhase={activePhase}
-              onPhaseChange={changePhase}
+              activePhase={activeView}
+              onPhaseChange={changeView}
             />
           </div>
         </div>
       </header>
 
-      {/* Sticky phase title bar */}
+      {/* Sticky view title bar */}
       <div className="sticky top-[53px] z-30 bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-4 py-2.5">
           <h2 className="text-sm font-semibold text-gray-700">
-            {PHASE_ICONS[activePhase]} {PHASE_LABELS[activePhase]}
+            {VIEW_ICONS[activeView]} {VIEW_LABELS[activeView]}
           </h2>
         </div>
       </div>
@@ -95,7 +95,7 @@ export function EventDashboard({
       <main className="max-w-5xl mx-auto px-4 py-6">
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <PhaseContent
-            phase={activePhase}
+            phase={activeView}
             eventId={eventId}
             eventSlug={eventSlug}
             eventStatus={eventStatus}
