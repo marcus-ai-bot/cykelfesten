@@ -10,10 +10,11 @@ interface Props {
   onPhaseChange?: (phase: string) => void;
 }
 
-const PHASES = [
+const VIEWS = [
   { key: 'invite', icon: '📨', label: 'Inbjudan' },
-  { key: 'dinner', icon: '🍽️', label: 'Middag' },
-  { key: 'after', icon: '🌅', label: 'Efteråt' },
+  { key: 'matching', icon: '🍽️', label: 'Matchning & Kuvert' },
+  { key: 'live', icon: '🔴', label: 'Live' },
+  { key: 'after', icon: '🎉', label: 'Efteråt' },
 ];
 
 export function HamburgerMenu({ eventId, eventSlug, activePhase, onPhaseChange }: Props) {
@@ -47,17 +48,17 @@ export function HamburgerMenu({ eventId, eventSlug, activePhase, onPhaseChange }
           {/* Phase navigation */}
           {onPhaseChange && (
             <>
-              {PHASES.map(phase => (
+              {VIEWS.map(view => (
                 <button
-                  key={phase.key}
-                  onClick={() => { onPhaseChange(phase.key); setOpen(false); }}
+                  key={view.key}
+                  onClick={() => { onPhaseChange(view.key); setOpen(false); }}
                   className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition ${
-                    activePhase === phase.key
+                    activePhase === view.key
                       ? 'bg-indigo-50 text-indigo-700 font-medium'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  <span>{phase.icon}</span> {phase.label}
+                  <span>{view.icon}</span> {view.label}
                 </button>
               ))}
               <div className="border-t border-gray-100 my-1" />
