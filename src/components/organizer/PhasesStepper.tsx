@@ -3,9 +3,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
 import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
-import { AfterPartyPreview } from '@/components/organizer/AfterPartyPreview';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
 
 /* ── Types ─────────────────────────────────────────────── */
@@ -167,15 +165,6 @@ export function PhasesStepper({
             {/* Inbjudningslänk — bara vid öppen/utkast */}
             {isInviteOpen && <InviteLinkSection eventId={eventId} />}
 
-            {/* Arrangörsteam */}
-            <div id="invite-team" className="scroll-mt-24 border-t pt-6">
-              <InviteTeamSection
-                eventId={eventId}
-                organizers={organizers}
-                isFounder={isFounder}
-                currentOrganizerId={currentOrganizerId}
-              />
-            </div>
           </div>
         );
       })(),

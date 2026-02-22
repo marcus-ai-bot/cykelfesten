@@ -23,7 +23,7 @@ export function HamburgerMenu({ eventId }: Props) {
     { icon: '⚙️', label: 'Eventinställningar', href: `/organizer/event/${eventId}/settings` },
     { icon: '⏰', label: 'Tider & kuvert', href: `/organizer/event/${eventId}/timing` },
     { icon: '✉️', label: 'Kuvertmeddelanden', href: `/organizer/event/${eventId}/messages` },
-    { icon: '👥', label: 'Arrangörsteam', href: `#invite-team` },
+    { icon: '👥', label: 'Arrangörsteam', href: `/organizer/event/${eventId}/team` },
   ];
 
   return (
