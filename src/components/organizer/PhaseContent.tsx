@@ -71,6 +71,12 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
             disabled={!hasMatching}
             step={liveStatus}
           />
+          <ActionCard
+            href={`/organizer/event/${eventId}/afterparty`}
+            title="Efterfesten"
+            description="Samlingsplats efter middagen"
+            icon="🎉"
+          />
         </div>
       );
     }
