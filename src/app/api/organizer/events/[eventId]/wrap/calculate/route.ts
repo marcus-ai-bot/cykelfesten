@@ -275,15 +275,132 @@ export async function POST(
     if (Array.isArray(c.partner_fun_facts) && c.partner_fun_facts.length > 0) funFactsCount++;
   });
 
-  // Districts
-  const districts = new Set<string>();
+  // --- Street-based stats ---
+  function extractStreet(address: string): string | null {
+    // "Sundsgatan 12, Piteå" → "Sundsgatan"
+    const match = address.match(/^([A-ZÅÄÖa-zåäö\s-]+?)\s+\d/);
+    return match ? match[1].trim() : null;
+  }
+
+  const streetCounts = new Map<string, number>(); // street → number of couples
   couples.forEach(c => {
-    if (c.address) {
-      const parts = c.address.split(',').map((s: string) => s.trim());
-      const city = parts.find((p: string) => /[A-ZÅÄÖ]/.test(p) && !/^\d/.test(p) && parts.indexOf(p) > 0);
-      if (city) districts.add(city);
+    if (!c.address) return;
+    const street = extractStreet(c.address);
+    if (street) streetCounts.set(street, (streetCounts.get(street) || 0) + 1);
+  });
+  const uniqueStreets = streetCounts.size;
+  const busiestStreet = [...streetCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  // Street with most served meals (hosts per street)
+  const streetMeals = new Map<string, number>(); // street → number of courses hosted
+  const envelopeList = envelopes || [];
+  const hostCoupleIds = new Set<string>();
+  envelopeList.forEach((e: any) => { if (e.host_couple_id) hostCoupleIds.add(e.host_couple_id); });
+  // Count courses per host address street
+  const hostCourseCounts = new Map<string, Set<string>>(); // hostCoupleId → set of courses
+  envelopeList.forEach((e: any) => {
+    if (!e.host_couple_id || !e.course) return;
+    if (!hostCourseCounts.has(e.host_couple_id)) hostCourseCounts.set(e.host_couple_id, new Set());
+    hostCourseCounts.get(e.host_couple_id)!.add(e.course);
+  });
+  // Now map host → street → total unique guests served
+  const streetServings = new Map<string, number>(); // street → total meal servings
+  for (const [hostId, courses] of hostCourseCounts) {
+    const couple = couples.find(c => c.id === hostId);
+    if (!couple?.address) continue;
+    const street = extractStreet(couple.address);
+    if (!street) continue;
+    // Each course hosts ~6 people (3 couples × 2), count envelope assignments
+    const mealsOnStreet = envelopeList.filter((e: any) => e.host_couple_id === hostId).length;
+    streetServings.set(street, (streetServings.get(street) || 0) + mealsOnStreet);
+  }
+  const topMealStreet = [...streetServings.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  // --- Event radius: max distance between any two participants ---
+  const allCoords = [...coupleCoords.values()];
+  let maxSpanMeters = 0;
+  let spanPairNames: [string, string] = ['', ''];
+  if (allCoords.length > 1) {
+    const coupleIdList = [...coupleCoords.keys()];
+    for (let i = 0; i < coupleIdList.length; i++) {
+      for (let j = i + 1; j < coupleIdList.length; j++) {
+        const d = haversineMeters(coupleCoords.get(coupleIdList[i])!, coupleCoords.get(coupleIdList[j])!);
+        if (d > maxSpanMeters) {
+          maxSpanMeters = d;
+          spanPairNames = [coupleNames.get(coupleIdList[i]) || '?', coupleNames.get(coupleIdList[j]) || '?'];
+        }
+      }
+    }
+  }
+
+  // --- Convex hull area (km²) using Shoelace formula on lat/lng ---
+  function convexHullArea(coords: Coord[]): number {
+    if (coords.length < 3) return 0;
+    // Simple convex hull (Graham scan)
+    const pts = coords.map(c => ({ x: c.lng, y: c.lat }));
+    pts.sort((a, b) => a.x - b.x || a.y - b.y);
+    const cross = (O: any, A: any, B: any) => (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+    const lower: any[] = [];
+    for (const p of pts) { while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop(); lower.push(p); }
+    const upper: any[] = [];
+    for (const p of pts.reverse()) { while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop(); upper.push(p); }
+    upper.pop(); lower.pop();
+    const hull = lower.concat(upper);
+    if (hull.length < 3) return 0;
+    // Shoelace in degrees, then convert to km² (approximate at latitude)
+    let area = 0;
+    for (let i = 0; i < hull.length; i++) {
+      const j = (i + 1) % hull.length;
+      area += hull[i].x * hull[j].y;
+      area -= hull[j].x * hull[i].y;
+    }
+    area = Math.abs(area) / 2;
+    // Convert degree² to km²: 1° lat ≈ 111 km, 1° lng ≈ 111 * cos(lat) km
+    const avgLat = coords.reduce((s, c) => s + c.lat, 0) / coords.length;
+    const kmPerDegLat = 111.32;
+    const kmPerDegLng = 111.32 * Math.cos(avgLat * Math.PI / 180);
+    return area * kmPerDegLat * kmPerDegLng;
+  }
+  const eventAreaKm2 = convexHullArea(allCoords);
+
+  // --- Neighbor pairs: couples on same street who never ate together ---
+  const neighborPairs: Array<{ a: string; b: string; street: string }> = [];
+  const couplesByStreet = new Map<string, string[]>(); // street → coupleIds
+  couples.forEach(c => {
+    if (!c.address) return;
+    const street = extractStreet(c.address);
+    if (street) {
+      if (!couplesByStreet.has(street)) couplesByStreet.set(street, []);
+      couplesByStreet.get(street)!.push(c.id);
     }
   });
+  // Build "ate together" set from envelopes (same host_couple_id + course = same table)
+  const ateTogetherSet = new Set<string>();
+  const envelopeByCourseHost = new Map<string, string[]>(); // "course:hostId" → coupleIds
+  envelopeList.forEach((e: any) => {
+    const key = `${e.course}:${e.host_couple_id}`;
+    if (!envelopeByCourseHost.has(key)) envelopeByCourseHost.set(key, []);
+    envelopeByCourseHost.get(key)!.push(e.couple_id);
+  });
+  for (const group of envelopeByCourseHost.values()) {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const pair = [group[i], group[j]].sort().join(':');
+        ateTogetherSet.add(pair);
+      }
+    }
+  }
+  for (const [street, ids] of couplesByStreet) {
+    if (ids.length < 2) continue;
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const pair = [ids[i], ids[j]].sort().join(':');
+        if (!ateTogetherSet.has(pair)) {
+          neighborPairs.push({ a: coupleNames.get(ids[i]) || '?', b: coupleNames.get(ids[j]) || '?', street });
+        }
+      }
+    }
+  }
 
   const existing = event?.wrap_stats || {};
 
@@ -308,8 +425,13 @@ export async function POST(
     longest_ride_couple: longestRoute?.name || '—',
     age_youngest: ages.length ? Math.min(...ages) : null,
     age_oldest: ages.length ? Math.max(...ages) : null,
-    districts_count: districts.size,
-    districts_list: Array.from(districts),
+    unique_streets: uniqueStreets,
+    busiest_street: busiestStreet ? { name: busiestStreet[0], couples: busiestStreet[1] } : null,
+    top_meal_street: topMealStreet ? { name: topMealStreet[0], servings: topMealStreet[1] } : null,
+    event_radius_km: Math.round(maxSpanMeters / 100) / 10,
+    event_radius_pair: spanPairNames,
+    event_area_km2: Math.round(eventAreaKm2 * 100) / 100,
+    neighbor_pairs: neighborPairs.slice(0, 10), // top 10
     fun_facts_count: funFactsCount,
     couples_with_routes: distances.length,
     distance_source: 'cycling',

@@ -16,7 +16,13 @@ interface WrapStats {
   longest_ride_couple: string;
   age_youngest: number | null;
   age_oldest: number | null;
-  districts_count: number;
+  unique_streets: number;
+  busiest_street: { name: string; couples: number } | null;
+  top_meal_street: { name: string; servings: number } | null;
+  event_radius_km: number;
+  event_radius_pair: string[];
+  event_area_km2: number;
+  neighbor_pairs: Array<{ a: string; b: string; street: string }>;
   fun_facts_count: number;
   couples_with_routes: number;
   distance_source: string;
@@ -137,7 +143,12 @@ export default function WrapPage() {
               <Stat label="⚡ Kortaste rutt" value={stats.shortest_ride_km > 0 ? `${stats.shortest_ride_km} km` : '—'} sub={stats.shortest_ride_couple || undefined} />
               <Stat label="🏔️ Längsta rutt" value={stats.longest_ride_km > 0 ? `${stats.longest_ride_km} km` : '—'} sub={stats.longest_ride_couple || undefined} />
               <Stat label="🎂 Åldersspan" value={stats.age_youngest && stats.age_oldest ? `${stats.age_youngest}–${stats.age_oldest} år` : 'Saknar födelseår'} />
-              <Stat label="🏘️ Stadsdelar" value={stats.districts_count || '—'} />
+              <Stat label="🏘️ Antal gator" value={stats.unique_streets || '—'} />
+              <Stat label="🏠 Flest boende" value={stats.busiest_street?.name || '—'} sub={stats.busiest_street ? `${stats.busiest_street.couples} ekipage` : undefined} />
+              <Stat label="🍳 Flest rätter serverade" value={stats.top_meal_street?.name || '—'} sub={stats.top_meal_street ? `${stats.top_meal_street.servings} kuvert` : undefined} />
+              <Stat label="🗺️ Eventets radie" value={stats.event_radius_km > 0 ? `${stats.event_radius_km} km` : '—'} sub={stats.event_radius_pair?.filter(Boolean).join(' ↔ ') || undefined} />
+              <Stat label="📐 Eventets yta" value={stats.event_area_km2 > 0 ? `${stats.event_area_km2} km²` : '—'} />
+              <Stat label="🌳 Grannpar som missades" value={stats.neighbor_pairs?.length ?? '—'} sub={stats.neighbor_pairs?.[0] ? `t.ex. ${stats.neighbor_pairs[0].a} & ${stats.neighbor_pairs[0].b}` : undefined} />
               <Stat label="✨ Fun facts" value={stats.fun_facts_count} />
             </div>
           </div>
