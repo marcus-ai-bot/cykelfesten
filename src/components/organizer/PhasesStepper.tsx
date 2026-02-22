@@ -5,26 +5,20 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { InviteTeamSection } from '@/components/organizer/InviteTeamSection';
 import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
-import { AfterPartyPreview } from '@/components/organizer/AfterPartyPreview';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
+import { InlineGuestList } from '@/components/organizer/InlineGuestList';
 
 /* ── Types ─────────────────────────────────────────────── */
 
-type PhaseStatus = 'not_started' | 'in_progress' | 'complete';
+type PhaseVisual = 'not_started' | 'in_progress' | 'complete' | 'locked';
 
 type OrganizerRow = {
   id: string;
   organizer_id: string;
   role: 'founder' | 'co-organizer';
   accepted_at: string | null;
-  organizer: {
-    id: string;
-    name: string | null;
-    email: string;
-  };
+  organizer: { id: string; name: string | null; email: string };
 };
-
-type PhaseVisual = 'not_started' | 'in_progress' | 'complete' | 'locked';
 
 interface Props {
   eventId: string;
@@ -37,6 +31,14 @@ interface Props {
   organizers: OrganizerRow[];
   isFounder: boolean;
   currentOrganizerId: string;
+  // Stats
+  pairsCount: number;
+  singlesCount: number;
+  geocodedCount: number;
+  hostCount: number;
+  envelopeCount: number;
+  daysUntilEvent: number;
+  maxCouples: number | null;
 }
 
 interface Phase {
@@ -45,6 +47,18 @@ interface Phase {
   icon: string;
   status: PhaseVisual;
   content: React.ReactNode;
+}
+
+/* ── PhaseStats — compact inline stats per phase ─────── */
+
+function PhaseStats({ items }: { items: string[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 mb-5 pb-4 border-b border-gray-100">
+      {items.map((item, i) => (
+        <span key={i}>{item}</span>
+      ))}
+    </div>
+  );
 }
 
 /* ── Main component ────────────────────────────────────── */
@@ -60,15 +74,22 @@ export function PhasesStepper({
   organizers,
   isFounder,
   currentOrganizerId,
+  pairsCount,
+  singlesCount,
+  geocodedCount,
+  hostCount,
+  envelopeCount,
+  daysUntilEvent,
+  maxCouples,
 }: Props) {
   const defaultPhaseIndex = useMemo(() => {
     if (isPast || eventStatus === 'completed') return 2;
     if (isToday || eventStatus === 'active') return 1;
     if (eventStatus === 'matched' || eventStatus === 'locked') return 1;
-    return 0; // draft, open → Inbjudan
+    return 0;
   }, [eventStatus, isPast, isToday]);
 
-  const phaseKeys = ['invite', 'dinner', 'after', 'settings'];
+  const phaseKeys = ['invite', 'dinner', 'after'];
   const [activePhaseIndex, setActivePhaseIndexRaw] = useState(() => {
     if (typeof window !== 'undefined') {
       const urlPhase = new URLSearchParams(window.location.search).get('phase');
@@ -81,14 +102,10 @@ export function PhasesStepper({
     return false;
   });
 
-  // Follow status-driven default unless user manually picked a tab
   useEffect(() => {
-    if (!manuallySelected) {
-      setActivePhaseIndexRaw(defaultPhaseIndex);
-    }
+    if (!manuallySelected) setActivePhaseIndexRaw(defaultPhaseIndex);
   }, [defaultPhaseIndex, manuallySelected]);
 
-  // Listen for popstate (back/forward)
   useEffect(() => {
     function onPopState() {
       const urlPhase = new URLSearchParams(window.location.search).get('phase');
@@ -109,6 +126,9 @@ export function PhasesStepper({
     window.history.pushState(null, '', `${window.location.pathname}${query ? '?' + query : ''}`);
   }
 
+  const missingGeo = couplesCount - geocodedCount;
+  const daysLabel = daysUntilEvent === 0 ? 'Idag!' : daysUntilEvent === 1 ? 'Imorgon!' : daysUntilEvent > 0 ? `${daysUntilEvent} dagar kvar` : 'Avslutad';
+
   const phases: Phase[] = [
     {
       key: 'invite',
@@ -121,53 +141,46 @@ export function PhasesStepper({
       content: (() => {
         const isEventLocked = eventStatus === 'locked' || eventStatus === 'active' || eventStatus === 'completed';
         const isInviteOpen = eventStatus === 'draft' || eventStatus === 'open';
+
+        const statsItems = [
+          `👥 ${couplesCount}${maxCouples ? ` / ${maxCouples}` : ''} anmälda`,
+          `${pairsCount} par · ${singlesCount} singlar`,
+          `📍 ${geocodedCount}/${couplesCount} adresser${missingGeo > 0 ? ` ⚠️` : ' ✅'}`,
+          hostCount > 0 ? `🏠 ${hostCount} värdar` : null,
+          `📅 ${daysLabel}`,
+        ].filter(Boolean) as string[];
+
         return (
           <div className="space-y-6">
+            <PhaseStats items={statsItems} />
+
             {(eventStatus === 'matched' || eventStatus === 'locked') && (
               <InviteLockedBanner eventId={eventId} />
             )}
 
-            {/* All action cards in one grid */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <ActionCard
-                href={`/organizer/event/${eventId}/guests`}
-                title="Gästlista"
-                description="Hantera registreringar och bekräftelser"
-                icon="👥"
-                count={couplesCount}
-              />
+            {/* Inline guest list */}
+            <InlineGuestList eventId={eventId} />
+
+            {/* Quick actions */}
+            <div className="flex flex-wrap gap-2">
               {isInviteOpen && (
-                <ActionCard
-                  href={`/e/${eventSlug}`}
-                  title="Förhandsgranska"
-                  description="Se gästsidan som dina gäster"
-                  icon="👁️"
-                  target="_blank"
-                />
+                <QuickAction href={`/e/${eventSlug}`} icon="👁️" label="Förhandsgranska" target="_blank" />
               )}
               {couplesCount > 0 && (
                 <>
-                  <ActionCard
+                  <QuickAction
                     href={`/organizer/event/${eventId}/matching`}
-                    title={isEventLocked ? '🔒 Matchning låst' : 'Kör matchning'}
-                    description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
                     icon="🔀"
+                    label={isEventLocked ? '🔒 Matchning' : 'Matchning'}
                     disabled={isEventLocked}
                   />
-                  <ActionCard
-                    href={`/organizer/event/${eventId}/map`}
-                    title="Karta"
-                    description="Se matchade grupper på kartan"
-                    icon="🗺️"
-                  />
+                  <QuickAction href={`/organizer/event/${eventId}/map`} icon="🗺️" label="Karta" />
                 </>
               )}
             </div>
 
-            {/* Inbjudningslänk — bara vid öppen/utkast */}
             {isInviteOpen && <InviteLinkSection eventId={eventId} />}
 
-            {/* Arrangörsteam */}
             <div id="invite-team" className="scroll-mt-24 border-t pt-6">
               <InviteTeamSection
                 eventId={eventId}
@@ -187,19 +200,18 @@ export function PhasesStepper({
       status: !hasMatching ? 'not_started' : isPast ? 'complete' : 'in_progress',
       content: (
         <div className="space-y-6">
+          <PhaseStats items={[
+            `✉️ ${envelopeCount} kuvert`,
+            `🏠 ${hostCount} värdar`,
+            `📅 ${daysLabel}`,
+          ]} />
+
           <div className="grid md:grid-cols-2 gap-6">
             <ActionCard
               href={`/organizer/event/${eventId}/timing`}
-              title="Kuvert & Timing"
-              description="Justera tider och kuvert"
+              title="Timing & Kuvert"
+              description="Tider, kuvertmeddelanden och kontroller"
               icon="⏰"
-              disabled={!hasMatching}
-            />
-            <ActionCard
-              href={`/organizer/event/${eventId}/messages`}
-              title="Kuvertmeddelanden"
-              description="Texter som visas i kuvertet"
-              icon="✉️"
               disabled={!hasMatching}
             />
             <ActionCard
@@ -221,9 +233,14 @@ export function PhasesStepper({
       status: !isPast ? 'not_started' : 'in_progress',
       content: (
         <div className="space-y-6">
+          <PhaseStats items={[
+            `👥 ${couplesCount} deltagare`,
+            `🏠 ${hostCount} värdar`,
+          ]} />
+
           {!isPast && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-              ⏳ Dessa funktioner blir tillgängliga efter eventet. Du kan förbereda Awards och Wrap-inställningar redan nu.
+              ⏳ Dessa funktioner blir tillgängliga efter eventet. Du kan förbereda redan nu.
             </div>
           )}
           <div className="grid md:grid-cols-2 gap-6">
@@ -243,22 +260,6 @@ export function PhasesStepper({
         </div>
       ),
     },
-    {
-      key: 'settings',
-      name: 'Inställningar',
-      icon: '⚙️',
-      status: 'not_started',
-      content: (
-        <div className="grid md:grid-cols-2 gap-6">
-          <ActionCard
-            href={`/organizer/event/${eventId}/settings`}
-            title="Eventinställningar"
-            description="Datum, tider och kuvert"
-            icon="⚙️"
-          />
-        </div>
-      ),
-    },
   ];
 
   const activePhase = phases[activePhaseIndex];
@@ -270,7 +271,6 @@ export function PhasesStepper({
         <div className="flex gap-1.5 overflow-x-auto overscroll-x-contain flex-nowrap scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
           {phases.map((phase, index) => {
             const isActive = index === activePhaseIndex;
-            // Status ring: complete=green, in_progress=amber, not_started=none
             const statusRing = !isActive && phase.status === 'locked'
               ? 'ring-2 ring-gray-400 bg-gray-100 text-gray-500'
               : !isActive && phase.status === 'complete'
@@ -289,23 +289,13 @@ export function PhasesStepper({
                   flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-2
                   text-sm font-semibold whitespace-nowrap
                   transition-all duration-200 ease-out
-                  ${isActive
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : statusRing
-                  }
+                  ${isActive ? 'bg-indigo-600 text-white shadow-sm' : statusRing}
                 `}
               >
                 <span className="text-base leading-none">{phase.icon}</span>
-                {phase.key === 'settings'
-                  ? <span className="hidden sm:inline">{phase.name}</span>
-                  : <span className="text-xs sm:text-sm">{phase.name}</span>
-                }
-                {phase.status === 'locked' && (
-                  <span className="text-xs">🔒</span>
-                )}
-                {isActive && phase.status === 'complete' && (
-                  <span className="text-white/80 text-xs">✓</span>
-                )}
+                <span className="text-xs sm:text-sm">{phase.name}</span>
+                {phase.status === 'locked' && <span className="text-xs">🔒</span>}
+                {isActive && phase.status === 'complete' && <span className="text-white/80 text-xs">✓</span>}
               </button>
             );
           })}
@@ -316,30 +306,20 @@ export function PhasesStepper({
       <div className="bg-white rounded-2xl shadow-sm p-6">
         <div className="flex items-center gap-3 mb-5">
           <span className="text-2xl leading-none">{activePhase.icon}</span>
-          <h2 className="text-lg font-semibold text-gray-900">
-            {activePhase.name}
-          </h2>
-          {activePhase.key !== 'settings' && activePhase.status !== 'not_started' && (
-            <StatusDot status={activePhase.status} size="md" />
-          )}
+          <h2 className="text-lg font-semibold text-gray-900">{activePhase.name}</h2>
+          {activePhase.status !== 'not_started' && <StatusDot status={activePhase.status} size="md" />}
         </div>
-        <div
-          key={activePhase.key}
-          className="animate-fade-in"
-        >
+        <div key={activePhase.key} className="animate-fade-in">
           {activePhase.content}
         </div>
       </div>
 
-      {/* CSS animation — no setTimeout hack */}
       <style>{`
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in {
-          animation: fadeSlideIn 0.25s ease-out both;
-        }
+        .animate-fade-in { animation: fadeSlideIn 0.25s ease-out both; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
@@ -349,52 +329,43 @@ export function PhasesStepper({
 
 /* ── StatusDot ─────────────────────────────────────────── */
 
-function StatusDot({
-  status,
-  size = 'sm',
-  className = '',
-}: {
-  status: PhaseVisual;
-  size?: 'sm' | 'md';
-  className?: string;
-}) {
-  const dims = size === 'sm' ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5';
-
+function StatusDot({ status, size = 'sm', className = '' }: { status: PhaseVisual; size?: 'sm' | 'md'; className?: string }) {
   if (status === 'complete') {
-    const completeDims = size === 'sm' ? 'w-3.5 h-3.5 text-[9px]' : 'w-5 h-5 text-xs';
+    const dims = size === 'sm' ? 'w-3.5 h-3.5 text-[9px]' : 'w-5 h-5 text-xs';
+    return <span className={`inline-flex items-center justify-center rounded-full bg-emerald-500 text-white font-bold ${dims} ${className}`}>✓</span>;
+  }
+  if (status === 'in_progress') {
+    const dims = size === 'sm' ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5';
+    return <span className={`inline-flex rounded-full bg-amber-400 ${dims} ${className}`} />;
+  }
+  return null;
+}
+
+/* ── QuickAction — compact action buttons ─────────────── */
+
+function QuickAction({ href, icon, label, disabled, target }: { href: string; icon: string; label: string; disabled?: boolean; target?: string }) {
+  if (disabled) {
     return (
-      <span className={`inline-flex items-center justify-center rounded-full bg-emerald-500 text-white font-bold ${completeDims} ${className}`}>
-        ✓
+      <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm cursor-not-allowed">
+        <span>{icon}</span> {label}
       </span>
     );
   }
-
-  if (status === 'in_progress') {
-    return <span className={`inline-flex rounded-full bg-amber-400 ${dims} ${className}`} />;
-  }
-
-  // not_started — shouldn't render but just in case
-  return <span className={`inline-flex rounded-full bg-gray-300 ${dims} ${className}`} />;
+  return (
+    <Link
+      href={href}
+      target={target}
+      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-medium transition"
+    >
+      <span>{icon}</span> {label}
+    </Link>
+  );
 }
 
 /* ── ActionCard ────────────────────────────────────────── */
 
-function ActionCard({
-  href,
-  title,
-  description,
-  icon,
-  count,
-  disabled,
-  target,
-}: {
-  href: string;
-  title: string;
-  description: string;
-  icon: string;
-  count?: number;
-  disabled?: boolean;
-  target?: string;
+function ActionCard({ href, title, description, icon, count, disabled, target }: {
+  href: string; title: string; description: string; icon: string; count?: number; disabled?: boolean; target?: string;
 }) {
   if (disabled) {
     return (
@@ -405,14 +376,8 @@ function ActionCard({
       </div>
     );
   }
-
   return (
-    <Link
-      href={href}
-      target={target}
-      className="group bg-white rounded-xl p-6 shadow-sm border border-gray-100
-                 hover:shadow-md hover:border-indigo-200 transition-all duration-150"
-    >
+    <Link href={href} target={target} className="group bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all duration-150">
       <div className="flex items-start justify-between">
         <div>
           <div className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-150 inline-block">{icon}</div>
@@ -420,9 +385,7 @@ function ActionCard({
           <p className="text-sm text-gray-500">{description}</p>
         </div>
         {count !== undefined && (
-          <span className="bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full text-sm font-semibold">
-            {count}
-          </span>
+          <span className="bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full text-sm font-semibold">{count}</span>
         )}
       </div>
     </Link>
