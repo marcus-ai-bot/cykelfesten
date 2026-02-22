@@ -60,10 +60,11 @@ export async function GET(request: NextRequest) {
   // Allow organizers to simulate time for preview
   const simulateTime = searchParams.get('simulateTime');
   const organizer = await getOrganizer();
-  const now = simulateTime && organizer ? new Date(simulateTime) : new Date();
+  const isOrganizerPreview = !!organizer || !!simulateTime;
+  const now = simulateTime ? new Date(simulateTime) : new Date();
   
   // Use admin client for organizer preview (bypasses RLS), regular client for guests
-  const supabase = organizer ? createAdminClient() : await createClient();
+  const supabase = isOrganizerPreview ? createAdminClient() : await createClient();
   
   try {
     // 1. Verify couple exists and belongs to event
