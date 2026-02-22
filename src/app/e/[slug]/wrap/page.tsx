@@ -450,7 +450,7 @@ export default function WrapPage() {
                 transition={{ delay: 1.1 }}
                 className="text-xl text-emerald-200"
               >
-                {ws.event_radius_km} km mellan {ws.event_radius_pair?.[0]?.split(' ')[0]} och {ws.event_radius_pair?.[1]?.split(' ')[0]}
+                {ws.event_radius_km} km från ena kanten till den andra
               </motion.p>
             )}
           </motion.div>
@@ -550,7 +550,6 @@ export default function WrapPage() {
 
     // Slide 8: Neighbor miss (if any) — emotional/funny
     if (ws?.neighbor_pairs && ws.neighbor_pairs.length > 0) {
-      const pair = ws.neighbor_pairs[0];
       newSlides.push(
         <Slide key="neighbors" bg="from-amber-400 via-yellow-500 to-lime-500">
           <motion.div
@@ -578,28 +577,34 @@ export default function WrapPage() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.5, type: 'spring' }}
-              className="text-2xl font-black mb-4 text-amber-900"
+              className="text-4xl font-black mb-4 text-amber-900"
             >
-              {pair.a.split(' ')[0]} och {pair.b.split(' ')[0]} bor på samma gata
+              {ws.neighbor_pairs.length}
             </motion.p>
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.9 }}
-              className="text-xl text-amber-800 mb-4"
+              transition={{ delay: 0.8 }}
+              className="text-2xl font-bold text-amber-800 mb-4"
             >
-              men träffades aldrig under kvällen?
+              grannpar bor på samma gata
             </motion.p>
-            {ws.neighbor_pairs.length > 1 && (
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.2 }}
-                className="text-lg text-amber-700"
-              >
-                ({ws.neighbor_pairs.length} grannpar missade varandra totalt!)
-              </motion.p>
-            )}
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.1 }}
+              className="text-xl text-amber-700"
+            >
+              men träffades aldrig under kvällen! 🏠↔️🏠
+            </motion.p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.5 }}
+              className="text-lg text-amber-600 mt-4"
+            >
+              Nästa gång kanske? 😏
+            </motion.p>
           </motion.div>
         </Slide>
       );
