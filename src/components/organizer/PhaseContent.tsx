@@ -275,6 +275,9 @@ function AfterPartyEditCard({ eventId }: { eventId: string }) {
 function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [event, setEvent] = useState<any>(null);
+  const [timing, setTiming] = useState<any>(null);
+  const [courseOffsets, setCourseOffsets] = useState<Record<string, Record<string, number>>>({});
+  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [delaying, setDelaying] = useState(false);
@@ -283,9 +286,17 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
 
   const loadData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/organizer/events/${eventId}/settings`);
-      const data = await res.json();
-      if (res.ok) setEvent(data.event);
+      const [settingsRes, timingRes] = await Promise.all([
+        fetch(`/api/organizer/events/${eventId}/settings`),
+        fetch(`/api/organizer/events/${eventId}/timing`),
+      ]);
+      const settingsData = await settingsRes.json();
+      const timingData = await timingRes.json();
+      if (settingsRes.ok && settingsData.event) {
+        setEvent(settingsData.event);
+        setCourseOffsets(settingsData.event.course_timing_offsets || {});
+      }
+      if (timingRes.ok && timingData.timing) setTiming(timingData.timing);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [eventId]);
@@ -396,6 +407,7 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
               <div className="space-y-1">
                 {courses.map(({ label, icon, field, value }) => {
                   const time = value?.slice(0, 5) || '00:00';
+                  const courseKey = field.replace('_time', ''); // starter, main, dessert
                   const adjust = (min: number) => {
                     const [h, m] = time.split(':').map(Number);
                     const total = h * 60 + m + min;
@@ -404,16 +416,108 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
                     const newTime = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:00`;
                     saveTime(field, newTime, time);
                   };
+                  const isExpanded = expandedCourse === courseKey;
+                  const offsets = courseOffsets[courseKey] || {};
+                  const revealFields = [
+                    { key: 'teasing_minutes_before', label: '🤫 Nyfiken', defaultVal: timing?.teasing_minutes_before ?? 360 },
+                    { key: 'clue_1_minutes_before', label: '🔮 Ledtråd 1', defaultVal: timing?.clue_1_minutes_before ?? 120 },
+                    { key: 'clue_2_minutes_before', label: '🔮 Ledtråd 2', defaultVal: timing?.clue_2_minutes_before ?? 30 },
+                    { key: 'street_minutes_before', label: '📍 Gata', defaultVal: timing?.street_minutes_before ?? 15 },
+                    { key: 'number_minutes_before', label: '🔢 Nummer', defaultVal: timing?.number_minutes_before ?? 5 },
+                  ];
+                  const fmtRevealTime = (minBefore: number) => {
+                    const [h, m] = time.split(':').map(Number);
+                    const total = h * 60 + m - minBefore;
+                    const rH = Math.floor(((total % 1440) + 1440) % 1440 / 60);
+                    const rM = ((total % 60) + 60) % 60;
+                    return `${String(rH).padStart(2, '0')}:${String(rM).padStart(2, '0')}`;
+                  };
                   return (
-                    <div key={field} className="flex items-center justify-between py-2">
-                      <span className="text-sm text-gray-700">{icon} {label}</span>
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => adjust(-5)} disabled={saving}
-                          className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">−</button>
-                        <span className="text-sm font-mono font-semibold text-gray-900 min-w-[3rem] text-center">{time}</span>
-                        <button onClick={() => adjust(5)} disabled={saving}
-                          className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">+</button>
+                    <div key={field}>
+                      <div className="flex items-center justify-between py-2">
+                        <button onClick={() => setExpandedCourse(isExpanded ? null : courseKey)}
+                          className="text-sm text-gray-700 hover:text-indigo-600 flex items-center gap-1">
+                          {icon} {label}
+                          <span className="text-[10px] text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => adjust(-5)} disabled={saving}
+                            className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">−</button>
+                          <span className="text-sm font-mono font-semibold text-gray-900 min-w-[3rem] text-center">{time}</span>
+                          <button onClick={() => adjust(5)} disabled={saving}
+                            className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">+</button>
+                        </div>
                       </div>
+                      {isExpanded && (
+                        <div className="ml-4 mb-3 pl-3 border-l-2 border-indigo-100 space-y-1.5">
+                          {revealFields.map(({ key, label: rLabel, defaultVal }) => {
+                            const val = offsets[key] ?? defaultVal;
+                            const adjustReveal = async (delta: number) => {
+                              const newVal = Math.max(0, val + delta);
+                              const newOffsets = { ...courseOffsets, [courseKey]: { ...offsets, [key]: newVal } };
+                              setCourseOffsets(newOffsets);
+                              setSaving(true);
+                              try {
+                                await fetch(`/api/organizer/events/${eventId}/settings`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ course_timing_offsets: newOffsets }),
+                                });
+                                await fetch('/api/admin/recalc-envelope-times', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ event_id: eventId }),
+                                });
+                                setMessage(`✅ ${rLabel} → ${fmtRevealTime(newVal)}`);
+                                setTimeout(() => setMessage(''), 2000);
+                              } catch { setMessage('❌ Nätverksfel'); }
+                              finally { setSaving(false); }
+                            };
+                            const isOverridden = offsets[key] != null;
+                            return (
+                              <div key={key} className="flex items-center justify-between">
+                                <span className={`text-xs ${isOverridden ? 'text-indigo-700 font-medium' : 'text-gray-500'}`}>
+                                  {rLabel}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => adjustReveal(-5)} disabled={saving}
+                                    className="w-6 h-6 rounded bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-[10px] font-bold">−</button>
+                                  <span className={`text-xs font-mono min-w-[3rem] text-center ${isOverridden ? 'text-indigo-700 font-bold' : 'text-gray-400'}`}>
+                                    {fmtRevealTime(val)}
+                                  </span>
+                                  <button onClick={() => adjustReveal(5)} disabled={saving}
+                                    className="w-6 h-6 rounded bg-blue-50 text-blue-500 hover:bg-blue-100 disabled:opacity-40 text-[10px] font-bold">+</button>
+                                  {isOverridden && (
+                                    <button onClick={async () => {
+                                      const { [key]: _, ...rest } = offsets;
+                                      const newOffsets = Object.keys(rest).length
+                                        ? { ...courseOffsets, [courseKey]: rest }
+                                        : (() => { const { [courseKey]: __, ...r } = courseOffsets; return r; })();
+                                      setCourseOffsets(newOffsets);
+                                      setSaving(true);
+                                      try {
+                                        await fetch(`/api/organizer/events/${eventId}/settings`, {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ course_timing_offsets: newOffsets }),
+                                        });
+                                        await fetch('/api/admin/recalc-envelope-times', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ event_id: eventId }),
+                                        });
+                                        setMessage(`✅ ${rLabel} återställd`);
+                                        setTimeout(() => setMessage(''), 2000);
+                                      } catch { setMessage('❌ Nätverksfel'); }
+                                      finally { setSaving(false); }
+                                    }} className="w-6 h-6 rounded bg-gray-100 text-gray-400 hover:bg-gray-200 text-[10px]" title="Återställ">↩</button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
