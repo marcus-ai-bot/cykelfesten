@@ -173,7 +173,13 @@ function AfterPartyEditCard({ eventId }: { eventId: string }) {
       });
       if (res.ok) {
         setMessage('✅ Sparat');
-        setTimeout(() => setMessage(''), 3000);
+        // Auto-recalc wrap stats if coordinates changed
+        if (form.afterparty_coordinates || form.afterparty_location) {
+          fetch(`/api/organizer/events/${eventId}/wrap/calculate`, { method: 'POST' })
+            .then(() => setMessage('✅ Sparat + avstånd omräknade'))
+            .catch(() => {});
+        }
+        setTimeout(() => setMessage(''), 4000);
       } else {
         setMessage('❌ Kunde inte spara');
       }
