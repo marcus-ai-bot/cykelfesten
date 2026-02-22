@@ -117,40 +117,29 @@ export default async function OrganizerEventPage({ params }: Props) {
   const isToday = eventDateObj.toDateString() === today.toDateString();
   const isFounder = access.role === 'founder';
   
+  const shortDate = eventDateObj.toLocaleDateString('sv-SE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b">
+      <header className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/organizer" className="text-gray-500 hover:text-gray-700 text-sm">
-            ← Alla fester
-          </Link>
-          <HamburgerMenu eventId={eventId} />
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h1 className="text-lg font-bold text-gray-900 truncate">{event.name}</h1>
+            <span className="text-sm text-gray-400 shrink-0">— {shortDate}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <StatusDropdown eventId={eventId} currentStatus={event.status} />
+            <HamburgerMenu eventId={eventId} eventSlug={event.slug} />
+          </div>
         </div>
       </header>
       
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* Event Header */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2 flex-wrap">
-                <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
-                <StatusDropdown eventId={eventId} currentStatus={event.status} />
-              </div>
-              <p className="text-gray-600 capitalize">{eventDate}</p>
-              {event.city && <p className="text-gray-500 text-sm">{event.city}</p>}
-            </div>
-            
-            <Link
-              href={`/e/${event.slug}`}
-              target="_blank"
-              className="text-indigo-600 hover:text-indigo-700 text-sm"
-            >
-              Öppna gästsida →
-            </Link>
-          </div>
-        </div>
+      <main className="max-w-5xl mx-auto px-4 py-6">
         
         {/* Phase-aware Stats */}
         <DashboardStats
