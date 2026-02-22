@@ -119,13 +119,23 @@ export function funFactsToStrings(raw: unknown): string[] {
 // ── Legacy parsing (string[] → FunFacts) ────────────────────────────
 
 const LEGACY_PATTERNS: { pattern: RegExp; key: keyof FunFacts; extract: (m: RegExpMatchArray) => string }[] = [
+  // Music decade — multiple formats
   { pattern: /^Tycker att (\d+)-talets musik var bäst$/i, key: 'musicDecade', extract: (m) => m[1] },
+  { pattern: /^Favoriter från (\d+)-talet$/i, key: 'musicDecade', extract: (m) => m[1] },
+  { pattern: /^(\d+)-talets musik/i, key: 'musicDecade', extract: (m) => m[1] },
+  { pattern: /^Musik.?\s*(\d+)/i, key: 'musicDecade', extract: (m) => m[1] },
+  // Other fields
   { pattern: /^Har husdjur:\s*(.+)$/i, key: 'pet', extract: (m) => m[1] },
+  { pattern: /^Husdjur:\s*(.+)$/i, key: 'pet', extract: (m) => m[1] },
   { pattern: /^Hemligt talent:\s*(.+)$/i, key: 'talent', extract: (m) => m[1] },
+  { pattern: /^Talent:\s*(.+)$/i, key: 'talent', extract: (m) => m[1] },
   { pattern: /^Första jobbet var\s+(.+)$/i, key: 'firstJob', extract: (m) => m[1] },
+  { pattern: /^Första jobbet:\s*(.+)$/i, key: 'firstJob', extract: (m) => m[1] },
   { pattern: /^Drömresmål:\s*(.+)$/i, key: 'dreamDestination', extract: (m) => m[1] },
   { pattern: /^Spelar\s+(.+)$/i, key: 'instruments', extract: (m) => m[1] },
+  { pattern: /^Instrument:\s*(.+)$/i, key: 'instruments', extract: (m) => m[1] },
   { pattern: /^Sportar:\s*(.+)$/i, key: 'sport', extract: (m) => m[1] },
+  { pattern: /^Sport:\s*(.+)$/i, key: 'sport', extract: (m) => m[1] },
   { pattern: /^Viktigt år:\s*(.+)$/i, key: 'importantYear', extract: (m) => m[1] },
 ];
 
