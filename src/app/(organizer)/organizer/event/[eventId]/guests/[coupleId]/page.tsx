@@ -296,7 +296,67 @@ function Field({ label, field, form, setForm, editing, type = 'text', isArray = 
   label: string; field: string; form: Record<string, any>; setForm: (f: any) => void; editing: boolean; type?: string; isArray?: boolean;
 }) {
   const value = form[field];
-  const display = isArray ? (value || []).join(', ') : (value ?? '—');
+
+  // Array fields: show as individual items (fun facts, allergies)
+  if (isArray) {
+    const items: string[] = value || [];
+
+    if (!editing) {
+      return (
+        <div className="py-1.5 border-b border-gray-50">
+          <span className="text-sm text-gray-500">{label}</span>
+          {items.length === 0 ? (
+            <span className="text-sm text-gray-400 ml-2">—</span>
+          ) : (
+            <ul className="mt-1 space-y-1">
+              {items.map((item, i) => (
+                <li key={i} className="text-sm text-gray-900 pl-4">• {item}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="py-1.5">
+        <label className="text-sm text-gray-500 block mb-1">{label}</label>
+        <div className="space-y-2">
+          {items.map((item, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                type="text"
+                value={item}
+                onChange={(e) => {
+                  const next = [...items];
+                  next[i] = e.target.value;
+                  setForm((prev: any) => ({ ...prev, [field]: next }));
+                }}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={`${label} ${i + 1}`}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const next = items.filter((_, idx) => idx !== i);
+                  setForm((prev: any) => ({ ...prev, [field]: next }));
+                }}
+                className="text-red-400 hover:text-red-600 px-2 text-sm"
+              >✕</button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setForm((prev: any) => ({ ...prev, [field]: [...items, ''] }))}
+            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+          >+ Lägg till</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Scalar fields
+  const display = value ?? '—';
 
   if (!editing) {
     return (
@@ -312,11 +372,9 @@ function Field({ label, field, form, setForm, editing, type = 'text', isArray = 
       <label className="text-sm text-gray-500 w-32 shrink-0">{label}</label>
       <input
         type={type}
-        value={isArray ? (value || []).join(', ') : (value ?? '')}
+        value={value ?? ''}
         onChange={(e) => {
-          const val = isArray
-            ? e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-            : type === 'number' ? (e.target.value ? parseInt(e.target.value) : null) : e.target.value;
+          const val = type === 'number' ? (e.target.value ? parseInt(e.target.value) : null) : e.target.value;
           setForm((prev: any) => ({ ...prev, [field]: val }));
         }}
         className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
