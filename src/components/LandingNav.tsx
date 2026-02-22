@@ -10,7 +10,7 @@ export function LandingNav() {
         </Link>
 
         <Link
-          href="/organizer/login"
+          href="/login"
           className="text-amber-700 hover:text-amber-900 text-sm font-medium transition"
         >
           Logga in

@@ -101,7 +101,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
               <Link
-                href="/organizer/login"
+                href="/login"
                 className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white px-6 py-3 text-base font-semibold shadow-lg hover:bg-amber-600 transition"
               >
                 Skapa ett event
@@ -206,7 +206,7 @@ export default function Home() {
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
-                href="/organizer/login"
+                href="/login"
                 className="rounded-full bg-white text-amber-700 px-5 py-2.5 text-sm font-semibold text-center"
               >
                 Skapa ett event
@@ -225,8 +225,8 @@ export default function Home() {
       <footer className="border-t border-amber-100 bg-white">
         <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm text-amber-700">
           <div className="flex flex-wrap gap-4">
-            <Link href="/organizer/login" className="hover:text-amber-900">Skapa event</Link>
-            <Link href="/organizer/login" className="hover:text-amber-900">Logga in</Link>
+            <Link href="/login" className="hover:text-amber-900">Skapa event</Link>
+            <Link href="/login" className="hover:text-amber-900">Logga in</Link>
             <Link href="/" className="hover:text-amber-900">Om oss</Link>
           </div>
           <div>Byggd med ❤️ i Piteå</div>
