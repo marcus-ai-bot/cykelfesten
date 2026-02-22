@@ -525,21 +525,6 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
             </div>
           )}
 
-          {/* Shift all envelope times */}
-          <div>
-            <p className="text-xs text-gray-500 font-medium mb-2">⏱️ Justera alla kuverttider</p>
-            <div className="flex gap-1.5 flex-wrap">
-              {[-15, -5, 5, 15, 30].map(min => (
-                <button key={min} onClick={() => adjustAllTimes(min)} disabled={delaying || !isActive}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-40 ${
-                    min < 0 ? 'bg-orange-50 text-orange-700 hover:bg-orange-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                  }`}>
-                  {min > 0 ? '+' : ''}{min} min
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Manual activation */}
           <div>
             <p className="text-xs text-gray-500 font-medium mb-2">📤 Aktivera kuvert manuellt</p>
