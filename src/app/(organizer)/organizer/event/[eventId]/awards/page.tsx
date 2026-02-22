@@ -1,13 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { AWARDS } from '@/lib/awards/calculate';
+import { useTabParam } from '@/hooks/useTabParam';
 
 const SENSITIVE_AWARDS = ['oldest', 'youngest', 'most_allergies', 'only_vegetarian', 'least_fun_facts', 'average_age'];
 
-export default function AwardsPage() {
+export default function AwardsPageWrapper() {
+  return <Suspense><AwardsPage /></Suspense>;
+}
+
+function AwardsPage() {
   const params = useParams();
   const eventId = params.eventId as string;
 
@@ -17,7 +22,7 @@ export default function AwardsPage() {
   const [enabledAwards, setEnabledAwards] = useState<Set<string>>(new Set());
   const [thankYouMessage, setThankYouMessage] = useState('');
   const [assignments, setAssignments] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'settings' | 'assignments' | 'preview' | 'send'>('settings');
+  const [activeTab, setActiveTab] = useTabParam<'settings' | 'assignments' | 'preview' | 'send'>('settings');
   const [previewPerson, setPreviewPerson] = useState('');
   const [previewChecked, setPreviewChecked] = useState(false);
   const [error, setError] = useState('');

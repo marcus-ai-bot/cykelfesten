@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useTabParam } from '@/hooks/useTabParam';
 
 interface WrapStats {
   total_distance_km: number;
@@ -39,7 +40,11 @@ interface Couple {
 
 type Tab = 'stats' | 'preview' | 'edit' | 'send';
 
-export default function WrapPage() {
+export default function WrapPageWrapper() {
+  return <Suspense><WrapPage /></Suspense>;
+}
+
+function WrapPage() {
   const params = useParams();
   const eventId = params.eventId as string;
 
@@ -48,7 +53,7 @@ export default function WrapPage() {
   const [stats, setStats] = useState<WrapStats | null>(null);
   const [event, setEvent] = useState<any>(null);
   const [couples, setCouples] = useState<Couple[]>([]);
-  const [activeTab, setActiveTab] = useState<Tab>('stats');
+  const [activeTab, setActiveTab] = useTabParam<Tab>('stats');
   const [previewPerson, setPreviewPerson] = useState('');
   const [lastDeparture, setLastDeparture] = useState('');
   const [previewChecked, setPreviewChecked] = useState(false);

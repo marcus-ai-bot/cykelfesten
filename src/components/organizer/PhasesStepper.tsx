@@ -68,15 +68,46 @@ export function PhasesStepper({
     return 0; // draft, open → Inbjudan
   }, [eventStatus, isPast, isToday]);
 
-  const [activePhaseIndex, setActivePhaseIndex] = useState(defaultPhaseIndex);
-  const [manuallySelected, setManuallySelected] = useState(false);
+  const phaseKeys = ['invite', 'dinner', 'after', 'settings'];
+  const [activePhaseIndex, setActivePhaseIndexRaw] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlPhase = new URLSearchParams(window.location.search).get('phase');
+      if (urlPhase) { const idx = phaseKeys.indexOf(urlPhase); if (idx >= 0) return idx; }
+    }
+    return defaultPhaseIndex;
+  });
+  const [manuallySelected, setManuallySelected] = useState(() => {
+    if (typeof window !== 'undefined') return !!new URLSearchParams(window.location.search).get('phase');
+    return false;
+  });
 
   // Follow status-driven default unless user manually picked a tab
   useEffect(() => {
     if (!manuallySelected) {
-      setActivePhaseIndex(defaultPhaseIndex);
+      setActivePhaseIndexRaw(defaultPhaseIndex);
     }
   }, [defaultPhaseIndex, manuallySelected]);
+
+  // Listen for popstate (back/forward)
+  useEffect(() => {
+    function onPopState() {
+      const urlPhase = new URLSearchParams(window.location.search).get('phase');
+      if (urlPhase) { const idx = phaseKeys.indexOf(urlPhase); if (idx >= 0) setActivePhaseIndexRaw(idx); }
+      else setActivePhaseIndexRaw(defaultPhaseIndex);
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [defaultPhaseIndex]);
+
+  function setActivePhaseIndex(index: number) {
+    setActivePhaseIndexRaw(index);
+    const key = phaseKeys[index] || '';
+    const params = new URLSearchParams(window.location.search);
+    if (index === defaultPhaseIndex) params.delete('phase');
+    else params.set('phase', key);
+    const query = params.toString();
+    window.history.pushState(null, '', `${window.location.pathname}${query ? '?' + query : ''}`);
+  }
 
   const phases: Phase[] = [
     {
