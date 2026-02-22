@@ -13,9 +13,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [delaying, setDelaying] = useState(false);
-  const [activating, setActivating] = useState<string | null>(null);
-  // sendNotifications removed — now in Wrap/Awards Skicka tabs
+  // Kuvertkontroller moved to Middag → Livekontroll panel
 
   useEffect(() => { loadData(); }, [eventId]);
 
@@ -57,38 +55,6 @@ export default function SettingsPage() {
       else setError(data.error || 'Kunde inte spara');
     } catch { setError('Nätverksfel'); }
     finally { setSaving(false); }
-  }
-
-  async function adjustEnvelopeTimes(minutes: number) {
-    setDelaying(true);
-    try {
-      const res = await fetch('/api/admin/delay-envelopes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, delay_minutes: minutes }),
-      });
-      if (res.ok) {
-        await loadData();
-        const direction = minutes > 0 ? 'fram' : 'tillbaka';
-        setSuccess(`Kuverttider skjutna ${direction} ${Math.abs(minutes)} min`);
-        setTimeout(() => setSuccess(''), 3000);
-      } else setError('Kunde inte justera tider');
-    } finally { setDelaying(false); }
-  }
-
-  async function activateCourse(course: string) {
-    const label = course === 'starter' ? 'förrätt' : course === 'main' ? 'huvudrätt' : 'dessert';
-    if (!confirm(`Aktivera kuvert för ${label} nu?`)) return;
-    setActivating(course);
-    try {
-      const res = await fetch('/api/admin/activate-course', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, course }),
-      });
-      if (res.ok) { await loadData(); setSuccess('Kuvert aktiverade!'); setTimeout(() => setSuccess(''), 3000); }
-      else setError('Kunde inte aktivera');
-    } finally { setActivating(null); }
   }
 
     if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-500">Laddar...</p></div>;
@@ -148,49 +114,6 @@ export default function SettingsPage() {
               </div>
             );
           })}
-        </Section>
-
-        {/* Envelope Controls */}
-        <Section title="✉️ Kuvertkontroller">
-          <div className="mb-4">
-            <p className="text-sm text-gray-500 mb-2">Justera kuverttider</p>
-            <div className="flex gap-2 flex-wrap">
-              {[-15, -5].map(min => (
-                <button key={min} onClick={() => adjustEnvelopeTimes(min)} disabled={delaying}
-                  className="px-4 py-2 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 disabled:opacity-50 text-sm">
-                  {min} min
-                </button>
-              ))}
-              {[5, 15, 30].map(min => (
-                <button key={min} onClick={() => adjustEnvelopeTimes(min)} disabled={delaying}
-                  className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 text-sm">
-                  +{min} min
-                </button>
-              ))}
-            </div>
-          </div>
-          {event.time_offset_minutes !== 0 && event.time_offset_minutes != null && (
-            <div className={`text-sm p-3 rounded-lg mb-4 ${event.time_offset_minutes > 0 ? 'text-amber-600 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>
-              {event.time_offset_minutes > 0
-                ? `⏩ Tiderna är skjutna fram ${event.time_offset_minutes} minuter`
-                : `⏪ Tiderna är skjutna tillbaka ${Math.abs(event.time_offset_minutes)} minuter`}
-            </div>
-          )}
-          <div>
-            <p className="text-sm text-gray-500 mb-2">Aktivera kuvert manuellt</p>
-            <div className="flex gap-2">
-              {[
-                { course: 'starter', label: '🥗 Förrätt' },
-                { course: 'main', label: '🍖 Huvudrätt' },
-                { course: 'dessert', label: '🍰 Efterrätt' },
-              ].map(({ course, label }) => (
-                <button key={course} onClick={() => activateCourse(course)} disabled={!!activating}
-                  className="px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-50 text-sm">
-                  {activating === course ? '...' : label}
-                </button>
-              ))}
-            </div>
-          </div>
         </Section>
 
         {/* Quick Links */}

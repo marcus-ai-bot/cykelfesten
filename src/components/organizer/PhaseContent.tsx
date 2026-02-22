@@ -34,10 +34,10 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
 
     case 'dinner': {
       const isActive = eventStatus === 'active';
-      // Workflow: Matchning → Kuvert & Timing → Live-karta
+      // Workflow: Matchning → Kuvert & Timing → Livekontroll + Live-karta
       const matchingStatus: StepStatus = hasMatching ? 'done' : isEventLocked ? 'locked' : 'active';
       const envelopeStatus: StepStatus = isActive ? 'done' : hasMatching ? 'active' : 'todo';
-      const mapStatus: StepStatus = isActive ? 'active' : 'todo';
+      const liveStatus: StepStatus = isActive ? 'active' : 'todo';
 
       return (
         <div className="space-y-4">
@@ -57,13 +57,16 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
             disabled={!hasMatching}
             step={envelopeStatus}
           />
+          {hasMatching && (
+            <LiveControlPanel eventId={eventId} isActive={isActive} />
+          )}
           <ActionCard
             href={`/organizer/event/${eventId}/map`}
             title="Live-karta"
             description="Följ middagen i realtid"
             icon="🗺️"
             disabled={!hasMatching}
-            step={mapStatus}
+            step={liveStatus}
           />
         </div>
       );
@@ -97,6 +100,103 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
     default:
       return null;
   }
+}
+
+/* ── LiveControlPanel ──────────────────────────────────── */
+
+function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: boolean }) {
+  const [delaying, setDelaying] = useState(false);
+  const [activating, setActivating] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+
+  async function adjustTimes(minutes: number) {
+    setDelaying(true); setMessage('');
+    try {
+      const res = await fetch('/api/admin/delay-envelopes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId, delay_minutes: minutes }),
+      });
+      if (res.ok) {
+        const dir = minutes > 0 ? 'fram' : 'tillbaka';
+        setMessage(`✅ Kuverttider skjutna ${dir} ${Math.abs(minutes)} min`);
+        setTimeout(() => setMessage(''), 3000);
+      } else setMessage('❌ Kunde inte justera');
+    } catch { setMessage('❌ Nätverksfel'); }
+    finally { setDelaying(false); }
+  }
+
+  async function activateCourse(course: string) {
+    const label = course === 'starter' ? 'förrätt' : course === 'main' ? 'huvudrätt' : 'dessert';
+    if (!confirm(`Aktivera kuvert för ${label} nu?`)) return;
+    setActivating(course); setMessage('');
+    try {
+      const res = await fetch('/api/admin/activate-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId, course }),
+      });
+      if (res.ok) {
+        setMessage(`✅ Kuvert för ${label} aktiverade!`);
+        setTimeout(() => setMessage(''), 3000);
+      } else setMessage('❌ Kunde inte aktivera');
+    } catch { setMessage('❌ Nätverksfel'); }
+    finally { setActivating(null); }
+  }
+
+  return (
+    <div className={`rounded-xl p-5 shadow-sm border ${
+      isActive ? 'bg-white border-2 border-orange-200' : 'bg-gray-50 border-gray-100 opacity-60'
+    }`}>
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-2xl">🎛️</span>
+        <div>
+          <h3 className="font-semibold text-gray-900">Livekontroll</h3>
+          <p className="text-sm text-gray-500">Justera kuverttider och aktivera manuellt</p>
+        </div>
+      </div>
+
+      {message && (
+        <div className={`text-sm p-2 rounded-lg mb-3 ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {message}
+        </div>
+      )}
+
+      {/* Time adjustment */}
+      <div className="mb-4">
+        <p className="text-xs text-gray-500 font-medium mb-2">Justera kuverttider</p>
+        <div className="flex gap-2 flex-wrap">
+          {[-15, -5, 5, 15, 30].map(min => (
+            <button key={min} onClick={() => adjustTimes(min)} disabled={delaying || !isActive}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition disabled:opacity-40 ${
+                min < 0
+                  ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
+                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+              }`}>
+              {min > 0 ? '+' : ''}{min} min
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Manual activation */}
+      <div>
+        <p className="text-xs text-gray-500 font-medium mb-2">Aktivera kuvert manuellt</p>
+        <div className="flex gap-2">
+          {[
+            { course: 'starter', label: '🥗 Förrätt' },
+            { course: 'main', label: '🍖 Huvudrätt' },
+            { course: 'dessert', label: '🍰 Efterrätt' },
+          ].map(({ course, label }) => (
+            <button key={course} onClick={() => activateCourse(course)} disabled={!!activating || !isActive}
+              className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-40 text-sm font-medium transition">
+              {activating === course ? '...' : label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ── ActionCard ────────────────────────────────────────── */
