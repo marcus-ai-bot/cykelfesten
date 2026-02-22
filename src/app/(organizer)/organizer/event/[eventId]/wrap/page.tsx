@@ -130,7 +130,7 @@ export default function WrapPage() {
             )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <Stat label="🚴 Total cykling" value={stats.total_distance_km > 0 ? `${stats.total_distance_km} km` : '—'} />
-              <Stat label="📏 Snitt per par" value={stats.avg_distance_km > 0 ? `${stats.avg_distance_km} km` : '—'} />
+              <Stat label="✏️ Snitt per person" value={stats.avg_distance_km > 0 ? `${stats.avg_distance_km} km` : '—'} />
               <Stat label="👥 Antal par" value={stats.total_couples} />
               <Stat label="👤 Antal personer" value={stats.total_people} />
               <Stat label="🍽️ Portioner" value={stats.total_portions} />

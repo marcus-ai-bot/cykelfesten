@@ -287,11 +287,20 @@ export async function POST(
 
   const existing = event?.wrap_stats || {};
 
+  // Build person-weighted total: couples ride together, so multiply by persons in each couple
+  const couplePersonCount = new Map<string, number>();
+  couples.forEach(c => couplePersonCount.set(c.id, c.partner_name ? 2 : 1));
+  const totalPersonMeters = coupleRoutes.reduce((sum, r) => {
+    const persons = couplePersonCount.get(r.coupleId) || 1;
+    return sum + r.totalMeters * persons;
+  }, 0);
+  const totalPeople = couples.reduce((sum, c) => sum + (c.partner_name ? 2 : 1), 0);
+
   const newStats = {
-    total_distance_km: Math.round(totalDistance / 100) / 10,
-    avg_distance_km: distances.length ? Math.round(totalDistance / distances.length / 100) / 10 : 0,
+    total_distance_km: Math.round(totalPersonMeters / 100) / 10,
+    avg_distance_km: totalPeople > 0 ? Math.round(totalPersonMeters / totalPeople / 100) / 10 : 0,
     total_couples: couples.length,
-    total_people: couples.reduce((sum, c) => sum + (c.partner_name ? 2 : 1), 0),
+    total_people: totalPeople,
     total_portions: couples.length * 3 * 2,
     shortest_ride_km: shortestRoute ? Math.round(shortestRoute.totalMeters / 100) / 10 : 0,
     shortest_ride_couple: shortestRoute?.name || '—',
