@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 
 interface CoupleOption {
   id: string;
@@ -91,13 +91,7 @@ export default function PreviewHubPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <Link href={`/organizer/event/${eventId}`} className="text-gray-500 hover:text-gray-700 text-sm">← Dashboard</Link>
-          <h1 className="text-xl font-bold text-gray-900 mt-1">👁️ Gästperspektiv</h1>
-          <p className="text-sm text-gray-500">Se hur gästerna upplever festen</p>
-        </div>
-      </header>
+      <SubPageHeader eventId={eventId} title="👁️ Gästperspektiv" />
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* Couple + time picker */}

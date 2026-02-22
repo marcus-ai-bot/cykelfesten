@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 
 export default function SettingsPage() {
   const params = useParams();
@@ -62,11 +62,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <Link href={`/organizer/event/${eventId}`} className="text-gray-500 hover:text-gray-700">← {event.name}</Link>
-        </div>
-      </header>
+      <SubPageHeader eventId={eventId} title="⚙️ Inställningar" />
 
       <main className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">⚙️ Inställningar</h1>

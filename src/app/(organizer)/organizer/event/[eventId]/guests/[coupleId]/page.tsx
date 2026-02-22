@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { FUN_FACT_FIELDS, normaliseFunFacts, renderFunFact } from '@/lib/fun-facts';
 import type { FunFacts } from '@/lib/fun-facts';
@@ -149,13 +150,7 @@ export default function CoupleDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <Link href={`/organizer/event/${eventId}/guests`} className="text-gray-500 hover:text-gray-700">
-            ← Gästlista
-          </Link>
-        </div>
-      </header>
+      <SubPageHeader eventId={eventId} title="Gästdetaljer" parentView="invite" />
 
       <main className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}

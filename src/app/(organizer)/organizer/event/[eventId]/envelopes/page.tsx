@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 
 /* ── Tab type ─────────────────────────────── */
 type Tab = 'tider' | 'texter' | 'skicka';
@@ -43,12 +43,7 @@ export default function EnvelopesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <Link href={`/organizer/event/${eventId}?phase=dinner`} className="text-gray-500 hover:text-gray-700 text-sm">← Middag</Link>
-          <h1 className="text-xl font-bold text-gray-900 mt-1">✉️ Kuvert & Timing</h1>
-        </div>
-      </header>
+      <SubPageHeader eventId={eventId} title="✉️ Kuvert & Timing" parentView="matching" />
 
       {/* Chrome-style tabs */}
       <div className="bg-white border-b sticky top-0 z-30">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 import { useTabParam } from '@/hooks/useTabParam';
 
 interface WrapStats {
@@ -173,18 +173,7 @@ function WrapPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b px-4 py-4">
-        <div className="max-w-4xl mx-auto">
-          <Link href={`/organizer/event/${eventId}`} className="text-indigo-600 hover:underline text-sm">← {event?.name || 'Tillbaka'}</Link>
-          <h1 className="text-2xl font-bold mt-2">🎬 Wrap</h1>
-          {stats && (
-            <p className="text-gray-500 text-sm mt-1">
-              {stats.total_distance_km} km · {stats.total_people} personer · {stats.unique_streets || '?'} gator
-            </p>
-          )}
-        </div>
-      </div>
+      <SubPageHeader eventId={eventId} title="🎬 Wrap" parentView="after" />
 
       {/* Tabs */}
       <div className="bg-white border-b">

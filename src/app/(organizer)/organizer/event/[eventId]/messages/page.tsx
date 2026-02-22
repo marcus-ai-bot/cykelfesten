@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 
 interface Message { emoji: string; text: string; }
 interface MessagesData {
@@ -86,10 +86,10 @@ export default function MessagesEditorPage() {
   if (loading) return <div className="min-h-screen bg-gray-50 p-8"><div className="max-w-3xl mx-auto animate-pulse space-y-4"><div className="h-8 bg-gray-200 rounded w-1/3"></div><div className="h-64 bg-gray-200 rounded"></div></div></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <SubPageHeader eventId={eventId} title="💬 Kuvertmeddelanden" parentView="matching" />
+      <div className="max-w-3xl mx-auto p-4 md:p-8">
         <div className="mb-6">
-          <Link href={`/organizer/event/${eventId}/settings`} className="text-indigo-600 hover:text-indigo-700 text-sm mb-2 inline-block">← Inställningar</Link>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900">💬 Kuvertmeddelanden</h1>
             <span className="group relative">

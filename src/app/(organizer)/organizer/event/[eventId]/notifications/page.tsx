@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 
 export default function NotificationsPage() {
   const params = useParams();
@@ -94,11 +94,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <Link href={`/organizer/event/${eventId}/settings`} className="text-gray-500 hover:text-gray-700">← Inställningar</Link>
-        </div>
-      </header>
+      <SubPageHeader eventId={eventId} title="📧 Notifikationer" parentView="after" />
 
       <main className="max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">📧 Notifikationer</h1>

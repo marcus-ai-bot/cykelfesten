@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 
 type Preference = 'avoid' | 'low' | 'neutral' | 'preferred' | 'known';
 
@@ -96,22 +97,7 @@ export default function PreferencesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <Link
-            href={`/organizer/event/${eventId}/guests/${coupleId}`}
-            className="text-gray-500 hover:text-gray-700 text-sm"
-          >
-            ← {sourceName}
-          </Link>
-          <h1 className="text-lg font-bold text-gray-900 mt-1">
-            🎯 Matchningspreferenser
-          </h1>
-          <p className="text-sm text-gray-500">
-            {couples.length} andra par · Swipa eller tryck för att ställa in
-          </p>
-        </div>
-      </header>
+      <SubPageHeader eventId={eventId} title="🎯 Matchningspreferenser" parentView="matching" />
 
       {/* Stats bar */}
       <div className="bg-white border-b">

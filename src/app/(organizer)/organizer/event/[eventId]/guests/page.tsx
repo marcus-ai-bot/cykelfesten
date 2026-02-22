@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 import { useTabParam } from '@/hooks/useTabParam';
 import { countFunFacts } from '@/lib/fun-facts';
 
@@ -195,18 +196,7 @@ function GuestsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b px-4 py-4">
-        <div className="max-w-4xl mx-auto">
-          <Link href={`/organizer/event/${eventId}`} className="text-indigo-600 hover:underline text-sm">← {event?.name || 'Tillbaka'}</Link>
-          <div className="flex items-center justify-between mt-2">
-            <div>
-              <h1 className="text-2xl font-bold">👥 Gäster</h1>
-              <p className="text-gray-500 text-sm">{counts.all} par · {counts.people} personer</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <SubPageHeader eventId={eventId} title="👥 Gäster" parentView="invite" />
 
       {/* Status summary */}
       <div className="bg-white border-b px-4 py-3">

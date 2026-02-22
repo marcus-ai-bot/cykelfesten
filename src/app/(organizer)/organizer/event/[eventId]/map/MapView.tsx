@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+import { HamburgerMenu } from '@/components/organizer/HamburgerMenu';
+import { useRouter } from 'next/navigation';
 import mapboxgl from 'mapbox-gl';
 import type { FeatureCollection, Feature, LineString, Point } from 'geojson';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -33,6 +34,30 @@ function routeDistanceKm(geometry: [number, number][] | null): number | null {
 }
 
 /* ── Component ─────────────────────────────────────── */
+
+function MapHeader({ eventId, eventName, coupleCount, missingCount }: { eventId: string; eventName: string; coupleCount: number; missingCount: number }) {
+  const router = useRouter();
+  return (
+    <header className="bg-white border-b border-gray-200 z-20 relative">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+        <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-700 transition shrink-0" aria-label="Tillbaka">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 10H5M5 10l5-5M5 10l5 5" />
+          </svg>
+        </button>
+        <div className="text-center flex-1 min-w-0">
+          <div className="font-semibold text-gray-900 truncate">{eventName}</div>
+          {coupleCount > 0 && (
+            <div className="text-xs text-gray-400">
+              {coupleCount} par{missingCount > 0 && ` · ${missingCount} saknar adress`}
+            </div>
+          )}
+        </div>
+        <HamburgerMenu eventId={eventId} activePhase="matching" onPhaseChange={(view) => router.push(`/organizer/event/${eventId}?view=${view}`)} />
+      </div>
+    </header>
+  );
+}
 
 export function MapView({ eventId, eventName }: { eventId: string; eventName: string }) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -637,23 +662,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 z-20 relative">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <Link href={`/organizer/event/${eventId}`} className="text-gray-400 hover:text-gray-700 text-sm transition">
-            ← Tillbaka
-          </Link>
-          <div className="text-center">
-            <div className="font-semibold text-gray-900">{eventName}</div>
-            {data.couples.length > 0 && (
-              <div className="text-xs text-gray-400">
-                {data.couples.length} par
-                {data.missingCoords.length > 0 && ` · ${data.missingCoords.length} saknar adress`}
-              </div>
-            )}
-          </div>
-          <div className="w-16" />
-        </div>
-      </header>
+      <MapHeader eventId={eventId} eventName={eventName} coupleCount={data.couples.length} missingCount={data.missingCoords.length} />
 
       {/* Course tabs */}
       {data.routes && (

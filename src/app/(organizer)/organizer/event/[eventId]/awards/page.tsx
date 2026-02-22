@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 import { AWARDS } from '@/lib/awards/calculate';
 import { useTabParam } from '@/hooks/useTabParam';
 
@@ -137,13 +137,7 @@ function AwardsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b px-4 py-4">
-        <div className="max-w-4xl mx-auto">
-          <Link href={`/organizer/event/${eventId}/settings`} className="text-indigo-600 hover:underline text-sm">← Inställningar</Link>
-          <h1 className="text-2xl font-bold mt-2">🏆 Awards</h1>
-          <p className="text-gray-600">{event?.name}</p>
-        </div>
-      </div>
+      <SubPageHeader eventId={eventId} title="🏆 Awards" parentView="after" />
 
       <div className="bg-white border-b">
         <div className="max-w-4xl mx-auto flex overflow-x-auto overscroll-x-contain scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
