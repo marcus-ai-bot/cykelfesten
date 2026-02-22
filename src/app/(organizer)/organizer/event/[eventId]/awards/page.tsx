@@ -17,8 +17,9 @@ export default function AwardsPage() {
   const [enabledAwards, setEnabledAwards] = useState<Set<string>>(new Set());
   const [thankYouMessage, setThankYouMessage] = useState('');
   const [assignments, setAssignments] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'settings' | 'assignments' | 'preview'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'assignments' | 'preview' | 'send'>('settings');
   const [previewPerson, setPreviewPerson] = useState('');
+  const [previewChecked, setPreviewChecked] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -65,6 +66,50 @@ export default function AwardsPage() {
     finally { setSaving(false); }
   }
 
+  // wrap_stats holds award_approved_at and award_sent_at
+  const wrapStats = event?.wrap_stats || {};
+  const awardApprovedAt = wrapStats.award_approved_at || null;
+  const awardSentAt = wrapStats.award_sent_at || null;
+
+  async function approveAwards() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/awards`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled_awards: Array.from(enabledAwards), thank_you_message: thankYouMessage, award_approved_at: new Date().toISOString() }),
+      });
+      if (res.ok) { await loadData(); setSuccess('Utskick godkänt!'); }
+      else { const d = await res.json(); setError(d.error || 'Fel'); }
+    } catch { setError('Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
+  async function revokeAwardApproval() {
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/awards`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled_awards: Array.from(enabledAwards), thank_you_message: thankYouMessage, award_approved_at: null }),
+      });
+      if (res.ok) { await loadData(); setSuccess('Godkännande ångrat.'); }
+    } catch { setError('Nätverksfel'); }
+  }
+
+  async function markAwardsSent() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/awards`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled_awards: Array.from(enabledAwards), thank_you_message: thankYouMessage, award_sent_at: new Date().toISOString() }),
+      });
+      if (res.ok) { await loadData(); setSuccess('Awards markerade som skickade!'); }
+      else { const d = await res.json(); setError(d.error || 'Fel'); }
+    } catch { setError('Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
   async function recalculateAwards() {
     if (!confirm('Beräkna om alla awards? Ersätter befintliga tilldelningar.')) return;
     setSaving(true); setError('');
@@ -97,10 +142,10 @@ export default function AwardsPage() {
 
       <div className="bg-white border-b">
         <div className="max-w-4xl mx-auto flex">
-          {(['settings', 'assignments', 'preview'] as const).map(tab => (
+          {(['settings', 'assignments', 'preview', 'send'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 font-medium ${activeTab === tab ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500'}`}>
-              {tab === 'settings' ? '⚙️ Inställningar' : tab === 'assignments' ? `👥 Tilldelning (${assignments.length})` : '👀 Preview'}
+              className={`px-5 py-3 font-medium whitespace-nowrap text-sm ${activeTab === tab ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500'}`}>
+              {tab === 'settings' ? '⚙️ Inställningar' : tab === 'assignments' ? `👥 Tilldelning (${assignments.length})` : tab === 'preview' ? '👀 Preview' : '📧 Skicka'}
             </button>
           ))}
         </div>
@@ -239,6 +284,91 @@ export default function AwardsPage() {
             )}
           </div>
         )}
+
+        {activeTab === 'send' && (() => {
+          const hasAwards = assignments.length > 0;
+          const isApproved = !!awardApprovedAt;
+          const isSent = !!awardSentAt;
+          const allChecked = hasAwards && previewChecked;
+
+          return (
+            <div className="space-y-4">
+              {isSent && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+                  <span className="text-4xl block mb-2">✅</span>
+                  <p className="text-green-700 font-bold text-lg">Awards skickade!</p>
+                  <p className="text-green-600 text-sm mt-1">{new Date(awardSentAt).toLocaleString('sv-SE')}</p>
+                </div>
+              )}
+
+              {!isSent && (
+                <>
+                  {/* Step 1 */}
+                  <div className="bg-white rounded-lg border p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${allChecked ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>1</span>
+                      <h2 className="font-bold">Förbered</h2>
+                    </div>
+                    <div className="space-y-3 ml-9">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-5 h-5 mt-0.5 rounded flex-shrink-0 flex items-center justify-center border-2 ${hasAwards ? 'bg-green-500 border-green-500 text-white' : 'border-gray-200'}`}>
+                          {hasAwards && <span className="text-xs">✓</span>}
+                        </div>
+                        <div>
+                          <p className={`text-sm font-medium ${hasAwards ? 'text-green-700' : 'text-gray-700'}`}>Awards beräknade</p>
+                          <p className="text-xs text-gray-400">{hasAwards ? `${assignments.length} awards tilldelade` : 'Gå till Inställningar och kör Beräkna'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3 cursor-pointer" onClick={() => setPreviewChecked(!previewChecked)}>
+                        <div className={`w-5 h-5 mt-0.5 rounded flex-shrink-0 flex items-center justify-center border-2 ${previewChecked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-indigo-400'}`}>
+                          {previewChecked && <span className="text-xs">✓</span>}
+                        </div>
+                        <p className={`text-sm font-medium ${previewChecked ? 'text-green-700' : 'text-gray-700'}`}>Jag har förhandsgranskat awards</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className={`bg-white rounded-lg border p-4 ${!allChecked ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${isApproved ? 'bg-green-500 text-white' : allChecked ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-500'}`}>2</span>
+                      <h2 className="font-bold">Godkänn utskick</h2>
+                    </div>
+                    <div className="ml-9">
+                      {isApproved ? (
+                        <div className="flex items-center justify-between">
+                          <p className="text-green-600 text-sm">✅ Godkänt {new Date(awardApprovedAt).toLocaleString('sv-SE')}</p>
+                          <button onClick={revokeAwardApproval} className="text-sm text-gray-400 hover:text-red-500">Ångra</button>
+                        </div>
+                      ) : (
+                        <button onClick={approveAwards} disabled={!allChecked || saving}
+                          className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                          🔒 Godkänn utskick
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className={`bg-white rounded-lg border p-4 ${!isApproved ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${isApproved ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-500'}`}>3</span>
+                      <h2 className="font-bold">Skicka</h2>
+                    </div>
+                    <div className="ml-9">
+                      <p className="text-sm text-gray-500 mb-3">Varje gäst får ett mail med en personlig länk till sin award.</p>
+                      <button onClick={markAwardsSent} disabled={!isApproved || saving}
+                        className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {saving ? '⏳ Skickar...' : '📧 Skicka awards till alla gäster'}
+                      </button>
+                      <p className="text-xs text-gray-400 text-center mt-2">Automatiskt e-postutskick kommer snart.</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

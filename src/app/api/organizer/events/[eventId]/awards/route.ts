@@ -18,7 +18,7 @@ export async function GET(
 
   const { data: event } = await supabase
     .from('events')
-    .select('id, name, slug, enabled_awards, thank_you_message')
+    .select('id, name, slug, enabled_awards, thank_you_message, wrap_stats')
     .eq('id', eventId)
     .single();
 
@@ -55,15 +55,28 @@ export async function PATCH(
   const access = await checkEventAccess(organizer.id, eventId);
   if (!access.hasAccess) return NextResponse.json({ error: 'No access' }, { status: 403 });
 
-  const { enabled_awards, thank_you_message } = await request.json();
+  const { enabled_awards, thank_you_message, award_approved_at, award_sent_at } = await request.json();
 
   const supabase = createAdminClient();
+  
+  // Store approval/send timestamps in wrap_stats JSON (no schema migration needed)
+  const updateData: Record<string, unknown> = {
+    enabled_awards: enabled_awards || [],
+    thank_you_message: thank_you_message || null,
+  };
+  
+  // If approval or send timestamps provided, merge into wrap_stats
+  if (award_approved_at !== undefined || award_sent_at !== undefined) {
+    const { data: current } = await supabase.from('events').select('wrap_stats').eq('id', eventId).single();
+    const ws = current?.wrap_stats || {};
+    if (award_approved_at !== undefined) ws.award_approved_at = award_approved_at;
+    if (award_sent_at !== undefined) ws.award_sent_at = award_sent_at;
+    updateData.wrap_stats = ws;
+  }
+
   const { error } = await supabase
     .from('events')
-    .update({
-      enabled_awards: enabled_awards || [],
-      thank_you_message: thank_you_message || null,
-    })
+    .update(updateData)
     .eq('id', eventId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

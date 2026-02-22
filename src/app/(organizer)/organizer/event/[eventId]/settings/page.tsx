@@ -209,39 +209,6 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        {/* Notifications */}
-        <Section title="📧 Notifieringar">
-          <div className="space-y-3">
-            <button onClick={() => sendNotifications('assignment')} disabled={sendingNotifications}
-              className="w-full py-3 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 disabled:opacity-50 text-sm font-medium">
-              📋 Skicka uppgifter (vilken rätt + adress)
-            </button>
-            <button onClick={() => sendNotifications('reminder')} disabled={sendingNotifications}
-              className="w-full py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 disabled:opacity-50 text-sm font-medium">
-              ⏰ Skicka påminnelse
-            </button>
-          </div>
-        </Section>
-
-        {/* Advanced Links */}
-        <Section title="🔧 Avancerat">
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { href: `/organizer/event/${eventId}/timing`, label: '⏱️ Timing-editor', desc: 'Kuvert-reveal tider' },
-              { href: `/organizer/event/${eventId}/messages`, label: '💬 Meddelanden', desc: 'Kuvert-texter' },
-              { href: `/organizer/event/${eventId}/awards`, label: '🏆 Awards', desc: 'Utmärkelser' },
-              { href: `/organizer/event/${eventId}/wrap`, label: '🎬 Wrap', desc: 'Sammanfattning & mail' },
-              { href: `/organizer/event/${eventId}/notifications`, label: '📧 Notifikationer', desc: 'Wrap-utskick & statistik' },
-            ].map(({ href, label, desc }) => (
-              <Link key={href} href={href}
-                className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <div className="font-medium text-sm text-gray-900">{label}</div>
-                <div className="text-xs text-gray-500">{desc}</div>
-              </Link>
-            ))}
-          </div>
-        </Section>
-
         {/* Quick Links */}
         <Section title="🔗 Gästlänkar">
           <div className="flex flex-wrap gap-2">
