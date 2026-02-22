@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer } from '@/lib/auth';
 
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch(
+      `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(address)}&country=se&limit=1&access_token=${token}`
+    );
+    const data = await res.json();
+    const coords = data?.features?.[0]?.geometry?.coordinates;
+    if (coords && coords.length === 2) {
+      return { lng: coords[0], lat: coords[1] };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 // GET /api/organizer/couples/[coupleId]
 export async function GET(
   request: NextRequest,
@@ -93,6 +109,14 @@ export async function PATCH(
     const { lat, lng } = updates.address_coordinates;
     if (typeof lat === 'number' && typeof lng === 'number') {
       filtered.coordinates = `(${lng},${lat})`;
+    }
+  }
+
+  // If address changed but no coordinates provided, try server-side geocoding
+  if (filtered.address && !filtered.coordinates) {
+    const coords = await geocodeAddress(filtered.address);
+    if (coords) {
+      filtered.coordinates = `(${coords.lng},${coords.lat})`;
     }
   }
 
