@@ -37,12 +37,23 @@ export const DEFAULT_TIMING: Omit<EventTiming, 'id' | 'event_id' | 'created_at' 
 /**
  * Calculate all envelope reveal times for a course
  */
+/** Per-course timing overrides (JSONB from events.course_timing_offsets) */
+export type CourseTimingOffsets = Partial<Record<Course, Partial<Pick<EventTiming,
+  'teasing_minutes_before' | 'clue_1_minutes_before' | 'clue_2_minutes_before' |
+  'street_minutes_before' | 'number_minutes_before'
+>>>>;
+
 export function calculateEnvelopeTimes(
   courseStartTime: Date,
   timing: Partial<EventTiming> = {},
-  cyclingMinutes?: number
+  cyclingMinutes?: number,
+  courseOffsets?: Partial<Pick<EventTiming,
+    'teasing_minutes_before' | 'clue_1_minutes_before' | 'clue_2_minutes_before' |
+    'street_minutes_before' | 'number_minutes_before'
+  >>
 ): EnvelopeTimes {
-  const t = { ...DEFAULT_TIMING, ...timing };
+  // Merge: global defaults → event timing → per-course overrides
+  const t = { ...DEFAULT_TIMING, ...timing, ...courseOffsets };
   
   // Adjust street/number timing based on cycling distance
   let streetMinutes = t.street_minutes_before;

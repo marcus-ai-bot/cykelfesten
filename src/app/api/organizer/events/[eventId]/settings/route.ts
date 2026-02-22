@@ -53,7 +53,8 @@ export async function PATCH(
   // Whitelist
   const allowed = ['name', 'event_date', 'city', 'description', 'status',
     'starter_time', 'main_time', 'dessert_time',
-    'afterparty_title', 'afterparty_location', 'afterparty_time', 'afterparty_description'];
+    'afterparty_title', 'afterparty_location', 'afterparty_time', 'afterparty_description',
+    'course_timing_offsets'];
   const filtered: Record<string, any> = {};
   for (const key of allowed) {
     if (key in updates) filtered[key] = updates[key];

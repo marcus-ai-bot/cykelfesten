@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { requireEventAccess } from '@/lib/auth';
-import { calculateEnvelopeTimes, parseCourseSchedules } from '@/lib/envelope/timing';
+import { calculateEnvelopeTimes, parseCourseSchedules, type CourseTimingOffsets } from '@/lib/envelope/timing';
 
 type CoordPair = [number, number];
 
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Get event with current times
     const { data: event } = await supabase
       .from('events')
-      .select('*, active_match_plan_id')
+      .select('*, active_match_plan_id, course_timing_offsets')
       .eq('id', event_id)
       .single();
 
@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     const timingConfig = { ...DEFAULT_TIMING, ...timing };
+    const courseOffsets: CourseTimingOffsets = event.course_timing_offsets || {};
 
     // Parse course start times from event
     const courseStartTimes = parseCourseSchedules(
@@ -132,7 +133,8 @@ export async function POST(request: NextRequest) {
           const times = calculateEnvelopeTimes(
             courseStartTimes[env.course as keyof typeof courseStartTimes],
             timingConfig,
-            cyclingMinutes
+            cyclingMinutes,
+            courseOffsets[env.course as keyof typeof courseOffsets]
           );
 
           const updatePayload: Record<string, string | number | null> = {

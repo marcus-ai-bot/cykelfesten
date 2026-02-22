@@ -87,6 +87,8 @@ export default function EnvelopesPage() {
 function TiderTab({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<any>(null);
   const [timing, setTiming] = useState<TimingSettings | null>(null);
+  const [courseOffsets, setCourseOffsets] = useState<Record<string, Record<string, number>>>({});
+  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
@@ -97,7 +99,10 @@ function TiderTab({ eventId }: { eventId: string }) {
       fetch(`/api/organizer/events/${eventId}/settings`).then(r => r.json()),
       fetch(`/api/organizer/events/${eventId}/timing`).then(r => r.json()),
     ]).then(([settingsData, timingData]) => {
-      if (settingsData.event) setEvent(settingsData.event);
+      if (settingsData.event) {
+        setEvent(settingsData.event);
+        setCourseOffsets(settingsData.event.course_timing_offsets || {});
+      }
       if (timingData.timing) setTiming(timingData.timing);
       setLoading(false);
     }).catch(() => { setError('Nätverksfel'); setLoading(false); });
@@ -130,6 +135,13 @@ function TiderTab({ eventId }: { eventId: string }) {
     if (!timing) return;
     setSaving(true); setError(''); setSuccess('');
     try {
+      // Save per-course offsets to event settings
+      await fetch(`/api/organizer/events/${eventId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ course_timing_offsets: courseOffsets }),
+      });
+
       const res = await fetch(`/api/organizer/events/${eventId}/timing`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -242,6 +254,88 @@ function TiderTab({ eventId }: { eventId: string }) {
                 <p className="text-gray-500 text-xs">Längre avstånd → tidigare gatunamn/nummer</p>
               </div>
             </label>
+          </div>
+
+          {/* Per-course reveal offsets */}
+          <div className="bg-white rounded-xl shadow-sm border">
+            <button onClick={() => setExpandedCourse(expandedCourse ? null : 'all')}
+              className="w-full flex items-center justify-between p-5">
+              <div>
+                <h2 className="font-semibold text-gray-900 text-left">🎯 Per-rätt reveal-justering</h2>
+                <p className="text-sm text-gray-500 text-left">Avvikelser från globala inställningarna ovan</p>
+              </div>
+              <span className="text-gray-400 text-lg">{expandedCourse ? '▲' : '▼'}</span>
+            </button>
+            {expandedCourse && (
+              <div className="px-5 pb-5 space-y-4 border-t pt-4">
+                {[
+                  { key: 'starter', label: '🥗 Förrätt', time: event?.starter_time?.slice(0, 5) },
+                  { key: 'main', label: '🍖 Varmrätt', time: event?.main_time?.slice(0, 5) },
+                  { key: 'dessert', label: '🍰 Dessert', time: event?.dessert_time?.slice(0, 5) },
+                ].map(({ key, label, time }) => {
+                  const offsets = courseOffsets[key] || {};
+                  const hasOffsets = Object.keys(offsets).length > 0;
+                  const fields = [
+                    { field: 'teasing_minutes_before', label: '🤫 Teasing', global: timing?.teasing_minutes_before },
+                    { field: 'clue_1_minutes_before', label: '🔮 Ledtråd 1', global: timing?.clue_1_minutes_before },
+                    { field: 'clue_2_minutes_before', label: '🔮 Ledtråd 2', global: timing?.clue_2_minutes_before },
+                    { field: 'street_minutes_before', label: '📍 Gata', global: timing?.street_minutes_before },
+                    { field: 'number_minutes_before', label: '🔢 Nummer', global: timing?.number_minutes_before },
+                  ];
+
+                  return (
+                    <div key={key} className="border border-gray-100 rounded-lg">
+                      <button onClick={() => setExpandedCourse(expandedCourse === key ? 'all' : key)}
+                        className="w-full flex items-center justify-between p-3 hover:bg-gray-50">
+                        <span className="text-sm font-medium">{label} <span className="text-gray-400">({time || '?'})</span></span>
+                        <span className="text-xs text-gray-400">
+                          {hasOffsets ? `${Object.keys(offsets).length} ändring${Object.keys(offsets).length > 1 ? 'ar' : ''}` : 'Standard'}
+                          {expandedCourse === key ? ' ▲' : ' ▼'}
+                        </span>
+                      </button>
+                      {expandedCourse === key && (
+                        <div className="px-3 pb-3 space-y-2 border-t">
+                          {fields.map(({ field, label: fLabel, global: globalVal }) => {
+                            const override = offsets[field];
+                            const isOverridden = override != null;
+                            return (
+                              <div key={field} className="flex items-center justify-between py-1.5">
+                                <span className={`text-xs ${isOverridden ? 'text-indigo-700 font-medium' : 'text-gray-500'}`}>
+                                  {fLabel} <span className="text-gray-300">({globalVal} min)</span>
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <button onClick={() => {
+                                    const val = (override ?? globalVal ?? 15) - 5;
+                                    if (val < 0) return;
+                                    const next = { ...courseOffsets, [key]: { ...offsets, [field]: val } };
+                                    setCourseOffsets(next);
+                                  }} className="w-7 h-7 rounded bg-orange-50 text-orange-600 hover:bg-orange-100 text-xs font-bold">−</button>
+                                  <span className={`text-xs font-mono min-w-[2.5rem] text-center ${isOverridden ? 'text-indigo-700 font-bold' : 'text-gray-400'}`}>
+                                    {override ?? globalVal ?? '?'} min
+                                  </span>
+                                  <button onClick={() => {
+                                    const val = (override ?? globalVal ?? 15) + 5;
+                                    const next = { ...courseOffsets, [key]: { ...offsets, [field]: val } };
+                                    setCourseOffsets(next);
+                                  }} className="w-7 h-7 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-bold">+</button>
+                                  {isOverridden && (
+                                    <button onClick={() => {
+                                      const { [field]: _, ...rest } = offsets;
+                                      const next = Object.keys(rest).length ? { ...courseOffsets, [key]: rest } : (() => { const { [key]: __, ...r } = courseOffsets; return r; })();
+                                      setCourseOffsets(next);
+                                    }} className="w-7 h-7 rounded bg-gray-100 text-gray-400 hover:bg-gray-200 text-xs" title="Återställ">↩</button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Timeline preview */}
