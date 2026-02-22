@@ -100,7 +100,7 @@ export async function GET(request: Request, context: RouteContext) {
     // Fetch event for times
     const { data: event } = await supabase
       .from('events')
-      .select('id, name, starter_time, main_time, dessert_time')
+      .select('id, name, starter_time, main_time, dessert_time, afterparty_coordinates, afterparty_title, afterparty_location')
       .eq('id', eventId)
       .single();
 
@@ -375,6 +375,41 @@ export async function GET(request: Request, context: RouteContext) {
       outgoingRoutes = outgoing;
     }
 
+    // Parse afterparty coordinates and compute routes from dessert hosts → afterparty
+    const afterpartyCoords = event ? parsePoint(event.afterparty_coordinates) : null;
+    let afterpartyRoutes: Array<{ hostId: string; hostName: string; from: [number, number]; to: [number, number]; geometry: [number, number][] | null }> = [];
+
+    const apToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (afterpartyCoords && routes?.dessert && apToken) {
+      // Get unique dessert hosts
+      const dessertHostIds = new Set(routes.dessert.map(r => r.hostId));
+      const hostCoordMap = new Map(withCoords.map((c) => [c.id, [c.lng, c.lat] as [number, number]]));
+      const hostNameMap = new Map(withCoords.map((c) => [c.id, c.name]));
+
+      const apTo: [number, number] = [afterpartyCoords.lng, afterpartyCoords.lat];
+      const apSegments: Array<{ from: [number, number]; to: [number, number] }> = [];
+      const apHosts: string[] = [];
+
+      for (const hostId of dessertHostIds) {
+        const from = hostCoordMap.get(hostId);
+        if (from) {
+          apSegments.push({ from, to: apTo });
+          apHosts.push(hostId);
+        }
+      }
+
+      if (apSegments.length > 0) {
+        const geos = await batchFetchRoutes(apSegments, apToken, 5);
+        afterpartyRoutes = apHosts.map((hostId, i) => ({
+          hostId,
+          hostName: hostNameMap.get(hostId) || '?',
+          from: apSegments[i].from,
+          to: apTo,
+          geometry: geos[i],
+        }));
+      }
+    }
+
     return NextResponse.json({
       couples: withCoords,
       missingCoords,
@@ -384,6 +419,13 @@ export async function GET(request: Request, context: RouteContext) {
         starter: event.starter_time?.slice(0, 5) || '17:30',
         main: event.main_time?.slice(0, 5) || '19:00',
         dessert: event.dessert_time?.slice(0, 5) || '20:30',
+      } : null,
+      afterparty: afterpartyCoords ? {
+        lat: afterpartyCoords.lat,
+        lng: afterpartyCoords.lng,
+        title: event?.afterparty_title || 'Efterfesten',
+        location: event?.afterparty_location || '',
+        routes: afterpartyRoutes,
       } : null,
     });
   } catch (err: any) {

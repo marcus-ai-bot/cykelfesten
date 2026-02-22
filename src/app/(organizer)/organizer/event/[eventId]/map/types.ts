@@ -33,12 +33,29 @@ export interface RouteSegment {
 /** Outgoing route: coupleId → { geometry, to } per course */
 export type OutgoingRoutes = Record<string, Record<string, { geometry: [number, number][] | null; to: [number, number] }>>;
 
+export interface AfterpartyRoute {
+  hostId: string;
+  hostName: string;
+  from: [number, number];
+  to: [number, number];
+  geometry: [number, number][] | null;
+}
+
+export interface AfterpartyInfo {
+  lat: number;
+  lng: number;
+  title: string;
+  location: string;
+  routes: AfterpartyRoute[];
+}
+
 export interface MapData {
   couples: MapCouple[];
   missingCoords: MissingCoords[];
   routes: Record<Course, RouteSegment[]> | null;
   outgoingRoutes: OutgoingRoutes | null;
   eventTimes: Record<Course, string> | null;
+  afterparty: AfterpartyInfo | null;
 }
 
 export interface MealGroup {

@@ -63,8 +63,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null, outgoingRoutes: null, eventTimes: null });
-  const [activeCourse, setActiveCourse] = useState<Course | null>(null);
+  const [data, setData] = useState<MapData>({ couples: [], missingCoords: [], routes: null, outgoingRoutes: null, eventTimes: null, afterparty: null });
+  const [activeCourse, setActiveCourse] = useState<Course | 'afterparty' | null>(null);
   const [selectedGroupHostId, setSelectedGroupHostId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -217,21 +217,21 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   /* ── Selected group derived state ───────────────── */
 
   const selectedGroup = useMemo(() => {
-    if (!selectedGroupHostId || !activeCourse) return null;
-    return mealGroups[activeCourse].find((g) => g.hostId === selectedGroupHostId) || null;
+    if (!selectedGroupHostId || !activeCourse || activeCourse === 'afterparty') return null;
+    return mealGroups[activeCourse].find((g: MealGroup) => g.hostId === selectedGroupHostId) || null;
   }, [selectedGroupHostId, activeCourse, mealGroups]);
 
   const selectedGroupIds = useMemo(() => {
     if (!selectedGroup) return null;
     const ids = new Set<string>();
     ids.add(selectedGroup.hostId);
-    selectedGroup.guests.forEach((g) => ids.add(g.id));
+    selectedGroup.guests.forEach((g: { id: string }) => ids.add(g.id));
     return ids;
   }, [selectedGroup]);
 
   const selectedGroupIndex = useMemo(() => {
-    if (!selectedGroup || !activeCourse) return -1;
-    return mealGroups[activeCourse].findIndex((g) => g.hostId === selectedGroup.hostId);
+    if (!selectedGroup || !activeCourse || activeCourse === 'afterparty') return -1;
+    return mealGroups[activeCourse].findIndex((g: MealGroup) => g.hostId === selectedGroup.hostId);
   }, [selectedGroup, activeCourse, mealGroups]);
 
   /* ── Find meal group for any couple ─────────────── */
@@ -323,14 +323,14 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
   /* ── Actions ────────────────────────────────────── */
 
-  const toggleCourse = useCallback((course: Course) => {
+  const toggleCourse = useCallback((course: Course | 'afterparty') => {
     setActiveCourse((prev) => prev === course ? null : course);
     setSelectedGroupHostId(null);
   }, []);
 
   const handlePinClick = useCallback((coupleId: string) => {
     const course = activeCourseRef.current;
-    if (!course) return;
+    if (!course || course === 'afterparty') return;
     const hostId = findGroupHostIdRef.current(coupleId, course);
     if (!hostId) return;
     setSelectedGroupHostId((prev) => prev === hostId ? null : hostId);
@@ -345,9 +345,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   }, []);
 
   const navigateGroup = useCallback((dir: 1 | -1) => {
-    if (!activeCourse) return;
+    if (!activeCourse || activeCourse === 'afterparty') return;
     const groups = mealGroups[activeCourse];
-    const idx = groups.findIndex((g) => g.hostId === selectedGroupHostId);
+    const idx = groups.findIndex((g: MealGroup) => g.hostId === selectedGroupHostId);
     if (idx < 0) return;
     const next = idx + dir;
     if (next >= 0 && next < groups.length) {
@@ -499,6 +499,19 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
         },
       });
 
+      // Afterparty routes + marker
+      map.addSource('afterparty-routes', { type: 'geojson', data: empty });
+      map.addLayer({
+        id: 'afterparty-routes-line', type: 'line', source: 'afterparty-routes',
+        layout: { 'line-join': 'round', 'line-cap': 'round', visibility: 'none' },
+        paint: { 'line-color': '#ec4899', 'line-width': 3, 'line-opacity': 0.7, 'line-dasharray': [2, 2] },
+      });
+      map.addSource('afterparty-point', { type: 'geojson', data: empty });
+      map.addLayer({
+        id: 'afterparty-marker', type: 'symbol', source: 'afterparty-point',
+        layout: { 'text-field': '🎉', 'text-size': 28, 'text-allow-overlap': true, visibility: 'none' },
+      });
+
       // --- Click handlers (use closure-safe pattern) ---
 
       // Track which layers got clicked to prevent background handler from firing
@@ -567,6 +580,29 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       (map.getSource(`host-${course}`) as mapboxgl.GeoJSONSource | undefined)?.setData(hostFeatures[course] as any);
     });
 
+    // Afterparty data
+    if (data.afterparty) {
+      const apRouteFC: FeatureCollection<LineString> = {
+        type: 'FeatureCollection',
+        features: data.afterparty.routes.map(r => ({
+          type: 'Feature' as const,
+          properties: { hostName: r.hostName },
+          geometry: { type: 'LineString' as const, coordinates: r.geometry ?? [r.from, r.to] },
+        })),
+      };
+      (map.getSource('afterparty-routes') as mapboxgl.GeoJSONSource | undefined)?.setData(apRouteFC as any);
+
+      const apPointFC: FeatureCollection<Point> = {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          properties: { title: data.afterparty.title },
+          geometry: { type: 'Point', coordinates: [data.afterparty.lng, data.afterparty.lat] },
+        }],
+      };
+      (map.getSource('afterparty-point') as mapboxgl.GeoJSONSource | undefined)?.setData(apPointFC as any);
+    }
+
     if (featureCollection.features.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       featureCollection.features.forEach((f) => bounds.extend(f.geometry.coordinates as [number, number]));
@@ -593,6 +629,11 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
           map.setLayoutProperty(`host-${course}-${suffix}`, 'visibility', vis);
       }
     });
+
+    // Afterparty layers
+    const apVis = activeCourse === 'afterparty' ? 'visible' : 'none';
+    if (map.getLayer('afterparty-routes-line')) map.setLayoutProperty('afterparty-routes-line', 'visibility', apVis);
+    if (map.getLayer('afterparty-marker')) map.setLayoutProperty('afterparty-marker', 'visibility', apVis);
 
     if (selectedGroup && activeCourse) {
       // === STATE: Group selected ===
@@ -656,8 +697,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
   /* ── Render ─────────────────────────────────────── */
 
-  const cfg = activeCourse ? courseConfig[activeCourse] : null;
-  const groups = activeCourse ? mealGroups[activeCourse] : [];
+  const isCourse = activeCourse && activeCourse !== 'afterparty';
+  const cfg = isCourse ? courseConfig[activeCourse] : null;
+  const groups = isCourse ? mealGroups[activeCourse] : [];
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -697,6 +739,24 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
                 </button>
               );
             })}
+            {data.afterparty && (
+              <button
+                type="button"
+                onClick={() => toggleCourse('afterparty')}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 shrink-0 ${
+                  activeCourse === 'afterparty'
+                    ? 'text-white shadow-lg scale-105 bg-pink-500'
+                    : 'text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                }`}
+                style={activeCourse === 'afterparty' ? { boxShadow: '0 4px 14px rgba(236,72,153,0.4)' } : undefined}
+              >
+                <span>🎉</span>
+                <span>Efterfest</span>
+                <span className={`text-xs ${activeCourse === 'afterparty' ? 'text-white/80' : 'text-gray-400'}`}>
+                  {data.afterparty.routes.length} rutter
+                </span>
+              </button>
+            )}
           </div>
         </div>
       )}
