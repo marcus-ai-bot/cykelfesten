@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
 import { InlineGuestList } from '@/components/organizer/InlineGuestList';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 interface Props {
   phase: string;
@@ -220,13 +221,13 @@ function AfterPartyEditCard({ eventId }: { eventId: string }) {
               </div>
               <div>
                 <label className="text-xs text-gray-500 font-medium">Plats</label>
-                <input
-                  type="text"
-                  value={form.afterparty_location}
-                  onChange={e => setForm(f => ({ ...f, afterparty_location: e.target.value }))}
-                  placeholder="t.ex. Garvargatan 2, Piteå"
-                  className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
+                <div className="mt-1">
+                  <AddressAutocomplete
+                    value={form.afterparty_location}
+                    onChange={(address) => setForm(f => ({ ...f, afterparty_location: address }))}
+                    placeholder="t.ex. Garvargatan 2, Piteå"
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-xs text-gray-500 font-medium">Tid</label>
