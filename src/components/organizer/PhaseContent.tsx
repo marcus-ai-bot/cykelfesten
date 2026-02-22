@@ -118,15 +118,19 @@ function ActionCard({ href, title, description, icon, count, disabled, target, s
 
   if (disabled) {
     return (
-      <div className="bg-gray-50 rounded-xl p-6 opacity-50 cursor-not-allowed relative">
-        <div className="text-3xl mb-3">{icon}</div>
-        <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
-        <p className="text-sm text-gray-500">{description}</p>
-        {badge && (
-          <span className={`absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-sm ${badge.className}`}>
-            {badge.icon}
-          </span>
-        )}
+      <div className="bg-gray-50 rounded-xl p-5 opacity-50 cursor-not-allowed">
+        <div className="flex items-center gap-4">
+          <div className="text-3xl shrink-0">{icon}</div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900">{title}</h3>
+            <p className="text-sm text-gray-500">{description}</p>
+          </div>
+          {badge && (
+            <span className={`w-8 h-8 flex items-center justify-center rounded-full text-sm shrink-0 ${badge.className}`}>
+              {badge.icon}
+            </span>
+          )}
+        </div>
       </div>
     );
   }
@@ -135,7 +139,7 @@ function ActionCard({ href, title, description, icon, count, disabled, target, s
     <Link
       href={href}
       target={target}
-      className={`group relative rounded-xl p-6 shadow-sm transition-all duration-150 ${
+      className={`group block relative rounded-xl p-5 shadow-sm transition-all duration-150 ${
         isActive
           ? 'bg-white border-2 border-indigo-300 shadow-md animate-subtle-pulse'
           : step === 'done'
@@ -143,13 +147,13 @@ function ActionCard({ href, title, description, icon, count, disabled, target, s
           : 'bg-white border border-gray-100 hover:shadow-md hover:border-indigo-200'
       }`}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-150 inline-block">{icon}</div>
-          <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
+      <div className="flex items-center gap-4">
+        <div className="text-3xl shrink-0 group-hover:scale-110 transition-transform duration-150">{icon}</div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900">{title}</h3>
           <p className="text-sm text-gray-500">{description}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {count !== undefined && (
             <span className="bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full text-sm font-semibold">{count}</span>
           )}
