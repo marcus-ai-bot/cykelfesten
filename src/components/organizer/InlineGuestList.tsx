@@ -426,8 +426,8 @@ function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
 
       {/* Swipeable card content */}
       <motion.div
-        drag
-        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.3}
         onDragEnd={handleDragEnd}
         onTouchStart={handleTouchStart}
