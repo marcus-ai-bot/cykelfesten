@@ -830,19 +830,27 @@ export default function WrapPage() {
     setHasStarted(true);
     setIsPlaying(true);
     setCurrentSlide(0);
-    // Try to play audio with better error handling
-    if (audioRef.current) {
-      audioRef.current.volume = 0.7;
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => setAudioPlaying(true))
-          .catch((err) => {
-            console.log('Audio autoplay blocked:', err);
-            setAudioPlaying(false);
-          });
-      }
-    }
+    // Play audio on user gesture (tap = allowed by browser policy)
+    playAudio();
+  }
+  
+  function playAudio() {
+    if (!audioRef.current) return;
+    audioRef.current.volume = 0.7;
+    audioRef.current.muted = false;
+    // Force load + play (mobile Safari needs this)
+    audioRef.current.load();
+    const p = audioRef.current.play();
+    if (p) p.then(() => setAudioPlaying(true)).catch(() => {
+      // Last resort: try unmuted after short delay
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.play()
+            .then(() => setAudioPlaying(true))
+            .catch(() => setAudioPlaying(false));
+        }
+      }, 100);
+    });
   }
   
   function toggleAudio() {
