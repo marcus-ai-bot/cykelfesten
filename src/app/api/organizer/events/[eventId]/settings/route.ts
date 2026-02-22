@@ -84,5 +84,19 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Auto-recalculate wrap stats when afterparty location changes
+  if (filtered.afterparty_coordinates && event?.active_match_plan_id) {
+    try {
+      const baseUrl = request.nextUrl.origin;
+      await fetch(`${baseUrl}/api/organizer/events/${eventId}/wrap/calculate`, {
+        method: 'POST',
+        headers: { cookie: request.headers.get('cookie') || '' },
+      });
+    } catch {
+      // Non-blocking — wrap recalc is best-effort
+    }
+  }
+
   return NextResponse.json({ event });
 }
