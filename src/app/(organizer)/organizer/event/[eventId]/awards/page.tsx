@@ -18,6 +18,7 @@ export default function AwardsPage() {
   const [thankYouMessage, setThankYouMessage] = useState('');
   const [assignments, setAssignments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'settings' | 'assignments' | 'preview'>('settings');
+  const [previewPerson, setPreviewPerson] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -79,6 +80,8 @@ export default function AwardsPage() {
     } catch { setError('Nätverksfel'); }
     finally { setSaving(false); }
   }
+
+  const eventSlug = event?.slug || '';
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-500">Laddar...</p></div>;
 
@@ -189,21 +192,49 @@ export default function AwardsPage() {
         )}
 
         {activeTab === 'preview' && (
-          <div className="bg-white rounded-lg border p-4">
-            <h2 className="font-bold mb-3">Preview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {AWARDS.filter(a => enabledAwards.has(a.id)).map(award => (
-                <div key={award.id} className={`p-6 rounded-xl text-white text-center bg-gradient-to-br ${award.color_from} ${award.color_to}`}>
-                  <div className="text-5xl mb-3">{award.emoji}</div>
-                  <div className="text-xl font-bold mb-1">&quot;{award.title}&quot;</div>
-                  <div className="text-sm opacity-90">{award.subtitle}</div>
-                </div>
-              ))}
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg border p-4">
+              <h2 className="font-bold mb-3">👀 Förhandsgranska som gäst</h2>
+              <p className="text-sm text-gray-600 mb-3">Välj en person för att se exakt hur deras award ser ut.</p>
+              <select
+                value={previewPerson}
+                onChange={(e) => setPreviewPerson(e.target.value)}
+                className="w-full p-3 border rounded-lg bg-white"
+              >
+                <option value="">Välj person...</option>
+                {assignments.map((a: any) => {
+                  const award = AWARDS.find(aw => aw.id === a.award_id);
+                  const name = a.person_type === 'partner' ? a.couples?.partner_name : a.couples?.invited_name;
+                  return (
+                    <option key={a.id} value={`${a.couple_id}:${a.person_type}`}>
+                      {name} — {award?.emoji} {award?.title || a.award_id}
+                    </option>
+                  );
+                })}
+              </select>
             </div>
-            {thankYouMessage && (
-              <div className="mt-6 p-4 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg text-white">
-                <p className="text-sm opacity-80 mb-2">Tack-meddelande:</p>
-                <p className="text-lg font-medium">{thankYouMessage}</p>
+
+            {previewPerson && (
+              <div className="bg-white rounded-lg border overflow-hidden" style={{ height: '700px' }}>
+                <iframe
+                  key={previewPerson}
+                  src={`/e/${eventSlug}/award?coupleId=${previewPerson.split(':')[0]}&person=${previewPerson.split(':')[1]}`}
+                  className="w-full h-full border-0"
+                  title="Award Preview"
+                />
+              </div>
+            )}
+
+            {!previewPerson && assignments.length > 0 && (
+              <div className="bg-gray-50 rounded-lg border p-8 text-center text-gray-500">
+                <span className="text-4xl block mb-3">🏆</span>
+                Välj en person ovan för att förhandsgranska deras award
+              </div>
+            )}
+
+            {assignments.length === 0 && (
+              <div className="bg-amber-50 rounded-lg border border-amber-200 p-4 text-amber-700">
+                ⚠️ Inga awards tilldelade. Kör &quot;Beräkna&quot; i Inställningar först.
               </div>
             )}
           </div>
