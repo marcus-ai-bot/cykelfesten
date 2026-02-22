@@ -583,7 +583,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity',
         ['case', ['in', ['get', 'id'], ['literal', ids]], 1, 0.08]);
       map.setPaintProperty('unclustered-point', 'circle-radius',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], 7, 3]);
+        ['case', ['in', ['get', 'id'], ['literal', ids]], 10, 3]);
+      map.setPaintProperty('unclustered-point', 'circle-stroke-width',
+        ['case', ['in', ['get', 'id'], ['literal', ids]], 3, 1]);
 
       // Dim other hosts
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity',
