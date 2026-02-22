@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
 import { getOrganizer } from '@/lib/auth';
 import { funFactsToStrings, countFunFacts } from '@/lib/fun-facts';
@@ -56,12 +57,13 @@ export async function GET(request: NextRequest) {
   
   const { coupleId } = access;
   
-  const supabase = await createClient();
-  
   // Allow organizers to simulate time for preview
   const simulateTime = searchParams.get('simulateTime');
   const organizer = await getOrganizer();
   const now = simulateTime && organizer ? new Date(simulateTime) : new Date();
+  
+  // Use admin client for organizer preview (bypasses RLS), regular client for guests
+  const supabase = organizer ? createAdminClient() : await createClient();
   
   try {
     // 1. Verify couple exists and belongs to event
