@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GuestPreviewSection } from '@/components/organizer/GuestPreviewSection';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
+import { InlineGuestList } from '@/components/organizer/InlineGuestList';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -125,46 +126,28 @@ export function PhasesStepper({
               <InviteLockedBanner eventId={eventId} />
             )}
 
-            {/* All action cards in one grid */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <ActionCard
-                href={`/organizer/event/${eventId}/guests`}
-                title="Gästlista"
-                description="Hantera registreringar och bekräftelser"
-                icon="👥"
-                count={couplesCount}
-              />
-              {isInviteOpen && (
-                <ActionCard
-                  href={`/e/${eventSlug}`}
-                  title="Förhandsgranska"
-                  description="Se gästsidan som dina gäster"
-                  icon="👁️"
-                  target="_blank"
-                />
-              )}
-              {couplesCount > 0 && (
-                <>
-                  <ActionCard
-                    href={`/organizer/event/${eventId}/matching`}
-                    title={isEventLocked ? '🔒 Matchning låst' : 'Kör matchning'}
-                    description={isEventLocked ? 'Ändra status för att låsa upp' : 'Koppla ihop gäster med värdar'}
-                    icon="🔀"
-                    disabled={isEventLocked}
-                  />
-                  <ActionCard
-                    href={`/organizer/event/${eventId}/map`}
-                    title="Karta"
-                    description="Se matchade grupper på kartan"
-                    icon="🗺️"
-                  />
-                </>
-              )}
-            </div>
-
-            {/* Inbjudningslänk — bara vid öppen/utkast */}
+            {/* Inbjudningslänk — överst */}
             {isInviteOpen && <InviteLinkSection eventId={eventId} />}
 
+            {/* Quick actions — compact buttons */}
+            {couplesCount > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <QuickAction
+                  href={`/organizer/event/${eventId}/map`}
+                  icon="🗺️"
+                  label="Karta"
+                />
+                <QuickAction
+                  href={`/organizer/event/${eventId}/matching`}
+                  icon="🔀"
+                  label={isEventLocked ? 'Matchning 🔒' : 'Matchning'}
+                  disabled={isEventLocked}
+                />
+              </div>
+            )}
+
+            {/* Inline guest list with progress bar */}
+            <InlineGuestList eventId={eventId} />
           </div>
         );
       })(),
@@ -345,6 +328,26 @@ function StatusDot({
 
   // not_started — shouldn't render but just in case
   return <span className={`inline-flex rounded-full bg-gray-300 ${dims} ${className}`} />;
+}
+
+/* ── QuickAction — compact pill buttons ────────────────── */
+
+function QuickAction({ href, icon, label, disabled }: { href: string; icon: string; label: string; disabled?: boolean }) {
+  if (disabled) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm cursor-not-allowed">
+        <span>{icon}</span> {label}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-medium transition"
+    >
+      <span>{icon}</span> {label}
+    </Link>
+  );
 }
 
 /* ── ActionCard ────────────────────────────────────────── */
