@@ -5,13 +5,12 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 /* ── Tab type ─────────────────────────────── */
-type Tab = 'tider' | 'reveals' | 'texter' | 'skicka';
+type Tab = 'tider' | 'texter' | 'skicka';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'tider', label: 'Tider', icon: '🕐' },
-  { id: 'reveals', label: 'Reveal-inställningar', icon: '📬' },
-  { id: 'texter', label: 'Kuverttexter', icon: '💬' },
-  { id: 'skicka', label: 'Skicka ut', icon: '📤' },
+  { id: 'texter', label: 'Texter', icon: '💬' },
+  { id: 'skicka', label: 'Skicka', icon: '📤' },
 ];
 
 export default function EnvelopesPage() {
@@ -74,7 +73,6 @@ export default function EnvelopesPage() {
 
       <main className="max-w-3xl mx-auto px-4 py-6">
         {activeTab === 'tider' && <TiderTab eventId={eventId} />}
-        {activeTab === 'reveals' && <RevealsTab eventId={eventId} />}
         {activeTab === 'texter' && <TexterTab eventId={eventId} />}
         {activeTab === 'skicka' && <SkickaTab eventId={eventId} />}
       </main>
@@ -93,22 +91,22 @@ export default function EnvelopesPage() {
 
 function TiderTab({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<any>(null);
+  const [timing, setTiming] = useState<TimingSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => { loadSettings(); }, [eventId]);
-
-  async function loadSettings() {
-    try {
-      const res = await fetch(`/api/organizer/events/${eventId}/settings`);
-      const data = await res.json();
-      if (res.ok) setEvent(data.event);
-      else setError(data.error);
-    } catch { setError('Nätverksfel'); }
-    finally { setLoading(false); }
-  }
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/organizer/events/${eventId}/settings`).then(r => r.json()),
+      fetch(`/api/organizer/events/${eventId}/timing`).then(r => r.json()),
+    ]).then(([settingsData, timingData]) => {
+      if (settingsData.event) setEvent(settingsData.event);
+      if (timingData.timing) setTiming(timingData.timing);
+      setLoading(false);
+    }).catch(() => { setError('Nätverksfel'); setLoading(false); });
+  }, [eventId]);
 
   async function saveTime(field: string, value: string) {
     setSaving(true); setError(''); setSuccess('');
@@ -121,7 +119,6 @@ function TiderTab({ eventId }: { eventId: string }) {
       if (res.ok) {
         const data = await res.json();
         setEvent(data.event);
-        // Recalc envelope times
         await fetch('/api/admin/recalc-envelope-times', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -132,6 +129,41 @@ function TiderTab({ eventId }: { eventId: string }) {
       }
     } catch { setError('Nätverksfel'); }
     finally { setSaving(false); }
+  }
+
+  async function saveTiming() {
+    if (!timing) return;
+    setSaving(true); setError(''); setSuccess('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/timing`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teasing_minutes_before: timing.teasing_minutes_before,
+          clue_1_minutes_before: timing.clue_1_minutes_before,
+          clue_2_minutes_before: timing.clue_2_minutes_before,
+          street_minutes_before: timing.street_minutes_before,
+          number_minutes_before: timing.number_minutes_before,
+          during_meal_clue_interval_minutes: timing.during_meal_clue_interval_minutes,
+          distance_adjustment_enabled: timing.distance_adjustment_enabled,
+        }),
+      });
+      if (res.ok) {
+        await fetch('/api/admin/recalc-envelope-times', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: eventId }),
+        });
+        setSuccess('Sparat!');
+        setTimeout(() => setSuccess(''), 2000);
+      } else { const d = await res.json(); setError(d.error); }
+    } catch { setError('Nätverksfel'); }
+    finally { setSaving(false); }
+  }
+
+  function handleTimingChange(field: keyof TimingSettings, value: number | boolean) {
+    if (!timing) return;
+    setTiming({ ...timing, [field]: value });
   }
 
   if (loading) return <LoadingPlaceholder />;
@@ -146,8 +178,9 @@ function TiderTab({ eventId }: { eventId: string }) {
     <div className="space-y-4">
       <Feedback success={success} error={error} onClearError={() => setError('')} />
 
+      {/* Course times */}
       <div className="bg-white rounded-xl shadow-sm p-5 border">
-        <h2 className="font-semibold text-gray-900 mb-4">🕐 Starttider per rätt</h2>
+        <h2 className="font-semibold text-gray-900 mb-1">🕐 Starttider per rätt</h2>
         <p className="text-sm text-gray-500 mb-4">Kuverttider räknas automatiskt utifrån dessa.</p>
         {courses.map(({ label, icon, field, value }) => {
           const time = value?.slice(0, 5) || '00:00';
@@ -178,96 +211,18 @@ function TiderTab({ eventId }: { eventId: string }) {
           );
         })}
       </div>
-    </div>
-  );
-}
 
-/* ══════════════════════════════════════════════
-   TAB 2: Reveal-inställningar (from timing page)
-   ══════════════════════════════════════════════ */
-
-interface TimingSettings {
-  id: string;
-  event_id: string;
-  teasing_minutes_before: number;
-  clue_1_minutes_before: number;
-  clue_2_minutes_before: number;
-  street_minutes_before: number;
-  number_minutes_before: number;
-  during_meal_clue_interval_minutes: number;
-  distance_adjustment_enabled: boolean;
-}
-
-function RevealsTab({ eventId }: { eventId: string }) {
-  const [timing, setTiming] = useState<TimingSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState('');
-  const [error, setError] = useState('');
-
-  useEffect(() => { loadTiming(); }, [eventId]);
-
-  async function loadTiming() {
-    try {
-      const res = await fetch(`/api/organizer/events/${eventId}/timing`);
-      const data = await res.json();
-      if (res.ok) setTiming(data.timing);
-      else setError(data.error);
-    } catch { setError('Nätverksfel'); }
-    finally { setLoading(false); }
-  }
-
-  async function handleSave() {
-    if (!timing) return;
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      const res = await fetch(`/api/organizer/events/${eventId}/timing`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teasing_minutes_before: timing.teasing_minutes_before,
-          clue_1_minutes_before: timing.clue_1_minutes_before,
-          clue_2_minutes_before: timing.clue_2_minutes_before,
-          street_minutes_before: timing.street_minutes_before,
-          number_minutes_before: timing.number_minutes_before,
-          during_meal_clue_interval_minutes: timing.during_meal_clue_interval_minutes,
-          distance_adjustment_enabled: timing.distance_adjustment_enabled,
-        }),
-      });
-      if (res.ok) {
-        await fetch('/api/admin/recalc-envelope-times', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event_id: eventId }),
-        });
-        setSuccess('Sparat!');
-        setTimeout(() => setSuccess(''), 2000);
-      } else { const d = await res.json(); setError(d.error); }
-    } catch { setError('Nätverksfel'); }
-    finally { setSaving(false); }
-  }
-
-  function handleChange(field: keyof TimingSettings, value: number | boolean) {
-    if (!timing) return;
-    setTiming({ ...timing, [field]: value });
-  }
-
-  if (loading) return <LoadingPlaceholder />;
-
-  return (
-    <div className="space-y-4">
-      <Feedback success={success} error={error} onClearError={() => setError('')} />
-
+      {/* Reveal settings */}
       {timing && (
         <>
           <div className="bg-white rounded-xl p-5 shadow-sm border">
             <h2 className="font-semibold text-gray-900 mb-4">📬 Kuvert-reveals (innan rätt startar)</h2>
             <div className="space-y-4">
-              <TimingRow label="🤫 Nyfiken? (teasing)" value={timing.teasing_minutes_before} onChange={(v) => handleChange('teasing_minutes_before', v)} options={[180,240,300,360,420,480]} />
-              <TimingRow label="🔮 Ledtråd 1" value={timing.clue_1_minutes_before} onChange={(v) => handleChange('clue_1_minutes_before', v)} options={[60,90,120,150,180]} />
-              <TimingRow label="🔮 Ledtråd 2" value={timing.clue_2_minutes_before} onChange={(v) => handleChange('clue_2_minutes_before', v)} options={[15,20,30,45,60]} />
-              <TimingRow label="📍 Gatunamn" value={timing.street_minutes_before} onChange={(v) => handleChange('street_minutes_before', v)} options={[10,15,20,25,30]} />
-              <TimingRow label="🔢 Husnummer" value={timing.number_minutes_before} onChange={(v) => handleChange('number_minutes_before', v)} options={[3,5,8,10,15]} />
+              <TimingRow label="🤫 Nyfiken? (teasing)" value={timing.teasing_minutes_before} onChange={(v) => handleTimingChange('teasing_minutes_before', v)} options={[180,240,300,360,420,480]} />
+              <TimingRow label="🔮 Ledtråd 1" value={timing.clue_1_minutes_before} onChange={(v) => handleTimingChange('clue_1_minutes_before', v)} options={[60,90,120,150,180]} />
+              <TimingRow label="🔮 Ledtråd 2" value={timing.clue_2_minutes_before} onChange={(v) => handleTimingChange('clue_2_minutes_before', v)} options={[15,20,30,45,60]} />
+              <TimingRow label="📍 Gatunamn" value={timing.street_minutes_before} onChange={(v) => handleTimingChange('street_minutes_before', v)} options={[10,15,20,25,30]} />
+              <TimingRow label="🔢 Husnummer" value={timing.number_minutes_before} onChange={(v) => handleTimingChange('number_minutes_before', v)} options={[3,5,8,10,15]} />
             </div>
           </div>
 
@@ -275,7 +230,7 @@ function RevealsTab({ eventId }: { eventId: string }) {
             <h2 className="font-semibold text-gray-900 mb-4">🍽️ Under måltiden</h2>
             <div className="flex items-center justify-between gap-4">
               <span className="text-gray-700 text-sm">Max ledtrådar per måltid</span>
-              <select value={timing.during_meal_clue_interval_minutes} onChange={(e) => handleChange('during_meal_clue_interval_minutes', parseInt(e.target.value))}
+              <select value={timing.during_meal_clue_interval_minutes} onChange={(e) => handleTimingChange('during_meal_clue_interval_minutes', parseInt(e.target.value))}
                 className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
                 {[1,2,3,4].map(v => <option key={v} value={v}>{v}</option>)}
               </select>
@@ -285,7 +240,7 @@ function RevealsTab({ eventId }: { eventId: string }) {
           <div className="bg-white rounded-xl p-5 shadow-sm border">
             <h2 className="font-semibold text-gray-900 mb-4">🚴 Avståndsanpassning</h2>
             <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked={timing.distance_adjustment_enabled} onChange={(e) => handleChange('distance_adjustment_enabled', e.target.checked)}
+              <input type="checkbox" checked={timing.distance_adjustment_enabled} onChange={(e) => handleTimingChange('distance_adjustment_enabled', e.target.checked)}
                 className="w-5 h-5 rounded border-gray-300 text-indigo-500" />
               <div>
                 <span className="text-gray-800 font-medium text-sm">Auto-justera för cykelavstånd</span>
@@ -307,9 +262,9 @@ function RevealsTab({ eventId }: { eventId: string }) {
             </div>
           </div>
 
-          <button onClick={handleSave} disabled={saving}
+          <button onClick={saveTiming} disabled={saving}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-3 rounded-xl transition-colors">
-            {saving ? 'Sparar...' : '💾 Spara inställningar'}
+            {saving ? 'Sparar...' : '💾 Spara reveal-inställningar'}
           </button>
         </>
       )}
@@ -318,8 +273,22 @@ function RevealsTab({ eventId }: { eventId: string }) {
 }
 
 /* ══════════════════════════════════════════════
-   TAB 3: Kuverttexter (from messages page)
+   TAB 2: Reveal-inställningar (from timing page)
    ══════════════════════════════════════════════ */
+
+interface TimingSettings {
+  id: string;
+  event_id: string;
+  teasing_minutes_before: number;
+  clue_1_minutes_before: number;
+  clue_2_minutes_before: number;
+  street_minutes_before: number;
+  number_minutes_before: number;
+  during_meal_clue_interval_minutes: number;
+  distance_adjustment_enabled: boolean;
+}
+
+/* ── Types for Texter tab ──────────────────── */
 
 interface Message { emoji: string; text: string; }
 interface MessagesData {
