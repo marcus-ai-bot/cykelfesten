@@ -200,28 +200,14 @@ export function PhasesStepper({
             <ActionCard
               href={`/organizer/event/${eventId}/wrap`}
               title="Wraps"
-              description="Personliga sammanfattningar per gäst"
-              icon="📧"
+              description="Statistik, preview och utskick"
+              icon="🎬"
             />
             <ActionCard
               href={`/organizer/event/${eventId}/awards`}
               title="Awards"
               description="Skapa och dela ut priser"
               icon="🏆"
-            />
-            <ActionCard
-              href={`/organizer/event/${eventId}/notifications`}
-              title="Skicka Wrap"
-              description="Wrap-utskick & statistik"
-              icon="📤"
-            />
-            <ActionCard
-              href={`/e/${eventSlug}/memories`}
-              title="Memories"
-              description="Gemensam statistik & hälsningar"
-              icon="📸"
-              target="_blank"
-              disabled={!isPast}
             />
           </div>
         </div>

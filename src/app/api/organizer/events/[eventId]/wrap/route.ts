@@ -19,7 +19,15 @@ export async function GET(
   const { data: event } = await supabase.from('events').select('*').eq('id', eventId).single();
   if (!event) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  return NextResponse.json({ event });
+  // Get couples for preview dropdown
+  const { data: couples } = await supabase
+    .from('couples')
+    .select('id, invited_name, partner_name')
+    .eq('event_id', eventId)
+    .eq('confirmed', true)
+    .order('invited_name');
+
+  return NextResponse.json({ event, couples: couples || [] });
 }
 
 // POST /api/organizer/events/[eventId]/wrap/calculate
