@@ -11,10 +11,12 @@ import { createClient } from '@supabase/supabase-js';
 import { getAccessFromParams } from '@/lib/tokens';
 import { AWARDS, type Award } from '@/lib/awards/calculate';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const DEFAULT_ENABLED_AWARDS = [
   'longest_distance', 'shortest_distance', 'average_distance',
@@ -50,6 +52,7 @@ export async function GET(request: NextRequest) {
   }
   
   const { coupleId, personType } = access;
+  const supabase = getSupabase();
   
   try {
     // Get couple with event

@@ -11,11 +11,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAccessFromParams } from '@/lib/tokens';
 
-// Use service role for server-side queries
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 interface WrapStats {
   total_distance_km: number;
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
   }
   
   const { coupleId, personType } = access;
+  const supabase = getSupabase();
   
   try {
     // 1. Get couple and event data
@@ -187,8 +189,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
     
   } catch (error) {
-    console.error('Wrap data error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Wrap data error:', error instanceof Error ? error.message : error);
+    console.error('Stack:', error instanceof Error ? error.stack : 'no stack');
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      detail: process.env.NODE_ENV === 'development' ? String(error) : undefined 
+    }, { status: 500 });
   }
 }
 
