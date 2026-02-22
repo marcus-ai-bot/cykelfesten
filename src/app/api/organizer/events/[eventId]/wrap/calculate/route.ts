@@ -418,7 +418,7 @@ export async function POST(
     avg_distance_km: totalPeople > 0 ? Math.round(totalPersonMeters / totalPeople / 100) / 10 : 0,
     total_couples: couples.length,
     total_people: totalPeople,
-    total_portions: couples.length * 3 * 2,
+    total_portions: totalPeople * 3,
     shortest_ride_km: shortestRoute ? Math.round(shortestRoute.totalMeters / 100) / 10 : 0,
     shortest_ride_couple: shortestRoute?.name || '—',
     longest_ride_km: longestRoute ? Math.round(longestRoute.totalMeters / 100) / 10 : 0,
