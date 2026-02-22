@@ -95,9 +95,20 @@ export function parseCourseSchedules(
 ): Record<Course, Date> {
   const parseTime = (time: string): Date => {
     const [hours, minutes] = time.split(':').map(Number);
-    const date = new Date(eventDate);
-    date.setHours(hours, minutes + timeOffsetMinutes, 0, 0);
-    return date;
+    const totalMinutes = hours * 60 + minutes + timeOffsetMinutes;
+    const h = Math.floor(((totalMinutes % 1440) + 1440) % 1440 / 60);
+    const m = ((totalMinutes % 60) + 60) % 60;
+    // Determine Stockholm UTC offset (CET +01:00 or CEST +02:00) for this date
+    // Use a probe date to check via Intl API (works on serverless/UTC environments)
+    const probeUtc = new Date(`${eventDate}T12:00:00Z`);
+    const utcHour = probeUtc.getUTCHours();
+    const stockholmStr = probeUtc.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm', hour: 'numeric', hour12: false });
+    const stockholmHour = parseInt(stockholmStr);
+    const offsetHours = stockholmHour - utcHour;
+    const sign = offsetHours >= 0 ? '+' : '-';
+    const absOffset = Math.abs(offsetHours);
+    const offset = `${sign}${String(absOffset).padStart(2, '0')}:00`;
+    return new Date(`${eventDate}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00${offset}`);
   };
   
   return {
