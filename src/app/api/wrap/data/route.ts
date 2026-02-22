@@ -198,8 +198,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function getMusicDecade(funFacts: string[] | null): string {
-  if (!funFacts || funFacts.length === 0) return 'default';
+function getMusicDecade(funFacts: unknown): string {
+  if (!Array.isArray(funFacts) || funFacts.length === 0) return 'default';
   
   const decadeKeywords: Record<string, string[]> = {
     '80s': ['80-tal', '80s', 'eighties', '1980'],
