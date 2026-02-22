@@ -30,6 +30,7 @@ interface LiveEnvelopeProps {
   course: CourseEnvelopeStatus;
   onOpen?: () => void;
   className?: string;
+  isPreview?: boolean;
   messages?: {
     host_self: CustomMessage[];
     lips_sealed: CustomMessage[];
@@ -557,7 +558,7 @@ function EnvelopeContent({ course, isOpen, hostSelfMessages, lipsSealedMessages,
 // Main Component
 // ============================================
 
-export function LiveEnvelope({ course, onOpen, className = '', messages }: LiveEnvelopeProps) {
+export function LiveEnvelope({ course, onOpen, className = '', isPreview = false, messages }: LiveEnvelopeProps) {
   // Use custom messages or fall back to defaults
   const hostSelfMessages = messages?.host_self ?? HOST_SELF_MESSAGES;
   const lipsSealedMessages = messages?.lips_sealed ?? LIPS_SEALED_MESSAGES;
@@ -585,9 +586,9 @@ export function LiveEnvelope({ course, onOpen, className = '', messages }: LiveE
       }, 500);
       setHasAnimated(true);
     } else if (state === 'OPEN' && !isOpen) {
-      // Auto-open and fire confetti
+      // Auto-open and fire confetti (skip confetti in preview mode)
       setIsOpen(true);
-      setTimeout(fireConfetti, 300);
+      if (!isPreview) setTimeout(fireConfetti, 300);
       setHasAnimated(true);
     }
   }, [state, hasAnimated, isOpen]);
@@ -605,7 +606,7 @@ export function LiveEnvelope({ course, onOpen, className = '', messages }: LiveE
     
     setIsOpen(!isOpen);
     
-    if (!isOpen && state === 'OPEN') {
+    if (!isOpen && state === 'OPEN' && !isPreview) {
       setTimeout(fireConfetti, 300);
     }
     

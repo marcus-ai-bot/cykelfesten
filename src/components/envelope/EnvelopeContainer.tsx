@@ -128,6 +128,7 @@ export function EnvelopeContainer({
         <LiveEnvelope
           key={course.type}
           course={course}
+          isPreview={!!simulateTime}
         />
       ))}
 
