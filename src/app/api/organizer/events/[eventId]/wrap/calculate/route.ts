@@ -44,6 +44,10 @@ async function getCyclingMeters(from: Coord, to: Coord): Promise<number> {
   }
 }
 
+function metersToKm(meters: number): number {
+  return Math.round(meters / 10) / 100;
+}
+
 interface CoupleRoute {
   coupleId: string;
   name: string;
@@ -108,6 +112,36 @@ export async function POST(
     if (!coupleHosts.has(e.couple_id)) coupleHosts.set(e.couple_id, new Map());
     coupleHosts.get(e.couple_id)!.set(e.course, e.host_couple_id);
   });
+
+  // Backfill envelope cycling distances (home → host)
+  if (matchPlanId && envelopes?.length) {
+    const BATCH = 10;
+    for (let i = 0; i < envelopes.length; i += BATCH) {
+      const chunk = envelopes.slice(i, i + BATCH);
+      const distances = await Promise.all(
+        chunk.map(async (env: any) => {
+          if (!env.host_couple_id) return { env, distanceKm: null };
+          if (env.couple_id === env.host_couple_id) return { env, distanceKm: 0 };
+          const from = coupleCoords.get(env.couple_id);
+          const to = coupleCoords.get(env.host_couple_id);
+          if (!from || !to) return { env, distanceKm: null };
+          const meters = await getCyclingMeters(from, to);
+          return { env, distanceKm: metersToKm(meters) };
+        })
+      );
+
+      await Promise.all(
+        distances.map(({ env, distanceKm }) =>
+          supabase
+            .from('envelopes')
+            .update({ cycling_distance_km: distanceKm })
+            .eq('match_plan_id', matchPlanId)
+            .eq('couple_id', env.couple_id)
+            .eq('course', env.course)
+        )
+      );
+    }
+  }
 
   // Calculate ACTUAL route per couple
   // The real journey: Home → Course1_location → Course2_location → Course3_location → Home

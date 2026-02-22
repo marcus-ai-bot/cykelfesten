@@ -143,6 +143,7 @@ export interface Envelope {
   scheduled_at: string;
   activated_at: string | null;
   opened_at: string | null;
+  cycling_distance_km: number | null;
   created_at: string;
 }
 

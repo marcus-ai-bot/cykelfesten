@@ -100,13 +100,12 @@ export async function GET(request: NextRequest) {
     // 5. Get envelopes for distance calculation
     const { data: envelopes } = await supabase
       .from('envelopes')
-      .select('cycling_minutes, couple_id')
+      .select('cycling_distance_km, couple_id')
       .eq('match_plan_id', event.active_match_plan_id);
     
     // Calculate totals
     const totalCouples = couples?.length || 0;
-    const totalCyclingMin = envelopes?.reduce((sum, e) => sum + (e.cycling_minutes || 0), 0) || 0;
-    const totalDistanceKm = Math.round(totalCyclingMin * 0.25 * 10) / 10;
+    const totalDistanceKm = Math.round(((envelopes?.reduce((sum, e) => sum + (e.cycling_distance_km || 0), 0) || 0) * 10)) / 10;
     
     // Build participants list
     const participants: Participant[] = [];
@@ -134,11 +133,11 @@ export async function GET(request: NextRequest) {
     
     if (couple) {
       const coupleEnvelopes = envelopes?.filter(e => e.couple_id === coupleId);
-      const personalCyclingMin = coupleEnvelopes?.reduce((sum, e) => sum + (e.cycling_minutes || 0), 0) || 0;
+      const personalDistanceKm = coupleEnvelopes?.reduce((sum, e) => sum + (e.cycling_distance_km || 0), 0) || 0;
       
       personalStats = {
         couple_name: `${couple.invited_name}${couple.partner_name ? ` & ${couple.partner_name}` : ''}`,
-        distance_cycled_km: Math.round(personalCyclingMin * 0.25 * 10) / 10,
+        distance_cycled_km: Math.round(personalDistanceKm * 10) / 10,
         people_met: Math.max(0, (totalCouples - 1) * 2),
         courses_eaten: 3,
       };

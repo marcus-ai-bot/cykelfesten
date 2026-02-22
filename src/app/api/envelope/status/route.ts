@@ -245,11 +245,10 @@ export async function GET(request: NextRequest) {
       const totalCouples = allCouples?.length ?? 0;
       
       // Calculate total cycling distance (rough estimate: sum all envelopes)
-      const totalCyclingMinutes = envelopes?.reduce(
-        (sum, e) => sum + Math.min(e.cycling_minutes ?? 0, 60),
+      const totalDistanceKm = Math.round(((envelopes?.reduce(
+        (sum, e) => sum + (e.cycling_distance_km ?? 0),
         0
-      ) ?? 0;
-      const totalDistanceKm = Math.round(totalCyclingMinutes * 0.25 * 10) / 10; // ~250m/min = 0.25km/min
+      ) ?? 0) * 10)) / 10;
       
       // Estimate vegetarian dishes from actual dietary preferences if available
       const isVegetarian = (allergies: unknown) =>
@@ -269,7 +268,7 @@ export async function GET(request: NextRequest) {
       const vegetarianDishes = hasDietaryData ? vegetarianPeople : Math.floor(totalCouples * 0.3);
       
       // Afterparty cycling time from this couple's location
-      const afterpartyCyclingMin = envelope.cycling_minutes ?? 10;
+      const afterpartyCyclingMin = estimateCyclingMinutes(envelope.cycling_distance_km) ?? 10;
       
       // Build course status
       const courseStatus: CourseEnvelopeStatus = {
@@ -280,7 +279,7 @@ export async function GET(request: NextRequest) {
         street: shouldShowStreet(state) && hostStreetInfo ? {
           name: hostStreetInfo.street_name ?? '',
           range: `${hostStreetInfo.number_range_low}-${hostStreetInfo.number_range_high}`,
-          cycling_minutes: envelope.cycling_minutes ?? 0,
+          cycling_minutes: estimateCyclingMinutes(envelope.cycling_distance_km) ?? 0,
         } : null,
         number: shouldShowNumber(state) ? hostStreetInfo?.street_number ?? null : null,
         full_address: state === 'OPEN' ? {
@@ -304,7 +303,7 @@ export async function GET(request: NextRequest) {
           : null,
         is_self_host: isSelfHost,
         host_has_fun_facts: hostHasFunFacts,
-        cycling_meters: envelope.cycling_minutes ? envelope.cycling_minutes * 250 : null,
+        cycling_meters: envelope.cycling_distance_km != null ? Math.round(envelope.cycling_distance_km * 1000) : null,
         // Dessert-specific reveals
         dessert_stats: isDessert && ['CLUE_1', 'CLUE_2', 'STREET', 'NUMBER', 'OPEN'].includes(state) ? {
           total_couples: totalCouples,
@@ -400,6 +399,11 @@ function getCourseStartTime(event: { event_date: string; starter_time: string; m
     dessert: event.dessert_time,
   };
   return `${event.event_date}T${timeMap[course]}`;
+}
+
+function estimateCyclingMinutes(distanceKm: number | null | undefined): number | null {
+  if (distanceKm == null) return null;
+  return Math.round(distanceKm * 4);
 }
 
 function shouldShowStreet(state: EnvelopeState): boolean {

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const coupleIds = couples.map(c => c.id);
     const { data: envelopes } = await supabase
       .from('envelopes')
-      .select('couple_id, cycling_minutes')
+      .select('couple_id, cycling_distance_km')
       .in('couple_id', coupleIds)
       .eq('match_plan_id', event.active_match_plan_id);
     
@@ -110,8 +110,8 @@ export async function POST(request: NextRequest) {
     const distanceByCouple = new Map<string, number>();
     envelopes?.forEach(e => {
       const current = distanceByCouple.get(e.couple_id) || 0;
-      const minutes = Math.min(e.cycling_minutes ?? 0, 60);
-      distanceByCouple.set(e.couple_id, current + minutes * 0.25);
+      const distanceKm = e.cycling_distance_km ?? 0;
+      distanceByCouple.set(e.couple_id, current + distanceKm);
     });
     
     // Build person list (invited + partners separately)

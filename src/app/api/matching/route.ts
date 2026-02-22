@@ -5,6 +5,35 @@ import { populateLivingEnvelopeData } from '@/lib/envelope';
 import { requireEventAccess } from '@/lib/auth';
 import type { Couple, Event, Assignment, EventTiming } from '@/types/database';
 
+type CoordPair = [number, number];
+
+function parsePoint(point: unknown): CoordPair | null {
+  if (!point) return null;
+  if (typeof point === 'string') {
+    const match = point.match(/\(([^,]+),([^)]+)\)/);
+    if (match) return [parseFloat(match[1]), parseFloat(match[2])];
+  }
+  if (typeof point === 'object' && point !== null) {
+    const p = point as Record<string, number>;
+    if (p.lng != null && p.lat != null) return [p.lng, p.lat];
+    if (p.x != null && p.y != null) return [p.x, p.y];
+  }
+  return null;
+}
+
+async function getCyclingDistanceKm(fromCoords: CoordPair, toCoords: CoordPair): Promise<number | null> {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return null;
+  try {
+    const url = `https://api.mapbox.com/directions/v5/mapbox/cycling/${fromCoords[0]},${fromCoords[1]};${toCoords[0]},${toCoords[1]}?overview=false&access_token=${token}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return data.routes?.[0]?.distance ? Math.round(data.routes[0].distance / 10) / 100 : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { event_id } = await request.json();
@@ -247,6 +276,40 @@ export async function POST(request: Request) {
       if (updateError) {
         console.error('Envelope update error:', updateError);
       }
+    }
+
+    // Calculate and persist cycling distances per envelope
+    const coupleCoords = new Map<string, CoordPair>();
+    for (const couple of couples as Couple[]) {
+      const coords = parsePoint(couple.coordinates);
+      if (coords) coupleCoords.set(couple.id, coords);
+    }
+
+    const distanceBatch = 10;
+    for (let i = 0; i < envelopesWithTimes.length; i += distanceBatch) {
+      const batch = envelopesWithTimes.slice(i, i + distanceBatch);
+      const distances = await Promise.all(
+        batch.map(async env => {
+          if (!env.host_couple_id) return { env, distanceKm: null };
+          if (env.couple_id === env.host_couple_id) return { env, distanceKm: 0 };
+          const from = coupleCoords.get(env.couple_id);
+          const to = coupleCoords.get(env.host_couple_id);
+          if (!from || !to) return { env, distanceKm: null };
+          const distanceKm = await getCyclingDistanceKm(from, to);
+          return { env, distanceKm };
+        })
+      );
+
+      await Promise.all(
+        distances.map(({ env, distanceKm }) =>
+          supabase
+            .from('envelopes')
+            .update({ cycling_distance_km: distanceKm })
+            .eq('match_plan_id', matchPlan.id)
+            .eq('couple_id', env.couple_id)
+            .eq('course', env.course)
+        )
+      );
     }
     
     // Update match plan stats

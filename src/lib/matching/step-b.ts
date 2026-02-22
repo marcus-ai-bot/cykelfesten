@@ -195,6 +195,7 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
           destination_address: host.address,
           destination_notes: host.addressNotes,
           scheduled_at: new Date().toISOString(), // Will be set properly based on event times
+          cycling_distance_km: null,
         });
       }
       
@@ -207,6 +208,7 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
         destination_address: host.address,
         destination_notes: 'Du är värd! Dina gäster kommer till dig.',
         scheduled_at: new Date().toISOString(),
+        cycling_distance_km: null,
       });
     }
   }
