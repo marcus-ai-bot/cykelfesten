@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { resend, FROM_EMAIL, BASE_URL } from '@/lib/resend';
 import { OrganizerReminderEmail } from '@/components/emails/organizer-reminder';
+import { countFunFacts } from '@/lib/fun-facts';
 
 // POST /api/notify/organizer-reminder
 // Send reminder email to organizer to fill in fun facts and approve wraps
@@ -43,11 +44,11 @@ export async function POST(request: NextRequest) {
     // Count couples and missing fun facts
     const { data: couples } = await supabase
       .from('couples')
-      .select('id, fun_facts')
+      .select('id, invited_fun_facts')
       .eq('event_id', eventId);
     
     const totalCouples = couples?.length || 0;
-    const missingFunFacts = couples?.filter(c => !c.fun_facts || c.fun_facts.length === 0).length || 0;
+    const missingFunFacts = couples?.filter(c => !countFunFacts(c.invited_fun_facts)).length || 0;
     
     // Format date
     const eventDate = new Date(event.event_date).toLocaleDateString('sv-SE', {

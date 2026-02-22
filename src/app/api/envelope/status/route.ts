@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
 import { getOrganizer } from '@/lib/auth';
+import { funFactsToStrings, countFunFacts } from '@/lib/fun-facts';
 import type { 
   EnvelopeStatusResponse, 
   CourseEnvelopeStatus, 
@@ -167,10 +168,8 @@ export async function GET(request: NextRequest) {
     // Build shuffled clue pool from all participants
     const allFunFacts: string[] = [];
     for (const c of allCouples ?? []) {
-      const invited = Array.isArray(c.invited_fun_facts) ? c.invited_fun_facts : [];
-      const partner = Array.isArray(c.partner_fun_facts) ? c.partner_fun_facts : [];
-      allFunFacts.push(...invited.filter((f): f is string => typeof f === 'string'));
-      allFunFacts.push(...partner.filter((f): f is string => typeof f === 'string'));
+      allFunFacts.push(...funFactsToStrings(c.invited_fun_facts));
+      allFunFacts.push(...funFactsToStrings(c.partner_fun_facts));
     }
     // Shuffle the pool
     const shuffledCluePool = allFunFacts.sort(() => Math.random() - 0.5);
@@ -228,13 +227,8 @@ export async function GET(request: NextRequest) {
       );
       
       // Check if host has fun facts
-      const hostInvitedFacts = Array.isArray(envelope.host_couple?.invited_fun_facts) 
-        ? envelope.host_couple.invited_fun_facts 
-        : [];
-      const hostPartnerFacts = Array.isArray(envelope.host_couple?.partner_fun_facts)
-        ? envelope.host_couple.partner_fun_facts
-        : [];
-      const hostHasFunFacts = hostInvitedFacts.length > 0 || hostPartnerFacts.length > 0;
+      const hostHasFunFacts = countFunFacts(envelope.host_couple?.invited_fun_facts) > 0 
+        || countFunFacts(envelope.host_couple?.partner_fun_facts) > 0;
       
       // Clue pool: show all participants' clues at CLUE_1 for starter/main (not dessert, not self-host)
       const isSelfHost = envelope.host_couple_id === coupleId;
@@ -426,13 +420,10 @@ function getRevealedClues(
   }
   
   // Combine all fun facts
-  const invitedFacts = Array.isArray(hostCouple.invited_fun_facts) 
-    ? hostCouple.invited_fun_facts 
-    : [];
-  const partnerFacts = Array.isArray(hostCouple.partner_fun_facts)
-    ? hostCouple.partner_fun_facts
-    : [];
-  const allFacts = [...invitedFacts, ...partnerFacts] as string[];
+  const allFacts = [
+    ...funFactsToStrings(hostCouple.invited_fun_facts),
+    ...funFactsToStrings(hostCouple.partner_fun_facts),
+  ];
   
   const clues: RevealedClue[] = [];
   

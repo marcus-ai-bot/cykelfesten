@@ -10,10 +10,11 @@
  */
 
 import type { Course, CourseClues } from '@/types/database';
+import { funFactsToStrings } from '@/lib/fun-facts';
 
 export interface FunFactsInput {
-  invited_fun_facts: string[] | null;
-  partner_fun_facts: string[] | null;
+  invited_fun_facts: unknown;
+  partner_fun_facts: unknown;
 }
 
 export interface AllocatedClues {
@@ -26,14 +27,10 @@ export interface AllocatedClues {
  * Combine all fun facts from a couple into a single array
  */
 export function combineFunFacts(couple: FunFactsInput): string[] {
-  const invited = Array.isArray(couple.invited_fun_facts) 
-    ? couple.invited_fun_facts 
-    : [];
-  const partner = Array.isArray(couple.partner_fun_facts)
-    ? couple.partner_fun_facts
-    : [];
-  
-  return [...invited, ...partner];
+  return [
+    ...funFactsToStrings(couple.invited_fun_facts),
+    ...funFactsToStrings(couple.partner_fun_facts),
+  ];
 }
 
 /**

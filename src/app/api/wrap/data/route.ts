@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAccessFromParams } from '@/lib/tokens';
+import { getMusicDecade } from '@/lib/fun-facts';
 
 function getSupabase() {
   return createClient(
@@ -210,24 +211,4 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function getMusicDecade(funFacts: unknown): string {
-  if (!Array.isArray(funFacts) || funFacts.length === 0) return 'default';
-  
-  const decadeKeywords: Record<string, string[]> = {
-    '80s': ['80-tal', '80s', 'eighties', '1980'],
-    '90s': ['90-tal', '90s', 'nineties', '1990'],
-    '2000s': ['2000-tal', '2000s', 'nollnoll', '00-tal'],
-    '2010s': ['2010-tal', '2010s', 'tio-tal'],
-    '2020s': ['2020-tal', '2020s', 'tjugo-tal', 'nu', 'modern'],
-  };
-  
-  const allFacts = funFacts.join(' ').toLowerCase();
-  
-  for (const [decade, keywords] of Object.entries(decadeKeywords)) {
-    if (keywords.some(kw => allFacts.includes(kw))) {
-      return decade;
-    }
-  }
-  
-  return 'default';
-}
+// getMusicDecade is now imported from @/lib/fun-facts

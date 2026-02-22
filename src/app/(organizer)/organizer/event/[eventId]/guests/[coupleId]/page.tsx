@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import { FUN_FACT_FIELDS, normaliseFunFacts, renderFunFact } from '@/lib/fun-facts';
+import type { FunFacts } from '@/lib/fun-facts';
 
 interface Couple {
   id: string;
@@ -13,14 +15,14 @@ interface Couple {
   invited_phone: string | null;
   invited_allergies: string[] | null;
   invited_birth_year: number | null;
-  invited_fun_facts: string[] | null;
+  invited_fun_facts: unknown;
   invited_pet_allergy: string;
   partner_name: string | null;
   partner_email: string | null;
   partner_phone: string | null;
   partner_allergies: string[] | null;
   partner_birth_year: number | null;
-  partner_fun_facts: string[] | null;
+  partner_fun_facts: unknown;
   partner_pet_allergy: string;
   address: string | null;
   address_unit: string | null;
@@ -210,7 +212,7 @@ export default function CoupleDetailPage() {
           <Field label="Allergier" field="invited_allergies" form={form} setForm={setForm} editing={editing} isArray />
           <SelectField label="Djurallergi" field="invited_pet_allergy" form={form} setForm={setForm} editing={editing}
             options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
-          <Field label="Fun facts" field="invited_fun_facts" form={form} setForm={setForm} editing={editing} isArray />
+          <FunFactsField field="invited_fun_facts" form={form} setForm={setForm} editing={editing} />
         </Section>
 
         {/* Partner */}
@@ -222,7 +224,7 @@ export default function CoupleDetailPage() {
             <Field label="Allergier" field="partner_allergies" form={form} setForm={setForm} editing={editing} isArray />
             <SelectField label="Djurallergi" field="partner_pet_allergy" form={form} setForm={setForm} editing={editing}
               options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
-            <Field label="Fun facts" field="partner_fun_facts" form={form} setForm={setForm} editing={editing} isArray />
+            <FunFactsField field="partner_fun_facts" form={form} setForm={setForm} editing={editing} />
           </Section>
         )}
 
@@ -288,6 +290,70 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
       <h2 className="font-semibold text-gray-900 mb-3">{title}</h2>
       <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function FunFactsField({ field, form, setForm, editing }: {
+  field: string; form: Record<string, any>; setForm: (f: any) => void; editing: boolean;
+}) {
+  const raw = form[field];
+  const facts = normaliseFunFacts(raw);
+
+  if (!editing) {
+    const filled = FUN_FACT_FIELDS.filter(f => facts[f.key]);
+    return (
+      <div className="py-1.5 border-b border-gray-50">
+        <span className="text-sm text-gray-500">Fun facts</span>
+        {filled.length === 0 ? (
+          <span className="text-sm text-gray-400 ml-2">—</span>
+        ) : (
+          <ul className="mt-1 space-y-1">
+            {filled.map(f => (
+              <li key={f.key} className="text-sm text-gray-900 pl-4">• {renderFunFact(f.key, facts[f.key]!)}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="py-1.5">
+      <label className="text-sm text-gray-500 block mb-1">Fun facts</label>
+      <div className="space-y-2">
+        {FUN_FACT_FIELDS.map(f => (
+          <div key={f.key}>
+            <label className="text-xs text-gray-400">{f.label}</label>
+            {f.type === 'select' ? (
+              <select
+                value={facts[f.key] || ''}
+                onChange={(e) => {
+                  const updated = { ...facts, [f.key]: e.target.value || undefined };
+                  setForm((prev: any) => ({ ...prev, [field]: updated }));
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">—</option>
+                {f.options?.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={facts[f.key] || ''}
+                onChange={(e) => {
+                  const updated = { ...facts, [f.key]: e.target.value || undefined };
+                  setForm((prev: any) => ({ ...prev, [field]: updated }));
+                }}
+                placeholder={f.placeholder}
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

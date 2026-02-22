@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { countFunFacts } from '@/lib/fun-facts';
 
 interface WrapStats {
   // Calculated
@@ -39,7 +40,7 @@ interface Couple {
   id: string;
   invited_name: string;
   partner_name: string | null;
-  fun_facts: string[] | null;
+  fun_facts: unknown;
 }
 
 export default function AdminWrapPage() {
@@ -180,8 +181,8 @@ export default function AdminWrapPage() {
       // Count fun facts
       let funFactsCount = 0;
       couples.forEach(c => {
-        if (c.fun_facts && Array.isArray(c.fun_facts)) {
-          funFactsCount += c.fun_facts.length;
+        if (c.fun_facts) {
+          funFactsCount += countFunFacts(c.fun_facts);
         }
       });
       

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
+import { countFunFacts } from '@/lib/fun-facts';
 
 // 228 Mapbox requests in batches of 10 = ~25 seconds needed
 export const maxDuration = 60;
@@ -271,8 +272,8 @@ export async function POST(
   // Fun facts
   let funFactsCount = 0;
   couples.forEach(c => {
-    if (Array.isArray(c.invited_fun_facts) && c.invited_fun_facts.length > 0) funFactsCount++;
-    if (Array.isArray(c.partner_fun_facts) && c.partner_fun_facts.length > 0) funFactsCount++;
+    if (countFunFacts(c.invited_fun_facts) > 0) funFactsCount++;
+    if (countFunFacts(c.partner_fun_facts) > 0) funFactsCount++;
   });
 
   // --- Street-based stats ---

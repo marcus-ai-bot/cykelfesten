@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTabParam } from '@/hooks/useTabParam';
+import { countFunFacts } from '@/lib/fun-facts';
 
 type Filter = 'all' | 'waiting' | 'approved' | 'rejected' | 'incomplete' | 'no_ff' | 'cancelled';
 
@@ -23,8 +24,8 @@ interface Couple {
   course_preference: string | null;
   invited_allergies: string[] | null;
   partner_allergies: string[] | null;
-  invited_fun_facts: string[] | null;
-  partner_fun_facts: string[] | null;
+  invited_fun_facts: unknown;
+  partner_fun_facts: unknown;
   accessibility_ok: boolean;
   accessibility_needs: string | null;
   created_at: string;
@@ -71,8 +72,8 @@ function GuestsPage() {
     const rejected = active.filter(c => c.approval_status === 'rejected');
     const incomplete = active.filter(c => !c.address || !c.coordinates);
     const noFf = active.filter(c => {
-      const hasInvited = c.invited_fun_facts && c.invited_fun_facts.length > 0;
-      const hasPartner = !c.partner_name || (c.partner_fun_facts && c.partner_fun_facts.length > 0);
+      const hasInvited = countFunFacts(c.invited_fun_facts) > 0;
+      const hasPartner = !c.partner_name || countFunFacts(c.partner_fun_facts) > 0;
       return !hasInvited || !hasPartner;
     });
     const cancelled = couples.filter(c => c.cancelled);
@@ -110,8 +111,8 @@ function GuestsPage() {
       case 'no_ff':
         list = list.filter(c => {
           if (c.cancelled) return false;
-          const hasInvited = c.invited_fun_facts && c.invited_fun_facts.length > 0;
-          const hasPartner = !c.partner_name || (c.partner_fun_facts && c.partner_fun_facts.length > 0);
+          const hasInvited = countFunFacts(c.invited_fun_facts) > 0;
+          const hasPartner = !c.partner_name || countFunFacts(c.partner_fun_facts) > 0;
           return !hasInvited || !hasPartner;
         });
         break;
@@ -308,8 +309,8 @@ function GuestsPage() {
 function GuestRow({ couple, eventId, selected, onToggle }: { couple: Couple; eventId: string; selected: boolean; onToggle: () => void }) {
   const hasAddress = !!couple.address;
   const hasCoords = !!couple.coordinates;
-  const hasInvitedFf = !!(couple.invited_fun_facts && couple.invited_fun_facts.length > 0);
-  const hasPartnerFf = !couple.partner_name || !!(couple.partner_fun_facts && couple.partner_fun_facts.length > 0);
+  const hasInvitedFf = countFunFacts(couple.invited_fun_facts) > 0;
+  const hasPartnerFf = !couple.partner_name || countFunFacts(couple.partner_fun_facts) > 0;
   const hasFf = hasInvitedFf && hasPartnerFf;
   const allergies = [...(couple.invited_allergies || []), ...(couple.partner_allergies || [])].filter(Boolean);
 

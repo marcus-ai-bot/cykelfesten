@@ -72,12 +72,32 @@ function validateAndSanitize(formData: Record<string, unknown>): { clean: Record
     }
   }
 
-  // Array fields: allergies, fun_facts (max 20 items, max 200 chars each)
-  for (const field of ['invited_allergies', 'partner_allergies', 'invited_fun_facts', 'partner_fun_facts']) {
+  // Array fields: allergies (max 20 items, max 200 chars each)
+  for (const field of ['invited_allergies', 'partner_allergies']) {
     if (clean[field] && Array.isArray(clean[field])) {
       clean[field] = (clean[field] as string[])
         .slice(0, 20)
         .map(s => typeof s === 'string' ? s.slice(0, 200) : String(s));
+    }
+  }
+
+  // Fun facts: accept both legacy string[] and new JSON object format
+  for (const field of ['invited_fun_facts', 'partner_fun_facts']) {
+    if (clean[field]) {
+      if (Array.isArray(clean[field])) {
+        // Legacy string[] — accept as-is
+        clean[field] = (clean[field] as string[])
+          .slice(0, 20)
+          .map(s => typeof s === 'string' ? s.slice(0, 200) : String(s));
+      } else if (typeof clean[field] === 'object') {
+        // New JSON object — trim values
+        const obj = clean[field] as Record<string, unknown>;
+        const trimmed: Record<string, string> = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (v && typeof v === 'string') trimmed[k] = v.slice(0, 200);
+        }
+        clean[field] = Object.keys(trimmed).length > 0 ? trimmed : null;
+      }
     }
   }
 

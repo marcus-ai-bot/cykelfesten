@@ -63,14 +63,14 @@ export interface Couple {
   invited_allergies: string[] | null;
   invited_allergy_notes: string | null;
   invited_birth_year: number | null;
-  invited_fun_facts: string[] | null;
+  invited_fun_facts: unknown;
   partner_name: string | null;
   partner_email: string | null;
   partner_phone: string | null;
   partner_allergies: string[] | null;
   partner_allergy_notes: string | null;
   partner_birth_year: number | null;
-  partner_fun_facts: string[] | null;
+  partner_fun_facts: unknown;
   replacement_name: string | null;
   replacement_allergies: string[] | null;
   replacement_allergy_notes: string | null;

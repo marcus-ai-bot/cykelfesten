@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
+import { countFunFacts } from '@/lib/fun-facts';
 
 const RegistrationMap = lazy(() => import('./RegistrationMap').then(m => ({ default: m.RegistrationMap })));
 
@@ -22,8 +23,8 @@ interface Couple {
   course_preference: string | null;
   invited_allergies: string[] | null;
   partner_allergies: string[] | null;
-  invited_fun_facts: string[] | null;
-  partner_fun_facts: string[] | null;
+  invited_fun_facts: unknown;
+  partner_fun_facts: unknown;
   accessibility_ok: boolean;
   accessibility_needs: string | null;
   approval_status?: 'waiting' | 'approved' | 'rejected';
@@ -110,8 +111,8 @@ export function InlineGuestList({ eventId }: Props) {
     const approved = active.filter(c => c.confirmed && c.approval_status === 'approved');
     const incomplete = active.filter(c => !c.address || !c.coordinates);
     const noFf = active.filter(c => {
-      const hasInvited = c.invited_fun_facts && c.invited_fun_facts.length > 0;
-      const hasPartner = !c.partner_name || (c.partner_fun_facts && c.partner_fun_facts.length > 0);
+      const hasInvited = countFunFacts(c.invited_fun_facts) > 0;
+      const hasPartner = !c.partner_name || countFunFacts(c.partner_fun_facts) > 0;
       return !hasInvited || !hasPartner;
     });
     const cancelled = couples.filter(c => c.cancelled);
@@ -134,8 +135,8 @@ export function InlineGuestList({ eventId }: Props) {
       case 'incomplete': list = list.filter(c => !c.cancelled && (!c.address || !c.coordinates)); break;
       case 'no_ff': list = list.filter(c => {
         if (c.cancelled) return false;
-        const hasInvited = c.invited_fun_facts && c.invited_fun_facts.length > 0;
-        const hasPartner = !c.partner_name || (c.partner_fun_facts && c.partner_fun_facts.length > 0);
+        const hasInvited = countFunFacts(c.invited_fun_facts) > 0;
+        const hasPartner = !c.partner_name || countFunFacts(c.partner_fun_facts) > 0;
         return !hasInvited || !hasPartner;
       }); break;
       case 'cancelled': list = list.filter(c => c.cancelled); break;
@@ -326,8 +327,8 @@ function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const hasAddress = !!c.address && !!c.coordinates;
-  const hasInvitedFf = !!(c.invited_fun_facts && c.invited_fun_facts.length > 0);
-  const hasPartnerFf = !c.partner_name || !!(c.partner_fun_facts && c.partner_fun_facts.length > 0);
+  const hasInvitedFf = countFunFacts(c.invited_fun_facts) > 0;
+  const hasPartnerFf = !c.partner_name || countFunFacts(c.partner_fun_facts) > 0;
   const hasFf = hasInvitedFf && hasPartnerFf;
   const allergies = [...(c.invited_allergies || []), ...(c.partner_allergies || [])].filter(Boolean);
 

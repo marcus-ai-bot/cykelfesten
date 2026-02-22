@@ -115,18 +115,13 @@ function RegisterForm() {
         str.split(',').map(s => s.trim()).filter(Boolean);
       
       // Build fun facts as array of readable strings (for clue system)
-      const buildFunFacts = (facts: typeof form.invited_fun_facts): string[] => {
-        const result: string[] = [];
-        if (facts.musicDecade) result.push(`Tycker att ${facts.musicDecade}-talets musik var bäst`);
-        if (facts.pet) result.push(`Har husdjur: ${facts.pet}`);
-        if (facts.talent) result.push(`Hemligt talent: ${facts.talent}`);
-        if (facts.firstJob) result.push(`Första jobbet var ${facts.firstJob}`);
-        if (facts.dreamDestination) result.push(`Drömresmål: ${facts.dreamDestination}`);
-        if (facts.instruments) result.push(`Spelar ${facts.instruments}`);
-        if (facts.sport) result.push(`Sportar: ${facts.sport}`);
-        if (facts.unknownFact) result.push(facts.unknownFact);
-        if (facts.importantYear) result.push(`Viktigt år: ${facts.importantYear}`);
-        return result;
+      // Filter out empty fun fact values before saving
+      const cleanFunFacts = (facts: typeof form.invited_fun_facts) => {
+        const result: Record<string, string> = {};
+        for (const [k, v] of Object.entries(facts)) {
+          if (v && String(v).trim()) result[k] = String(v).trim();
+        }
+        return Object.keys(result).length > 0 ? result : null;
       };
       
       // Register via server API (handles insert + emails)
@@ -141,12 +136,12 @@ function RegisterForm() {
           invited_phone: form.invited_phone || null,
           invited_allergies: parseAllergies(form.invited_allergies),
           invited_birth_year: form.invited_birth_year ? parseInt(form.invited_birth_year) : null,
-          invited_fun_facts: buildFunFacts(form.invited_fun_facts),
+          invited_fun_facts: cleanFunFacts(form.invited_fun_facts),
           partner_name: hasPartner ? form.partner_name : null,
           partner_email: hasPartner ? form.partner_email : null,
           partner_allergies: hasPartner ? parseAllergies(form.partner_allergies) : null,
           partner_birth_year: hasPartner && form.partner_birth_year ? parseInt(form.partner_birth_year) : null,
-          partner_fun_facts: hasPartner ? buildFunFacts(form.partner_fun_facts) : null,
+          partner_fun_facts: hasPartner ? cleanFunFacts(form.partner_fun_facts) : null,
           address: form.address,
           coordinates: form.address_coordinates
             ? `(${form.address_coordinates.lng},${form.address_coordinates.lat})`

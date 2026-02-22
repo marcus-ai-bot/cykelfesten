@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { AWARDS } from '@/lib/awards/calculate';
 import { requireEventAccess } from '@/lib/auth';
+import { countFunFacts } from '@/lib/fun-facts';
 
 // Default enabled awards (non-sensitive)
 const DEFAULT_ENABLED_AWARDS = [
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
         person_type: 'invited',
         name: couple.invited_name,
         birth_year: couple.invited_birth_year,
-        fun_facts_count: (couple.invited_fun_facts as string[] | null)?.length || 0,
+        fun_facts_count: countFunFacts(couple.invited_fun_facts),
         distance_km: Math.round(personDistance * 10) / 10,
         registered_at: couple.created_at,
         allergies_count: (couple.invited_allergies as string[] | null)?.length || 0,
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
           person_type: 'partner',
           name: couple.partner_name,
           birth_year: couple.partner_birth_year,
-          fun_facts_count: (couple.partner_fun_facts as string[] | null)?.length || 0,
+          fun_facts_count: countFunFacts(couple.partner_fun_facts),
           distance_km: Math.round(personDistance * 10) / 10,
           registered_at: couple.created_at,
           allergies_count: (couple.partner_allergies as string[] | null)?.length || 0,

@@ -84,8 +84,8 @@ export function populateLivingEnvelopeData(input: PopulateInput): PopulateOutput
     if (!host) continue;
     
     const allFacts = combineFunFacts({
-      invited_fun_facts: host.invited_fun_facts as string[] | null,
-      partner_fun_facts: host.partner_fun_facts as string[] | null,
+      invited_fun_facts: host.invited_fun_facts,
+      partner_fun_facts: host.partner_fun_facts,
     });
     
     const allocation = allocateClueIndices(allFacts.length);

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { countFunFacts, normaliseFunFacts } from '@/lib/fun-facts';
 
 // Age clue generator
 function getAgeClue(birthYear: number): string {
@@ -367,11 +368,11 @@ export default function HostPage() {
                   )}
                   
                   {/* Fun facts clues */}
-                  {guest.invited_fun_facts && Object.keys(guest.invited_fun_facts).length > 0 && (
-                    <p>• {getFunFactClue(guest.invited_fun_facts)}</p>
+                  {guest.invited_fun_facts && countFunFacts(guest.invited_fun_facts) > 0 && (
+                    <p>• {getFunFactClue(normaliseFunFacts(guest.invited_fun_facts))}</p>
                   )}
-                  {guest.partner_fun_facts && Object.keys(guest.partner_fun_facts).length > 0 && (
-                    <p>• Partnern: {getFunFactClue(guest.partner_fun_facts)}</p>
+                  {guest.partner_fun_facts && countFunFacts(guest.partner_fun_facts) > 0 && (
+                    <p>• Partnern: {getFunFactClue(normaliseFunFacts(guest.partner_fun_facts))}</p>
                   )}
                   
                   {/* Fallback if no clues */}
