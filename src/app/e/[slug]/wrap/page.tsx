@@ -167,9 +167,10 @@ export default function WrapPage() {
       
       const wrapData: WrapData = await response.json();
       
-      // Set music based on decade
-      const musicFile = `/music/${wrapData.music_decade}.mp3`;
-      setMusicSrc(musicFile);
+      // Set music based on decade (with fallback)
+      const validDecades = ['80s', '90s', '2000s', '2010s', '2020s', 'default'];
+      const decade = validDecades.includes(wrapData.music_decade) ? wrapData.music_decade : 'default';
+      setMusicSrc(`/music/${decade}.mp3`);
       
       setData({
         ...wrapData,
