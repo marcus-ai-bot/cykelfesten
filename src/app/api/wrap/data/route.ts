@@ -116,26 +116,24 @@ export async function GET(request: NextRequest) {
       ? couple.partner_fun_facts 
       : couple.invited_fun_facts;
     
-    // Calculate individual distance
-    const coupleEnvelopes = envelopes?.filter(e => e.couple_id === coupleId) ?? [];
-    const coupleMinutes = coupleEnvelopes.reduce(
-      (sum, e) => sum + Math.min(e.cycling_minutes ?? 0, 60),
-      0
-    );
+    // Calculate individual distance from wrap_stats routes (Mapbox cycling)
+    const routes = Array.isArray(wrapStats?.routes) ? wrapStats.routes : [];
+    const coupleRoute = routes.find((r: any) => r.couple_id === coupleId);
+    const coupleDistanceKm = coupleRoute?.totalKm ?? 0;
     const hasPartner = !!couple.partner_name;
-    const individualDistanceKm = Math.round((coupleMinutes * 0.25 / (hasPartner ? 2 : 1)) * 10) / 10;
+    // Per-person distance (split between couple members)
+    const individualDistanceKm = hasPartner 
+      ? Math.round((coupleDistanceKm / 2) * 10) / 10
+      : coupleDistanceKm;
     
-    // Calculate total event distance
-    const totalMinutes = envelopes?.reduce(
-      (sum, e) => sum + Math.min(e.cycling_minutes ?? 0, 60),
-      0
-    ) ?? 0;
-    const totalDistanceKm = Math.round(totalMinutes * 0.25 * 10) / 10;
+    // Total event distance from wrap_stats
+    const totalDistanceKm = wrapStats?.total_distance_km ?? 0;
     const distancePercent = totalDistanceKm > 0 
       ? Math.round((individualDistanceKm / totalDistanceKm) * 100 * 10) / 10
       : 0;
     
     // Count people met: tablemates per course (exclude self), estimate people per couple
+    const coupleEnvelopes = envelopes?.filter(e => e.couple_id === coupleId) ?? [];
     let couplesMet = 0;
     for (const env of coupleEnvelopes) {
       if (!env.host_couple_id) continue;
@@ -151,14 +149,10 @@ export async function GET(request: NextRequest) {
     // Determine music decade from fun facts
     const musicDecade = getMusicDecade(personFunFacts);
     
-    // Check if longest rider
-    const allDistances = new Map<string, number>();
-    for (const e of envelopes ?? []) {
-      const current = allDistances.get(e.couple_id) || 0;
-      allDistances.set(e.couple_id, current + Math.min(e.cycling_minutes ?? 0, 60));
-    }
-    const maxDistance = Math.max(...Array.from(allDistances.values()));
-    const isLongestRider = allDistances.get(coupleId) === maxDistance;
+    // Check if longest rider (from wrap_stats routes)
+    const isLongestRider = routes.length > 0
+      ? coupleRoute?.totalKm === Math.max(...routes.map((r: any) => r.totalKm ?? 0))
+      : false;
     
     // Build response
     const data: WrapData = {

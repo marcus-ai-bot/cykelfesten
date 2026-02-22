@@ -204,6 +204,7 @@ export async function POST(
 
   // Clean up response (remove coord objects)
   const routeSummaries = coupleRoutes.map(r => ({
+    couple_id: r.coupleId,
     name: r.name,
     hostingCourse: r.hostingCourse,
     totalKm: Math.round(r.totalMeters / 100) / 10,
