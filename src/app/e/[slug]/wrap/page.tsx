@@ -32,9 +32,15 @@ interface WrapStats {
   shortest_ride_couple: string;
   longest_ride_meters: number;
   longest_ride_couple: string;
-  districts_count: number;
   fun_facts_count: number;
   last_guest_departure: string | null;
+  unique_streets: number;
+  busiest_street: { name: string; couples: number } | null;
+  top_meal_street: { name: string; servings: number } | null;
+  event_radius_km: number;
+  event_radius_pair: string[];
+  event_area_km2: number;
+  neighbor_pairs: Array<{ a: string; b: string; street: string }>;
 }
 
 interface WrapData {
@@ -394,14 +400,10 @@ export default function WrapPage() {
       </Slide>
     );
     
-    // Slide 5: Shortest ride (ALWAYS show, even tiny - storytelling!)
-    if (ws?.shortest_ride_meters) {
-      const metersStr = ws.shortest_ride_meters < 1000 
-        ? `${ws.shortest_ride_meters}m`
-        : `${(ws.shortest_ride_meters / 1000).toFixed(1)} km`;
-      
+    // Slide 5: The Map — streets, radius, area
+    if (ws && (ws.unique_streets > 0 || ws.event_radius_km > 0)) {
       newSlides.push(
-        <Slide key="shortest" bg="from-yellow-400 via-amber-500 to-orange-600">
+        <Slide key="map" bg="from-teal-500 via-emerald-600 to-green-700">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -413,50 +415,98 @@ export default function WrapPage() {
               transition={{ type: 'spring', bounce: 0.5 }}
               className="text-7xl mb-6"
             >
-              ⚡
+              🗺️
             </motion.div>
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
-              className="text-amber-100 text-lg mb-2"
+              className="text-emerald-200 text-lg mb-2"
             >
-              Kortaste cykelturen:
+              Kvällen spände över
             </motion.p>
             <motion.p 
               initial={{ scale: 0.5 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.5, type: 'spring' }}
-              className="text-6xl font-black mb-4"
+              className="text-6xl font-black mb-2"
             >
-              {metersStr}
+              {ws.unique_streets} gator
+            </motion.p>
+            {ws.event_area_km2 > 0 && (
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="text-2xl font-bold mb-2"
+              >
+                {ws.event_area_km2} km² av staden
+              </motion.p>
+            )}
+            {ws.event_radius_km > 0 && (
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.1 }}
+                className="text-xl text-emerald-200"
+              >
+                {ws.event_radius_km} km mellan {ws.event_radius_pair?.[0]?.split(' ')[0]} och {ws.event_radius_pair?.[1]?.split(' ')[0]}
+              </motion.p>
+            )}
+          </motion.div>
+        </Slide>
+      );
+    }
+
+    // Slide 6: The Kitchen Street — busiest food street
+    if (ws?.top_meal_street) {
+      newSlides.push(
+        <Slide key="mealstreet" bg="from-orange-400 via-red-500 to-rose-600">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', bounce: 0.5 }}
+              className="text-7xl mb-6"
+            >
+              👨‍🍳
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-orange-100 text-lg mb-2"
+            >
+              Kvällens mest matlagande gata
+            </motion.p>
+            <motion.p 
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, type: 'spring' }}
+              className="text-5xl font-black mb-4"
+            >
+              {ws.top_meal_street.name}
             </motion.p>
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
-              className="text-xl font-bold"
+              className="text-2xl font-bold"
             >
-              {ws.shortest_ride_couple}
+              {ws.top_meal_street.servings} kuvert serverade
             </motion.p>
-            {ws.shortest_ride_meters < 200 && (
+            {ws.busiest_street && (
               <motion.p 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.1 }}
-                className="text-lg text-yellow-200 mt-4"
+                className="text-lg text-orange-200 mt-4"
               >
-                Turligt placerade! 🍀
-              </motion.p>
-            )}
-            {ws.shortest_ride_meters < 50 && (
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.4 }}
-                className="text-lg text-yellow-200"
-              >
-                Praktiskt taget grannbesök! 😄
+                🏠 Flest ekipage: {ws.busiest_street.name} ({ws.busiest_street.couples} st)
               </motion.p>
             )}
           </motion.div>
@@ -464,10 +514,45 @@ export default function WrapPage() {
       );
     }
     
-    // Slide 6: Longest ride (highlight if you)
-    if (ws?.longest_ride_meters) {
+    // Slide 7: Shortest vs Longest ride (combined, more dramatic)
+    if (ws?.shortest_ride_meters && ws?.longest_ride_meters) {
       newSlides.push(
-        <Slide key="longest" bg="from-indigo-500 via-purple-600 to-violet-700">
+        <Slide key="extremes" bg="from-indigo-500 via-purple-600 to-violet-700">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <motion.div className="flex justify-center gap-6 mb-6">
+              <motion.span initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-6xl">⚡</motion.span>
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="text-5xl text-purple-300">vs</motion.span>
+              <motion.span initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-6xl">🏔️</motion.span>
+            </motion.div>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mb-6">
+              <p className="text-purple-200 text-sm mb-1">Kortaste rutten</p>
+              <p className="text-4xl font-black">
+                {ws.shortest_ride_meters < 1000 ? `${ws.shortest_ride_meters}m` : `${(ws.shortest_ride_meters / 1000).toFixed(1)} km`}
+              </p>
+              <p className="text-purple-200">{ws.shortest_ride_couple}</p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}>
+              <p className="text-purple-200 text-sm mb-1">Längsta rutten</p>
+              <p className="text-4xl font-black">{(ws.longest_ride_meters / 1000).toFixed(1)} km</p>
+              <p className="text-purple-200">{ws.longest_ride_couple}</p>
+              {data.is_longest_rider && (
+                <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 1.3, type: 'spring' }} className="text-green-300 text-xl mt-2">Det var du! 💪</motion.p>
+              )}
+            </motion.div>
+          </motion.div>
+        </Slide>
+      );
+    }
+
+    // Slide 8: Neighbor miss (if any) — emotional/funny
+    if (ws?.neighbor_pairs && ws.neighbor_pairs.length > 0) {
+      const pair = ws.neighbor_pairs[0];
+      newSlides.push(
+        <Slide key="neighbors" bg="from-amber-400 via-yellow-500 to-lime-500">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -479,40 +564,40 @@ export default function WrapPage() {
               transition={{ type: 'spring', bounce: 0.5 }}
               className="text-7xl mb-6"
             >
-              🏆
+              🌳
             </motion.div>
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
-              className="text-violet-200 text-lg mb-2"
+              className="text-amber-900 text-lg mb-2"
             >
-              Längsta cykelturen:
+              Visste du att...
             </motion.p>
             <motion.p 
-              initial={{ scale: 0.5 }}
-              animate={{ scale: 1 }}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.5, type: 'spring' }}
-              className="text-6xl font-black mb-4"
+              className="text-2xl font-black mb-4 text-amber-900"
             >
-              {(ws.longest_ride_meters / 1000).toFixed(1)} km
+              {pair.a.split(' ')[0]} och {pair.b.split(' ')[0]} bor på samma gata
             </motion.p>
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.8 }}
-              className="text-xl font-bold"
+              transition={{ delay: 0.9 }}
+              className="text-xl text-amber-800 mb-4"
             >
-              {ws.longest_ride_couple}
+              men träffades aldrig under kvällen?
             </motion.p>
-            {data.is_longest_rider && (
+            {ws.neighbor_pairs.length > 1 && (
               <motion.p 
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.2, type: 'spring' }}
-                className="text-2xl text-green-300 mt-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.2 }}
+                className="text-lg text-amber-700"
               >
-                Det var du! 💪
+                ({ws.neighbor_pairs.length} grannpar missade varandra totalt!)
               </motion.p>
             )}
           </motion.div>

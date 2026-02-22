@@ -27,9 +27,15 @@ interface WrapStats {
   shortest_ride_couple: string;
   longest_ride_meters: number;
   longest_ride_couple: string;
-  districts_count: number;
   fun_facts_count: number;
   last_guest_departure: string | null;
+  unique_streets: number;
+  busiest_street: { name: string; couples: number } | null;
+  top_meal_street: { name: string; servings: number } | null;
+  event_radius_km: number;
+  event_radius_pair: string[];
+  event_area_km2: number;
+  neighbor_pairs: Array<{ a: string; b: string; street: string }>;
 }
 
 interface WrapData {
@@ -178,9 +184,15 @@ export async function GET(request: NextRequest) {
         shortest_ride_couple: wrapStats.shortest_ride_couple ?? '',
         longest_ride_meters: Math.round((wrapStats.longest_ride_km ?? 0) * 1000),
         longest_ride_couple: wrapStats.longest_ride_couple ?? '',
-        districts_count: wrapStats.districts_count ?? 1,
         fun_facts_count: wrapStats.fun_facts_count ?? 0,
         last_guest_departure: wrapStats.last_guest_departure ?? null,
+        unique_streets: wrapStats.unique_streets ?? 0,
+        busiest_street: wrapStats.busiest_street ?? null,
+        top_meal_street: wrapStats.top_meal_street ?? null,
+        event_radius_km: wrapStats.event_radius_km ?? 0,
+        event_radius_pair: wrapStats.event_radius_pair ?? [],
+        event_area_km2: wrapStats.event_area_km2 ?? 0,
+        neighbor_pairs: wrapStats.neighbor_pairs ?? [],
       } : null,
       has_award: !!award,
       is_longest_rider: isLongestRider,
