@@ -412,7 +412,7 @@ function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
               <Link href={`/organizer/event/${eventId}/guests/${c.id}`} onClick={() => setSwipeMode(null)}
                 className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">✏️ Redigera</Link>
               <Link href={`/organizer/event/${eventId}/guests/${c.id}/preferences`} onClick={() => setSwipeMode(null)}
-                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">🔀 Matchningspreferenser</Link>
+                className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">🔀 Matchningspreferens</Link>
               <button onClick={() => setSwipeMode(null)}
                 className="w-full px-3 py-1.5 text-xs text-gray-400 text-center">Stäng</button>
             </div>
@@ -496,7 +496,7 @@ function RowMenu({ eventId, coupleId, onClose, onAction }: {
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}`} onClick={onClose}
         className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✏️ Redigera</Link>
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`} onClick={onClose}
-        className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">🔀 Matchningspreferenser</Link>
+        className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">🔀 Matchningspreferens</Link>
     </div>
   );
 }
