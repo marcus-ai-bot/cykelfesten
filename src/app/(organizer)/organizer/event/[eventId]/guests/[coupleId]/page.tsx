@@ -210,14 +210,7 @@ export default function CoupleDetailPage() {
           <Field label="Allergier" field="invited_allergies" form={form} setForm={setForm} editing={editing} isArray />
           <SelectField label="Djurallergi" field="invited_pet_allergy" form={form} setForm={setForm} editing={editing}
             options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
-          {couple.invited_fun_facts?.length ? (
-            <div className="py-2">
-              <span className="text-sm text-gray-500">Fun facts:</span>
-              <ul className="list-disc list-inside text-sm text-gray-700 mt-1">
-                {couple.invited_fun_facts.map((f, i) => <li key={i}>{f}</li>)}
-              </ul>
-            </div>
-          ) : null}
+          <Field label="Fun facts" field="invited_fun_facts" form={form} setForm={setForm} editing={editing} isArray />
         </Section>
 
         {/* Partner */}
@@ -229,14 +222,7 @@ export default function CoupleDetailPage() {
             <Field label="Allergier" field="partner_allergies" form={form} setForm={setForm} editing={editing} isArray />
             <SelectField label="Djurallergi" field="partner_pet_allergy" form={form} setForm={setForm} editing={editing}
               options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
-            {couple.partner_fun_facts?.length ? (
-              <div className="py-2">
-                <span className="text-sm text-gray-500">Fun facts:</span>
-                <ul className="list-disc list-inside text-sm text-gray-700 mt-1">
-                  {couple.partner_fun_facts.map((f, i) => <li key={i}>{f}</li>)}
-                </ul>
-              </div>
-            ) : null}
+            <Field label="Fun facts" field="partner_fun_facts" form={form} setForm={setForm} editing={editing} isArray />
           </Section>
         )}
 

@@ -380,7 +380,7 @@ function RowMenu({ eventId, coupleId, onClose }: { eventId: string; coupleId: st
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}`} onClick={onClose}
         className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✏️ Redigera</Link>
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`} onClick={onClose}
-        className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">🍽️ Preferenser</Link>
+        className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">🔀 Matchningspreferenser</Link>
     </div>
   );
 }
