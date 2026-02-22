@@ -183,7 +183,7 @@ export default function WrapPage() {
 
       {/* Tabs */}
       <div className="bg-white border-b">
-        <div className="max-w-4xl mx-auto flex overflow-x-auto">
+        <div className="max-w-4xl mx-auto flex overflow-x-auto overscroll-x-contain scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
           {tabs.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`px-5 py-3 font-medium whitespace-nowrap text-sm ${activeTab === tab.id ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500'}`}>

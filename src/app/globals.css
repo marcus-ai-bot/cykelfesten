@@ -37,3 +37,12 @@ body {
 .animate-pulse-once {
   animation: pulse-once 0.8s ease-out 0.3s 1;
 }
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

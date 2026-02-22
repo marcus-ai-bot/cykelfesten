@@ -242,7 +242,7 @@ export function PhasesStepper({
     <section className="space-y-6">
       {/* ── Pill navigation ──────────────────────────── */}
       <nav className="bg-white rounded-2xl shadow-sm px-3 py-3 md:px-5">
-        <div className="flex gap-1.5 overflow-x-auto flex-nowrap scrollbar-hide">
+        <div className="flex gap-1.5 overflow-x-auto overscroll-x-contain flex-nowrap scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
           {phases.map((phase, index) => {
             const isActive = index === activePhaseIndex;
             // Status ring: complete=green, in_progress=amber, not_started=none

@@ -141,7 +141,7 @@ export default function AwardsPage() {
       </div>
 
       <div className="bg-white border-b">
-        <div className="max-w-4xl mx-auto flex">
+        <div className="max-w-4xl mx-auto flex overflow-x-auto overscroll-x-contain scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
           {(['settings', 'assignments', 'preview', 'send'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`px-5 py-3 font-medium whitespace-nowrap text-sm ${activeTab === tab ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500'}`}>
