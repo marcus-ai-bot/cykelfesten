@@ -472,8 +472,9 @@ function RowMenu({ eventId, coupleId, onClose, onAction }: {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    // Use click (not mousedown) so menu items can fire before close
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
   }, [onClose]);
 
   return (
