@@ -490,11 +490,16 @@ function RowMenu({ eventId, coupleId, onClose, onAction }: {
   }, [onClose]);
 
   return (
-    <div ref={menuRef} className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-30">
+    <div ref={menuRef} className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-30">
       <button onClick={() => { onAction('approve'); onClose(); }}
         className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✅ Godkänn</button>
       <button onClick={() => { onAction('reject'); onClose(); }}
         className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">❌ Neka</button>
+      <div className="border-t border-gray-100 my-1" />
+      <button onClick={() => { onAction('remind_address'); onClose(); }}
+        className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">📍 Påminn om adress</button>
+      <button onClick={() => { onAction('remind_ff'); onClose(); }}
+        className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">🎉 Påminn om fun facts</button>
       <div className="border-t border-gray-100 my-1" />
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}`} onClick={onClose}
         className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✏️ Redigera</Link>
