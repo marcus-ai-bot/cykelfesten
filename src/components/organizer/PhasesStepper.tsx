@@ -129,18 +129,7 @@ export function PhasesStepper({
             {/* Inbjudningslänk — överst */}
             {isInviteOpen && <InviteLinkSection eventId={eventId} />}
 
-            {/* Quick action — map */}
-            {couplesCount > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <QuickAction
-                  href={`/organizer/event/${eventId}/map`}
-                  icon="🗺️"
-                  label="Karta"
-                />
-              </div>
-            )}
-
-            {/* Inline guest list with progress bar */}
+            {/* Inline guest list with Lista/Karta tabs */}
             <InlineGuestList eventId={eventId} />
           </div>
         );
@@ -271,15 +260,6 @@ export function PhasesStepper({
 
       {/* ── Content panel ────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-sm p-6">
-        <div className="flex items-center gap-3 mb-5">
-          <span className="text-2xl leading-none">{activePhase.icon}</span>
-          <h2 className="text-lg font-semibold text-gray-900">
-            {activePhase.name}
-          </h2>
-          {activePhase.status !== 'not_started' && (
-            <StatusDot status={activePhase.status} size="md" />
-          )}
-        </div>
         <div
           key={activePhase.key}
           className="animate-fade-in"

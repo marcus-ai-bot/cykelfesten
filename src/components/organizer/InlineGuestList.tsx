@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import Link from 'next/link';
+
+const RegistrationMap = lazy(() => import('./RegistrationMap').then(m => ({ default: m.RegistrationMap })));
 
 type Filter = 'all' | 'waiting' | 'approved' | 'incomplete' | 'no_ff' | 'cancelled';
 
@@ -32,6 +34,7 @@ interface Props {
 }
 
 export function InlineGuestList({ eventId }: Props) {
+  const [view, setView] = useState<'lista' | 'karta'>('lista');
   const [couples, setCouples] = useState<Couple[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
@@ -111,6 +114,36 @@ export function InlineGuestList({ eventId }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Lista / Karta tabs */}
+      <div className="flex gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setView('lista')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            view === 'lista'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          📋 Lista
+        </button>
+        <button
+          onClick={() => setView('karta')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            view === 'karta'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          🗺️ Karta
+        </button>
+      </div>
+
+      {view === 'karta' ? (
+        <Suspense fallback={<div className="h-[400px] rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 text-sm">Laddar karta...</div>}>
+          <RegistrationMap eventId={eventId} />
+        </Suspense>
+      ) : (
+      <>
       {/* Progress bar */}
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -182,6 +215,8 @@ export function InlineGuestList({ eventId }: Props) {
             <GuestRow key={c.id} couple={c} eventId={eventId} />
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );
