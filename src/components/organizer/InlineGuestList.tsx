@@ -231,21 +231,60 @@ export function InlineGuestList({ eventId }: Props) {
         )}
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 overflow-x-auto overscroll-x-contain scrollbar-hide">
-        {filters.map(f => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
-              filter === f.id
-                ? 'bg-indigo-100 text-indigo-700 font-medium'
-                : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            {f.label} {f.count > 0 && <span className="text-xs opacity-70">{f.count}</span>}
-          </button>
-        ))}
+      {/* ── Sticky toolbar ── */}
+      <div className="sticky top-[94px] z-20 bg-white -mx-6 px-6 pt-2 pb-3 space-y-3 border-b border-gray-100">
+        {/* Filter tabs */}
+        <div className="flex gap-1 overflow-x-auto overscroll-x-contain scrollbar-hide">
+          {filters.map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+                filter === f.id
+                  ? 'bg-indigo-100 text-indigo-700 font-medium'
+                  : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              {f.label} {f.count > 0 && <span className="text-xs opacity-70">{f.count}</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Search + batch actions */}
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              placeholder="Sök namn, email, adress..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+            <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+          </div>
+          {(selected.size > 0 || filter === 'waiting' || filter === 'incomplete' || filter === 'no_ff') && (
+            <select
+              onChange={e => { if (e.target.value) batchAction(e.target.value); e.target.value = ''; }}
+              disabled={acting}
+              className="appearance-none bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50 shrink-0"
+            >
+              <option value="">Åtgärder ▼</option>
+              <option value="approve">✅ Godkänn {selected.size > 0 ? `(${selected.size})` : 'alla'}</option>
+              <option value="reject">❌ Neka {selected.size > 0 ? `(${selected.size})` : 'alla'}</option>
+              <option value="remind_address">📍 Påminn om adress</option>
+              <option value="remind_ff">🎉 Påminn om fun facts</option>
+            </select>
+          )}
+        </div>
+
+        {/* Select all / count */}
+        {filtered.length > 0 && (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
+              onChange={toggleAll} className="w-4 h-4 rounded" />
+            <span>{selected.size > 0 ? `${selected.size} markerade` : `${filtered.length} par`}</span>
+          </div>
+        )}
       </div>
 
       {/* Message */}
@@ -253,42 +292,6 @@ export function InlineGuestList({ eventId }: Props) {
         <div className={`p-3 rounded-lg text-sm flex items-center justify-between ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
           {message}
           <button onClick={() => setMessage('')} className="text-gray-400 ml-2">✕</button>
-        </div>
-      )}
-
-      {/* Search + batch actions */}
-      <div className="flex gap-2">
-        <div className="flex-1 relative">
-          <input
-            type="text"
-            placeholder="Sök namn, email, adress..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
-          <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
-        </div>
-        {(selected.size > 0 || filter === 'waiting' || filter === 'incomplete' || filter === 'no_ff') && (
-          <select
-            onChange={e => { if (e.target.value) batchAction(e.target.value); e.target.value = ''; }}
-            disabled={acting}
-            className="appearance-none bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50 shrink-0"
-          >
-            <option value="">Åtgärder ▼</option>
-            <option value="approve">✅ Godkänn {selected.size > 0 ? `(${selected.size})` : 'alla'}</option>
-            <option value="reject">❌ Neka {selected.size > 0 ? `(${selected.size})` : 'alla'}</option>
-            <option value="remind_address">📍 Påminn om adress</option>
-            <option value="remind_ff">🎉 Påminn om fun facts</option>
-          </select>
-        )}
-      </div>
-
-      {/* Select all */}
-      {filtered.length > 0 && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
-            onChange={toggleAll} className="w-4 h-4 rounded" />
-          <span>{selected.size > 0 ? `${selected.size} markerade` : `${filtered.length} par`}</span>
         </div>
       )}
 

@@ -83,6 +83,15 @@ export function EventDashboard({
         </div>
       </header>
 
+      {/* Sticky phase title bar */}
+      <div className="sticky top-[53px] z-30 bg-white border-b border-gray-200">
+        <div className="max-w-5xl mx-auto px-4 py-2.5">
+          <h2 className="text-sm font-semibold text-gray-700">
+            {PHASE_ICONS[activePhase]} {PHASE_LABELS[activePhase]}
+          </h2>
+        </div>
+      </div>
+
       <main className="max-w-5xl mx-auto px-4 py-6">
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <PhaseContent
