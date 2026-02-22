@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import Link from 'next/link';
 
 const RegistrationMap = lazy(() => import('./RegistrationMap').then(m => ({ default: m.RegistrationMap })));
@@ -39,13 +39,53 @@ export function InlineGuestList({ eventId }: Props) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [acting, setActing] = useState(false);
+  const [message, setMessage] = useState('');
 
-  useEffect(() => {
+  function loadData() {
     fetch(`/api/organizer/events/${eventId}/guests`)
       .then(r => r.json())
       .then(data => { setCouples(data.couples || []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [eventId]);
+  }
+
+  useEffect(() => { loadData(); }, [eventId]);
+
+  function toggleSelect(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  }
+
+  function toggleAll() {
+    if (selected.size === filtered.length) setSelected(new Set());
+    else setSelected(new Set(filtered.map(c => c.id)));
+  }
+
+  async function batchAction(action: string) {
+    const ids = selected.size > 0 ? Array.from(selected) : filtered.map(c => c.id);
+    if (ids.length === 0) return;
+    const labels: Record<string, string> = {
+      approve: `Godkänn ${ids.length} par`,
+      reject: `Neka ${ids.length} par`,
+      remind_address: `Påminn ${ids.length} par om adress`,
+      remind_ff: `Påminn ${ids.length} par om fun facts`,
+    };
+    if (!confirm(`${labels[action] || action}?`)) return;
+    setActing(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/guests/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, couple_ids: ids }),
+      });
+      const data = await res.json();
+      if (res.ok) { setMessage(`✅ ${data.message || 'Klart!'}`); setSelected(new Set()); loadData(); }
+      else setMessage(`❌ ${data.error}`);
+    } catch { setMessage('❌ Nätverksfel'); }
+    finally { setActing(false); }
+  }
 
   const active = useMemo(() => couples.filter(c => !c.cancelled), [couples]);
 
@@ -192,17 +232,49 @@ export function InlineGuestList({ eventId }: Props) {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <input
-          type="text"
-          placeholder="Sök namn, email, adress..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-        />
-        <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+      {/* Message */}
+      {message && (
+        <div className={`p-3 rounded-lg text-sm flex items-center justify-between ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {message}
+          <button onClick={() => setMessage('')} className="text-gray-400 ml-2">✕</button>
+        </div>
+      )}
+
+      {/* Search + batch actions */}
+      <div className="flex gap-2">
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            placeholder="Sök namn, email, adress..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+        </div>
+        {(selected.size > 0 || filter === 'waiting' || filter === 'incomplete' || filter === 'no_ff') && (
+          <select
+            onChange={e => { if (e.target.value) batchAction(e.target.value); e.target.value = ''; }}
+            disabled={acting}
+            className="appearance-none bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            <option value="">Åtgärder ▼</option>
+            <option value="approve">✅ Godkänn {selected.size > 0 ? `(${selected.size})` : 'alla'}</option>
+            <option value="reject">❌ Neka {selected.size > 0 ? `(${selected.size})` : 'alla'}</option>
+            <option value="remind_address">📍 Påminn om adress</option>
+            <option value="remind_ff">🎉 Påminn om fun facts</option>
+          </select>
+        )}
       </div>
+
+      {/* Select all */}
+      {filtered.length > 0 && (
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
+            onChange={toggleAll} className="w-4 h-4 rounded" />
+          <span>{selected.size > 0 ? `${selected.size} markerade` : `${filtered.length} par`}</span>
+        </div>
+      )}
 
       {/* List */}
       {filtered.length === 0 ? (
@@ -212,7 +284,8 @@ export function InlineGuestList({ eventId }: Props) {
       ) : (
         <div className="space-y-2">
           {filtered.map(c => (
-            <GuestRow key={c.id} couple={c} eventId={eventId} />
+            <GuestRow key={c.id} couple={c} eventId={eventId}
+              selected={selected.has(c.id)} onToggle={() => toggleSelect(c.id)} />
           ))}
         </div>
       )}
@@ -224,7 +297,10 @@ export function InlineGuestList({ eventId }: Props) {
 
 /* ── GuestRow ──────────────────────────────────────────── */
 
-function GuestRow({ couple: c, eventId }: { couple: Couple; eventId: string }) {
+function GuestRow({ couple: c, eventId, selected, onToggle }: {
+  couple: Couple; eventId: string; selected: boolean; onToggle: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const hasAddress = !!c.address && !!c.coordinates;
   const hasInvitedFf = !!(c.invited_fun_facts && c.invited_fun_facts.length > 0);
   const hasPartnerFf = !c.partner_name || !!(c.partner_fun_facts && c.partner_fun_facts.length > 0);
@@ -243,29 +319,69 @@ function GuestRow({ couple: c, eventId }: { couple: Couple; eventId: string }) {
   }
 
   return (
-    <Link
-      href={`/organizer/event/${eventId}/guests/${c.id}`}
-      className={`block bg-white rounded-lg border p-3 hover:border-indigo-200 hover:shadow-sm transition ${c.cancelled ? 'opacity-50' : ''}`}
-    >
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-medium text-sm text-gray-900 truncate">
-          {c.invited_name}
-          {c.partner_name && <span className="text-gray-400 font-normal"> & {c.partner_name}</span>}
-        </span>
-        <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadge.color}`}>{statusBadge.text}</span>
-      </div>
+    <div className={`bg-white rounded-lg border p-3 flex items-start gap-3 ${selected ? 'ring-2 ring-indigo-300' : ''} ${c.cancelled ? 'opacity-50' : ''}`}>
+      <input type="checkbox" checked={selected} onChange={onToggle}
+        className="w-4 h-4 rounded mt-1 shrink-0" />
 
-      <div className="flex flex-wrap gap-1.5 mt-1.5">
-        <Badge ok={hasAddress} label="📍 Adress" />
-        <Badge ok={hasFf} label="🎉 Fun facts" />
-        {allergies.length > 0 && <span className="text-xs text-orange-600">⚠️ {allergies.join(', ')}</span>}
-        {!c.partner_name && <span className="text-xs text-gray-400">Solo</span>}
-      </div>
+      <Link href={`/organizer/event/${eventId}/guests/${c.id}`} className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-sm text-gray-900 truncate">
+            {c.invited_name}
+            {c.partner_name && <span className="text-gray-400 font-normal"> & {c.partner_name}</span>}
+          </span>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadge.color}`}>{statusBadge.text}</span>
+        </div>
 
-      {c.invited_email && (
-        <p className="text-xs text-gray-400 mt-1 truncate">{c.invited_email}</p>
-      )}
-    </Link>
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          <Badge ok={hasAddress} label="📍 Adress" />
+          <Badge ok={hasFf} label="🎉 Fun facts" />
+          {allergies.length > 0 && <span className="text-xs text-orange-600">⚠️ {allergies.join(', ')}</span>}
+          {!c.partner_name && <span className="text-xs text-gray-400">Solo</span>}
+        </div>
+
+        {c.invited_email && (
+          <p className="text-xs text-gray-400 mt-1 truncate">{c.invited_email}</p>
+        )}
+      </Link>
+
+      {/* Row menu */}
+      <div className="relative shrink-0">
+        <button onClick={() => setMenuOpen(!menuOpen)}
+          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="8" cy="3" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="8" cy="13" r="1.2" />
+          </svg>
+        </button>
+        {menuOpen && (
+          <RowMenu
+            eventId={eventId}
+            coupleId={c.id}
+            onClose={() => setMenuOpen(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RowMenu({ eventId, coupleId, onClose }: { eventId: string; coupleId: string; onClose: () => void }) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={menuRef} className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-30">
+      <Link href={`/organizer/event/${eventId}/guests/${coupleId}`} onClick={onClose}
+        className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✏️ Redigera</Link>
+      <Link href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`} onClick={onClose}
+        className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">🍽️ Preferenser</Link>
+    </div>
   );
 }
 
