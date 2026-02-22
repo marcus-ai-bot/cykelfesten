@@ -87,21 +87,11 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
             icon="🗺️"
             disabled={!hasMatching}
           />
-          <div className="rounded-xl shadow-sm border border-gray-100 bg-white p-5">
-            <div className="flex items-center gap-4">
-              <span className="text-3xl">🔍</span>
-              <div>
-                <h3 className="font-semibold text-gray-900">Hjälp en gäst</h3>
-                <p className="text-sm text-gray-500">Välj en person och se deras kuvert som de ser det just nu</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 mt-3">🚧 Kommer snart</p>
-          </div>
           <ActionCard
-            href={`/organizer/event/${eventId}/afterparty`}
-            title="Efterfesten"
-            description="Så här ser gästerna efterfest-infon"
-            icon="🎉"
+            href={`/organizer/event/${eventId}/help-guest`}
+            title="Hjälp ett par"
+            description="Se kuvertet som gästen ser det — välj par och tid"
+            icon="🔍"
           />
         </div>
       );
