@@ -6,9 +6,17 @@ import Link from 'next/link';
 interface Props {
   eventId: string;
   eventSlug?: string;
+  activePhase?: string;
+  onPhaseChange?: (phase: string) => void;
 }
 
-export function HamburgerMenu({ eventId, eventSlug }: Props) {
+const PHASES = [
+  { key: 'invite', icon: '📨', label: 'Inbjudan' },
+  { key: 'dinner', icon: '🍽️', label: 'Middag' },
+  { key: 'after', icon: '🌅', label: 'Efteråt' },
+];
+
+export function HamburgerMenu({ eventId, eventSlug, activePhase, onPhaseChange }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -36,14 +44,27 @@ export function HamburgerMenu({ eventId, eventSlug }: Props) {
 
       {open && (
         <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
-          <Link
-            href="/organizer"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition"
-          >
-            ← Alla fester
-          </Link>
-          <div className="border-t border-gray-100 my-1" />
+          {/* Phase navigation */}
+          {onPhaseChange && (
+            <>
+              {PHASES.map(phase => (
+                <button
+                  key={phase.key}
+                  onClick={() => { onPhaseChange(phase.key); setOpen(false); }}
+                  className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition ${
+                    activePhase === phase.key
+                      ? 'bg-indigo-50 text-indigo-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{phase.icon}</span> {phase.label}
+                </button>
+              ))}
+              <div className="border-t border-gray-100 my-1" />
+            </>
+          )}
+
+          {/* Tools */}
           <Link
             href={`/organizer/event/${eventId}/settings`}
             onClick={() => setOpen(false)}
@@ -63,11 +84,11 @@ export function HamburgerMenu({ eventId, eventSlug }: Props) {
           )}
           <div className="border-t border-gray-100 my-1" />
           <Link
-            href={`/organizer/event/${eventId}/settings#links`}
+            href="/organizer"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition"
           >
-            <span>🔗</span> Inbjudningslänk
+            ← Alla fester
           </Link>
         </div>
       )}
