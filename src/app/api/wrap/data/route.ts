@@ -123,15 +123,13 @@ export async function GET(request: NextRequest) {
       : couple.invited_fun_facts;
     
     // Calculate individual distance from wrap_stats routes (Mapbox cycling)
+    // This is the FULL route: home → starter → main → dessert → afterparty → home
+    // Both people in a couple cycle the same distance, so no dividing by 2
     const routes = Array.isArray(wrapStats?.routes) ? wrapStats.routes : [];
     const coupleRoute = routes.find((r: any) => r.couple_id === coupleId);
     const envelopeDistanceKm = envelopeDistanceByCouple.get(coupleId) || 0;
-    const coupleDistanceKm = coupleRoute?.totalKm ?? envelopeDistanceKm;
+    const individualDistanceKm = coupleRoute?.totalKm ?? envelopeDistanceKm;
     const hasPartner = !!couple.partner_name;
-    // Per-person distance (split between couple members)
-    const individualDistanceKm = hasPartner 
-      ? Math.round((coupleDistanceKm / 2) * 10) / 10
-      : coupleDistanceKm;
     
     // Total event distance from wrap_stats (fallback to envelope totals)
     const envelopeTotalKm = Array.from(envelopeDistanceByCouple.values()).reduce((sum, km) => sum + km, 0);
