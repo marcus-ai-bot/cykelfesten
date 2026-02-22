@@ -83,11 +83,12 @@ export async function POST(
 
   const { data: event } = await supabase
     .from('events')
-    .select('active_match_plan_id, wrap_stats')
+    .select('active_match_plan_id, wrap_stats, afterparty_coordinates')
     .eq('id', eventId)
     .single();
 
   const matchPlanId = event?.active_match_plan_id;
+  const afterpartyCoord = parsePoint(event?.afterparty_coordinates);
 
   const { data: envelopes } = matchPlanId
     ? await supabase
@@ -189,7 +190,12 @@ export async function POST(
       });
     }
 
-    // Return home after last course
+    // Afterparty (if configured)
+    if (afterpartyCoord) {
+      waypoints.push({ label: '🎉 Efterfest', coord: afterpartyCoord });
+    }
+
+    // Return home after last course (or afterparty)
     waypoints.push({ label: '🏠 Hem', coord: home });
 
     // Build legs

@@ -149,6 +149,7 @@ function AfterPartyEditCard({ eventId }: { eventId: string }) {
     afterparty_location: '',
     afterparty_time: '',
     afterparty_description: '',
+    afterparty_coordinates: null as { lat: number; lng: number } | null,
   });
 
   const loadData = useCallback(async () => {
@@ -161,6 +162,7 @@ function AfterPartyEditCard({ eventId }: { eventId: string }) {
           afterparty_location: data.event.afterparty_location || '',
           afterparty_time: data.event.afterparty_time?.slice(0, 5) || '',
           afterparty_description: data.event.afterparty_description || '',
+          afterparty_coordinates: null,
         });
       }
     } catch { /* ignore */ }
@@ -172,7 +174,7 @@ function AfterPartyEditCard({ eventId }: { eventId: string }) {
   async function handleSave() {
     setSaving(true); setMessage('');
     try {
-      const body: Record<string, string> = { ...form };
+      const body: Record<string, any> = { ...form };
       if (body.afterparty_time) body.afterparty_time = body.afterparty_time + ':00';
       const res = await fetch(`/api/organizer/events/${eventId}/settings`, {
         method: 'PATCH',
@@ -224,7 +226,11 @@ function AfterPartyEditCard({ eventId }: { eventId: string }) {
                 <div className="mt-1">
                   <AddressAutocomplete
                     value={form.afterparty_location}
-                    onChange={(address) => setForm(f => ({ ...f, afterparty_location: address }))}
+                    onChange={(address, coordinates) => setForm(f => ({
+                      ...f,
+                      afterparty_location: address,
+                      ...(coordinates ? { afterparty_coordinates: coordinates } : {}),
+                    }))}
                     placeholder="t.ex. Garvargatan 2, Piteå"
                   />
                 </div>
