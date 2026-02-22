@@ -225,12 +225,6 @@ export function PhasesStepper({
             description="Datum, tider och kuvert"
             icon="⚙️"
           />
-          <ActionCard
-            href={`/organizer/event/${eventId}/notifications`}
-            title="Notifieringar"
-            description="Ställ in påminnelser"
-            icon="🔔"
-          />
         </div>
       ),
     },

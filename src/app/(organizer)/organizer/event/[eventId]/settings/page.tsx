@@ -15,7 +15,7 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState('');
   const [delaying, setDelaying] = useState(false);
   const [activating, setActivating] = useState<string | null>(null);
-  const [sendingNotifications, setSendingNotifications] = useState(false);
+  // sendNotifications removed — now in Wrap/Awards Skicka tabs
 
   useEffect(() => { loadData(); }, [eventId]);
 
@@ -91,23 +91,7 @@ export default function SettingsPage() {
     } finally { setActivating(null); }
   }
 
-  async function sendNotifications(type: string) {
-    const label = type === 'assignment' ? 'uppgiftsnotifieringar' : 'påminnelser';
-    if (!confirm(`Skicka ${label} till alla par?`)) return;
-    setSendingNotifications(true);
-    try {
-      const res = await fetch('/api/notifications/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, notification_type: type }),
-      });
-      const data = await res.json();
-      if (res.ok) { setSuccess(`Skickat: ${data.summary.sent}, redan skickade: ${data.summary.already_sent}`); setTimeout(() => setSuccess(''), 5000); }
-      else setError('Kunde inte skicka: ' + (data.error || 'okänt fel'));
-    } finally { setSendingNotifications(false); }
-  }
-
-  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-500">Laddar...</p></div>;
+    if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-500">Laddar...</p></div>;
   if (!event) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-red-500">{error}</p></div>;
 
   return (
