@@ -305,6 +305,8 @@ export async function POST(
     last_guest_departure: existing.last_guest_departure || null,
     wrap1_sent_at: existing.wrap1_sent_at || null,
     wrap2_sent_at: existing.wrap2_sent_at || null,
+    // Per-couple route data
+    routes: routeSummaries,
   };
 
   await supabase.from('events').update({ wrap_stats: newStats }).eq('id', eventId);
