@@ -119,8 +119,8 @@ export async function POST(request: NextRequest) {
     
     for (const couple of couples) {
       const coupleDistance = distanceByCouple.get(couple.id) || 0;
-      const hasPartner = !!couple.partner_name;
-      const personDistance = hasPartner ? coupleDistance / 2 : coupleDistance;
+      // Both persons in a couple cycle the SAME distance (they ride together)
+      const personDistance = coupleDistance;
       
       // Invited person
       persons.push({
@@ -160,6 +160,13 @@ export async function POST(request: NextRequest) {
     const assignedPersons = new Set<string>(); // "coupleId:personType"
     const assignedAwards = new Set<string>();
     
+    // Awards based on shared couple data (same route, same address) → both get it
+    const COUPLE_AWARDS = new Set([
+      'longest_distance', 'shortest_distance', 'average_distance',
+      'furthest_from_center', 'closest_to_center',
+      'perfect_host',
+    ]);
+    
     function tryAssign(person: Person, awardId: string, value: string | null): boolean {
       const personKey = `${person.couple_id}:${person.person_type}`;
       
@@ -174,8 +181,24 @@ export async function POST(request: NextRequest) {
         award_id: awardId,
         value,
       });
-      
       assignedPersons.add(personKey);
+      
+      // For couple-shared awards: also assign to partner if they exist
+      if (COUPLE_AWARDS.has(awardId)) {
+        const otherType = person.person_type === 'invited' ? 'partner' : 'invited';
+        const partner = persons.find(p => p.couple_id === person.couple_id && p.person_type === otherType);
+        const partnerKey = `${person.couple_id}:${otherType}`;
+        if (partner && !assignedPersons.has(partnerKey)) {
+          assignments.push({
+            couple_id: partner.couple_id,
+            person_type: partner.person_type,
+            award_id: awardId,
+            value,
+          });
+          assignedPersons.add(partnerKey);
+        }
+      }
+      
       assignedAwards.add(awardId);
       return true;
     }
