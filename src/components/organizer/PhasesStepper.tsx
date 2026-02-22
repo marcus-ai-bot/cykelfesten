@@ -195,7 +195,6 @@ export function PhasesStepper({
               ⏳ Dessa funktioner blir tillgängliga efter eventet. Du kan förbereda Awards och Wrap-inställningar redan nu.
             </div>
           )}
-          {hasMatching && <AfterPartyPreview eventId={eventId} slug={eventSlug} />}
           <div className="grid md:grid-cols-2 gap-6">
             <ActionCard
               href={`/organizer/event/${eventId}/wrap`}
