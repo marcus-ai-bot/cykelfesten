@@ -234,22 +234,8 @@ export function InlineGuestList({ eventId }: Props) {
 
       {/* ── Sticky toolbar ── */}
       <div className="sticky top-[94px] z-20 bg-white -mx-6 px-6 pt-2 pb-3 space-y-3 border-b border-gray-100">
-        {/* Filter tabs */}
-        <div className="flex gap-1 overflow-x-auto overscroll-x-contain scrollbar-hide">
-          {filters.map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
-                filter === f.id
-                  ? 'bg-indigo-100 text-indigo-700 font-medium'
-                  : 'text-gray-500 hover:bg-gray-100'
-              }`}
-            >
-              {f.label} {f.count > 0 && <span className="text-xs opacity-70">{f.count}</span>}
-            </button>
-          ))}
-        </div>
+        {/* Filter tabs with scroll indicators */}
+        <FilterTabsScroll filters={filters} activeFilter={filter} onFilterChange={setFilter} />
 
         {/* Search + batch actions */}
         <div className="flex gap-2">
@@ -515,5 +501,98 @@ function Badge({ ok, label }: { ok: boolean; label: string }) {
     <span className={`text-xs ${ok ? 'text-green-600' : 'text-red-500 font-medium'}`}>
       {ok ? '✓' : '✗'} {label}
     </span>
+  );
+}
+
+/* ── Filter tabs with scroll arrows ──────────────────── */
+
+function FilterTabsScroll({ filters, activeFilter, onFilterChange }: {
+  filters: { id: Filter; label: string; count: number }[];
+  activeFilter: Filter;
+  onFilterChange: (id: Filter) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [hasCountRight, setHasCountRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const sl = el.scrollLeft;
+    const sw = el.scrollWidth;
+    const cw = el.clientWidth;
+    setCanScrollLeft(sl > 4);
+    setCanScrollRight(sw - sl - cw > 4);
+
+    // Check if any hidden-right filter has count > 0
+    const buttons = el.querySelectorAll<HTMLElement>('[data-filter-id]');
+    let found = false;
+    buttons.forEach(btn => {
+      const rect = btn.getBoundingClientRect();
+      const containerRect = el.getBoundingClientRect();
+      if (rect.right > containerRect.right) {
+        const id = btn.getAttribute('data-filter-id') || '';
+        const f = filters.find(f => f.id === id);
+        if (f && f.count > 0) found = true;
+      }
+    });
+    setHasCountRight(found);
+  }, [filters]);
+
+  useEffect(() => {
+    checkScroll();
+    const el = scrollRef.current;
+    if (el) el.addEventListener('scroll', checkScroll, { passive: true });
+    window.addEventListener('resize', checkScroll);
+    return () => {
+      if (el) el.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('resize', checkScroll);
+    };
+  }, [checkScroll]);
+
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -120 : 120, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative flex items-center">
+      {/* Left arrow */}
+      {canScrollLeft && (
+        <button onClick={() => scroll('left')}
+          className="absolute left-0 z-10 w-7 h-7 flex items-center justify-center bg-white/90 rounded-full shadow text-gray-400 hover:text-gray-600 -ml-1">
+          ‹
+        </button>
+      )}
+
+      <div ref={scrollRef} className="flex gap-1 overflow-x-auto overscroll-x-contain scrollbar-hide px-1">
+        {filters.map(f => (
+          <button
+            key={f.id}
+            data-filter-id={f.id}
+            onClick={() => onFilterChange(f.id as Filter)}
+            className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+              activeFilter === f.id
+                ? 'bg-indigo-100 text-indigo-700 font-medium'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {f.label} {f.count > 0 && <span className="text-xs opacity-70">{f.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Right arrow — highlighted if hidden tabs have counts */}
+      {canScrollRight && (
+        <button onClick={() => scroll('right')}
+          className={`absolute right-0 z-10 w-7 h-7 flex items-center justify-center rounded-full shadow -mr-1 ${
+            hasCountRight
+              ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
+              : 'bg-white/90 text-gray-400 hover:text-gray-600'
+          }`}>
+          ›
+        </button>
+      )}
+    </div>
   );
 }
