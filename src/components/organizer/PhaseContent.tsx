@@ -998,7 +998,7 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
                         className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-w-[260px]"
                       >
                         <option value="">Välj värd...</option>
-                        {hosts.map(host => {
+                        {hosts.filter(h => h.couple_id !== couple.id).map(host => {
                           const available = host.max_guests - host.current_guests;
                           const hasRoom = available >= couple.person_count;
                           return (
@@ -1012,11 +1012,11 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
                             </option>
                           );
                         })}
-                        {/* Potential new hosts */}
-                        {data.potentialHosts && data.potentialHosts[course] && data.potentialHosts[course].length > 0 && (
+                        {/* Potential new hosts (exclude self) */}
+                        {data.potentialHosts && data.potentialHosts[course] && data.potentialHosts[course].filter(ph => ph.couple_id !== couple.id).length > 0 && (
                           <>
                             <option disabled>── Ny värd ──</option>
-                            {data.potentialHosts[course].map(ph => (
+                            {data.potentialHosts[course].filter(ph => ph.couple_id !== couple.id).map(ph => (
                               <option key={`new-${ph.couple_id}`} value={`new:${ph.couple_id}`}>
                                 ★ {ph.name} — {ph.address} (ny värd)
                               </option>
@@ -1087,7 +1087,7 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
                             className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-w-[260px]"
                           >
                             <option value="">Välj värd...</option>
-                            {hosts.map(host => {
+                            {hosts.filter(h => h.couple_id !== couple.id).map(host => {
                               const available = host.max_guests - host.current_guests;
                               const hasRoom = available >= couple.person_count;
                               return (
@@ -1097,10 +1097,10 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
                                 </option>
                               );
                             })}
-                            {data.potentialHosts?.[course]?.length ? (
+                            {data.potentialHosts?.[course]?.filter(ph => ph.couple_id !== couple.id).length ? (
                               <>
                                 <option disabled>── Ny värd ──</option>
-                                {data.potentialHosts[course].map(ph => (
+                                {data.potentialHosts[course].filter(ph => ph.couple_id !== couple.id).map(ph => (
                                   <option key={`new-${ph.couple_id}`} value={`new:${ph.couple_id}`}>
                                     ★ {ph.name} — {ph.address} (ny värd)
                                   </option>

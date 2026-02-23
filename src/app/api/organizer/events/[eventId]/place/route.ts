@@ -169,7 +169,7 @@ export async function POST(
       destination_address: host?.address ?? null,
       destination_notes: host?.address_notes ?? null,
       scheduled_at: courseStartTimes[p.course].toISOString(),
-      cycling_distance_km: null,
+      
       current_state: 'LOCKED' as const,
       teasing_at: times.teasing_at.toISOString(),
       clue_1_at: times.clue_1_at.toISOString(),
