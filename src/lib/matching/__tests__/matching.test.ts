@@ -85,6 +85,8 @@ function createTestEvent(): Event {
     max_couples: null,
     status: 'open',
     active_match_plan_id: null,
+    afterparty_teasing_at: null,
+    afterparty_revealed_at: null,
     created_at: new Date().toISOString(),
   };
 }

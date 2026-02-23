@@ -174,8 +174,62 @@ export async function GET(
     person_count: c.person_count,
   }));
 
+  // --- Per-course gaps: couples missing placement on specific courses ---
+  // A couple is "missing" on a course if they don't appear as host OR guest
+  // for that course in any pairing.
+  const pairingsByCourse: Record<string, Set<string>> = {
+    starter: new Set<string>(),
+    main: new Set<string>(),
+    dessert: new Set<string>(),
+  };
+
+  for (const p of allPairingsDetailed ?? []) {
+    const c = p.course as Course;
+    if (pairingsByCourse[c]) {
+      pairingsByCourse[c].add(p.host_couple_id);
+      pairingsByCourse[c].add(p.guest_couple_id);
+    }
+  }
+
+  const missingByCourse: Record<string, Array<{
+    id: string;
+    name: string;
+    person_count: number;
+    current_host_on_course: string | null;
+  }>> = { starter: [], main: [], dessert: [] };
+
+  // Build a lookup: coupleId:course -> host name (for context)
+  const guestToHost = new Map<string, string>();
+  for (const p of allPairingsDetailed ?? []) {
+    const host = coupleMap.get(p.host_couple_id);
+    if (host) {
+      const hostName = host.partner_name
+        ? `${host.invited_name} & ${host.partner_name}`
+        : host.invited_name;
+      guestToHost.set(`${p.guest_couple_id}:${p.course}`, hostName);
+    }
+  }
+
+  for (const c of allCouples) {
+    const displayName = c.partner_name
+      ? `${c.invited_name} & ${c.partner_name}`
+      : c.invited_name;
+
+    for (const course of courses) {
+      if (!pairingsByCourse[course].has(c.id)) {
+        missingByCourse[course].push({
+          id: c.id,
+          name: displayName,
+          person_count: c.person_count,
+          current_host_on_course: null,
+        });
+      }
+    }
+  }
+
   return NextResponse.json({
     unplaced: unplacedFormatted,
+    missingByCourse,
     hostsByCourse,
     potentialHosts,
   });

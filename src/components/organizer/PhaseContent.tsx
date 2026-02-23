@@ -739,8 +739,16 @@ interface PotentialHost {
   address: string;
 }
 
+interface MissingCouple {
+  id: string;
+  name: string;
+  person_count: number;
+  current_host_on_course: string | null;
+}
+
 interface UnplacedData {
   unplaced: UnplacedCouple[];
+  missingByCourse?: Record<string, MissingCouple[]>;
   hostsByCourse: Record<string, HostOption[]>;
   potentialHosts?: Record<string, PotentialHost[]>;
 }
@@ -774,9 +782,21 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   if (loading) return null;
-  if (!data || data.unplaced.length === 0) return null;
+  if (!data) return null;
 
   const courses = ['starter', 'main', 'dessert'];
+
+  // Count per-course missing (excluding fully unplaced to avoid double-counting)
+  const unplacedIds = new Set(data.unplaced.map(c => c.id));
+  const missingByCourse = data.missingByCourse ?? {};
+  const partiallyMissing: Record<string, MissingCouple[]> = {};
+  let totalPartiallyMissing = 0;
+  for (const course of courses) {
+    partiallyMissing[course] = (missingByCourse[course] ?? []).filter(c => !unplacedIds.has(c.id));
+    totalPartiallyMissing += partiallyMissing[course].length;
+  }
+
+  if (data.unplaced.length === 0 && totalPartiallyMissing === 0) return null;
 
   const handleSelectionChange = (coupleId: string, course: string, value: string) => {
     const isNewHost = value.startsWith('new:');
@@ -797,9 +817,53 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
     setMessage('');
 
     try {
-      // Group by new hosts that need to be promoted first
-      const newHostSelections = allSelections.filter(([, s]) => s.isNewHost);
-      const existingHostSelections = allSelections.filter(([, s]) => !s.isNewHost);
+      // Separate reassignments (missing:coupleId:course) from new placements (coupleId)
+      const reassignSelections = allSelections.filter(([key]) => key.startsWith('missing:'));
+      const placementSelections = allSelections.filter(([key]) => !key.startsWith('missing:'));
+
+      let totalCreated = 0;
+
+      // Handle reassignments via /reassign endpoint
+      for (const [key, s] of reassignSelections) {
+        const parts = key.split(':');
+        const coupleId = parts[1];
+
+        if (s.isNewHost) {
+          // Promote new host first, then reassign
+          const promoteRes = await fetch(`/api/organizer/events/${eventId}/promote-host`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ couple_id: s.hostId, course: s.course }),
+          });
+          if (!promoteRes.ok) {
+            const d = await promoteRes.json();
+            setMessage(`❌ Kunde inte uppgradera värd: ${d.error || 'Okänt fel'}`);
+            setSaving(false);
+            return;
+          }
+        }
+
+        const res = await fetch(`/api/organizer/events/${eventId}/reassign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            guest_couple_id: coupleId,
+            course: s.course,
+            new_host_couple_id: s.hostId,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setMessage(`❌ ${json.error || 'Kunde inte flytta'}`);
+          setSaving(false);
+          return;
+        }
+        totalCreated++;
+      }
+
+      // Handle new placements (fully unplaced couples)
+      const newHostSelections = placementSelections.filter(([, s]) => s.isNewHost);
+      const existingHostSelections = placementSelections.filter(([, s]) => !s.isNewHost);
 
       // Promote new hosts first (group guests by new host + course)
       const newHostGroups: Record<string, { course: string; guestIds: string[] }> = {};
@@ -810,8 +874,6 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
         }
         newHostGroups[key].guestIds.push(coupleId);
       }
-
-      let totalCreated = 0;
 
       for (const [key, group] of Object.entries(newHostGroups)) {
         const hostId = key.split(':')[0];
@@ -856,7 +918,7 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
         }
       }
 
-      setMessage(`✅ ${totalCreated} par placerade!`);
+      setMessage(`✅ ${totalCreated} placering${totalCreated > 1 ? 'ar' : ''} sparad${totalCreated > 1 ? 'e' : ''}!`);
       setSelections({});
       setLoading(true);
       await loadData();
@@ -969,6 +1031,92 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
             </div>
           );
         })}
+
+        {/* Per-course gaps (partially placed couples) */}
+        {totalPartiallyMissing > 0 && (
+          <div className="rounded-xl shadow-sm border-2 border-amber-200 bg-amber-50/30 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🔀</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 text-sm">
+                  Saknar placering på enskild rätt
+                  <span className="ml-2 text-xs font-normal text-amber-600">
+                    ({totalPartiallyMissing} st)
+                  </span>
+                </h4>
+                <p className="text-xs text-gray-500">
+                  Par som har placering på vissa rätter men saknar på andra.
+                </p>
+              </div>
+            </div>
+
+            {courses.map(course => {
+              const missing = partiallyMissing[course];
+              if (!missing || missing.length === 0) return null;
+              const hosts = data.hostsByCourse[course] || [];
+              const { label, icon } = COURSE_LABELS[course];
+
+              return (
+                <div key={`missing-${course}`} className="bg-white rounded-lg border border-gray-100 p-3">
+                  <h5 className="text-xs font-semibold text-gray-600 mb-2">
+                    {icon} {label}
+                    <span className="ml-1 text-amber-600">({missing.length} saknar plats)</span>
+                  </h5>
+                  <div className="space-y-2">
+                    {missing.map(couple => {
+                      const key = `missing:${couple.id}:${course}`;
+                      const sel = selections[key];
+
+                      return (
+                        <div key={key} className="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{couple.name}</p>
+                            <p className="text-xs text-gray-400">{couple.person_count} pers</p>
+                          </div>
+                          <select
+                            value={sel?.hostId ?? ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              const isNewHost = val.startsWith('new:');
+                              const hostId = isNewHost ? val.slice(4) : val;
+                              setSelections(prev => ({
+                                ...prev,
+                                [key]: { course, hostId, isNewHost },
+                              }));
+                            }}
+                            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-w-[260px]"
+                          >
+                            <option value="">Välj värd...</option>
+                            {hosts.map(host => {
+                              const available = host.max_guests - host.current_guests;
+                              const hasRoom = available >= couple.person_count;
+                              return (
+                                <option key={host.couple_id} value={host.couple_id} disabled={!hasRoom}>
+                                  {host.name} — {host.address} ({host.current_guests}/{host.max_guests})
+                                  {!hasRoom ? ' ⛔' : ''}
+                                </option>
+                              );
+                            })}
+                            {data.potentialHosts?.[course]?.length ? (
+                              <>
+                                <option disabled>── Ny värd ──</option>
+                                {data.potentialHosts[course].map(ph => (
+                                  <option key={`new-${ph.couple_id}`} value={`new:${ph.couple_id}`}>
+                                    ★ {ph.name} — {ph.address} (ny värd)
+                                  </option>
+                                ))}
+                              </>
+                            ) : null}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Save button */}
         {selectedCount > 0 && (
