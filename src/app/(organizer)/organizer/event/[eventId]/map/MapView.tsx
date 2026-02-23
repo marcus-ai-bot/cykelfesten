@@ -688,8 +688,10 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
         ['case', ['in', ['get', 'id'], ['literal', ids]], 12, 0]);
       map.setPaintProperty('unclustered-point', 'circle-stroke-width',
         ['case', ['in', ['get', 'id'], ['literal', ids]], 3, 0]);
+      // Guest origin dots: black for group members, hidden for rest
+      const guestIds = selectedGroup.guests.map((g: { id: string }) => g.id);
       map.setPaintProperty('unclustered-point', 'circle-color',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], '#334155', '#475569']);
+        ['case', ['in', ['get', 'id'], ['literal', guestIds]], '#0f172a', '#475569']);
 
       // Show only selected host, hide others
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity',
