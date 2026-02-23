@@ -148,6 +148,22 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       // If they're a HOST → they stay at their own home
       const nextDestFor = new Map<string, { name: string; address: string; coords: [number, number]; isHome: boolean }>();
 
+      // For the last course: if afterparty exists, everyone goes there
+      if (!nextCourse && data.afterparty) {
+        const ap = data.afterparty;
+        for (const group of result[course]) {
+          group.hostNextAddress = ap.location;
+          group.hostNextHostName = ap.title || 'Efterfest';
+          for (const guest of group.guests) {
+            guest.toAddress = ap.location;
+            guest.toHostName = ap.title || 'Efterfest';
+            guest.toCoords = [ap.lng, ap.lat] as [number, number];
+            guest.toDistanceKm = haversineKm(group.hostCoords, [ap.lng, ap.lat]);
+          }
+        }
+        continue;
+      }
+
       if (nextCourse && data.routes![nextCourse]) {
         // First: mark all hosts in next course → they go home (stay home)
         const nextHosts = new Set<string>();
