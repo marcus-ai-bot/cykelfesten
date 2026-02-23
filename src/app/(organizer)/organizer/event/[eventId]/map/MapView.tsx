@@ -38,7 +38,7 @@ function routeDistanceKm(geometry: [number, number][] | null): number | null {
 function MapHeader({ eventId, eventName, coupleCount, missingCount }: { eventId: string; eventName: string; coupleCount: number; missingCount: number }) {
   const router = useRouter();
   return (
-    <header className="bg-white border-b border-gray-200 z-20 relative">
+    <header className="bg-white border-b border-gray-200 z-50 relative">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-700 transition shrink-0" aria-label="Tillbaka">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
