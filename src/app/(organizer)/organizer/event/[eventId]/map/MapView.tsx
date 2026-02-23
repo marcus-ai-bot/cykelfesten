@@ -679,19 +679,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       if (map.getLayer('clusters')) map.setLayoutProperty('clusters', 'visibility', 'none');
       if (map.getLayer('cluster-count')) map.setLayoutProperty('cluster-count', 'visibility', 'none');
 
-      // Show only this group's guest dots — bigger and prominent
-      map.setPaintProperty('unclustered-point', 'circle-opacity',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], 1, 0]);
-      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], 1, 0]);
-      map.setPaintProperty('unclustered-point', 'circle-radius',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], 12, 0]);
-      map.setPaintProperty('unclustered-point', 'circle-stroke-width',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], 3, 0]);
-      // Guest origin dots: black for group members, hidden for rest
-      const guestIds = selectedGroup.guests.map((g: { id: string }) => g.id);
-      map.setPaintProperty('unclustered-point', 'circle-color',
-        ['case', ['in', ['get', 'id'], ['literal', guestIds]], '#0f172a', '#475569']);
+      // Hide all unclustered dots during selection (routes show origins)
+      map.setPaintProperty('unclustered-point', 'circle-opacity', 0);
+      map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 0);
 
       // Show only selected host, hide others
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity',
@@ -703,10 +693,22 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-width',
         ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 4, 3]);
 
-      // Zoom to group — extra bottom padding for drawer peek
+      // Zoom to group — include all route geometry, not just home coords
       const bounds = new mapboxgl.LngLatBounds();
       bounds.extend(selectedGroup.hostCoords);
-      selectedGroup.guests.forEach((g) => bounds.extend(g.coords));
+      // Include route start/end points from actual route features
+      const courseRoutes = routeFeatures[activeCourse as Course];
+      if (courseRoutes) {
+        courseRoutes.features.forEach((f) => {
+          if (f.properties?.hostId === selectedGroup.hostId) {
+            f.geometry.coordinates.forEach((coord) => {
+              bounds.extend(coord as [number, number]);
+            });
+          }
+        });
+      }
+      // Fallback: also include guest from-coords
+      selectedGroup.guests.forEach((g) => bounds.extend(g.fromCoords));
       const isMobile = window.innerWidth < 768;
       map.fitBounds(bounds, {
         padding: {
@@ -731,6 +733,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.setPaintProperty('unclustered-point', 'circle-opacity', 0.25);
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 0.25);
       map.setPaintProperty('unclustered-point', 'circle-radius', 5);
+      map.setPaintProperty('unclustered-point', 'circle-stroke-width', 1.5);
       map.setPaintProperty('unclustered-point', 'circle-color', '#475569');
 
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity', 0.9);
@@ -745,7 +748,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.setPaintProperty('unclustered-point', 'circle-radius', 8);
       map.setPaintProperty('unclustered-point', 'circle-color', '#475569');
     }
-  }, [selectedGroup, selectedGroupIds, activeCourse, mapLoaded]);
+  }, [selectedGroup, selectedGroupIds, activeCourse, mapLoaded, routeFeatures]);
 
   /* ── Render ─────────────────────────────────────── */
 
