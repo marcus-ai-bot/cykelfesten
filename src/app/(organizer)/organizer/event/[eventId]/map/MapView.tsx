@@ -638,9 +638,10 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
     // Afterparty layers
     const apVis = activeCourse === 'afterparty' ? 'visible' : 'none';
     if (map.getLayer('afterparty-routes-line')) map.setLayoutProperty('afterparty-routes-line', 'visibility', apVis);
-    // Afterparty pin always visible (routes only when tab active)
-    if (map.getLayer('afterparty-circle')) map.setLayoutProperty('afterparty-circle', 'visibility', 'visible');
-    if (map.getLayer('afterparty-marker')) map.setLayoutProperty('afterparty-marker', 'visibility', 'visible');
+    // Afterparty pin: hide when a course is selected (to reduce noise), show otherwise
+    const apPinVis = activeCourse && activeCourse !== 'afterparty' ? 'none' : 'visible';
+    if (map.getLayer('afterparty-circle')) map.setLayoutProperty('afterparty-circle', 'visibility', apPinVis);
+    if (map.getLayer('afterparty-marker')) map.setLayoutProperty('afterparty-marker', 'visibility', apPinVis);
 
     if (selectedGroup && activeCourse) {
       // === STATE: Group selected ===
@@ -678,15 +679,17 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       if (map.getLayer('clusters')) map.setLayoutProperty('clusters', 'visibility', 'none');
       if (map.getLayer('cluster-count')) map.setLayoutProperty('cluster-count', 'visibility', 'none');
 
-      // Hide all guest dots except this group's members
+      // Show only this group's guest dots — bigger and prominent
       map.setPaintProperty('unclustered-point', 'circle-opacity',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], 0.9, 0]);
+        ['case', ['in', ['get', 'id'], ['literal', ids]], 1, 0]);
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity',
         ['case', ['in', ['get', 'id'], ['literal', ids]], 1, 0]);
       map.setPaintProperty('unclustered-point', 'circle-radius',
-        ['case', ['in', ['get', 'id'], ['literal', ids]], 10, 0]);
+        ['case', ['in', ['get', 'id'], ['literal', ids]], 12, 0]);
       map.setPaintProperty('unclustered-point', 'circle-stroke-width',
         ['case', ['in', ['get', 'id'], ['literal', ids]], 3, 0]);
+      map.setPaintProperty('unclustered-point', 'circle-color',
+        ['case', ['in', ['get', 'id'], ['literal', ids]], '#334155', '#475569']);
 
       // Show only selected host, hide others
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity',
@@ -726,6 +729,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.setPaintProperty('unclustered-point', 'circle-opacity', 0.25);
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 0.25);
       map.setPaintProperty('unclustered-point', 'circle-radius', 5);
+      map.setPaintProperty('unclustered-point', 'circle-color', '#475569');
 
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity', 0.9);
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-opacity', 1);
@@ -736,7 +740,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       // === STATE: Idle (no course) ===
       map.setPaintProperty('unclustered-point', 'circle-opacity', 0.7);
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 1);
-      map.setPaintProperty('unclustered-point', 'circle-radius', 6);
+      map.setPaintProperty('unclustered-point', 'circle-radius', 8);
+      map.setPaintProperty('unclustered-point', 'circle-color', '#475569');
     }
   }, [selectedGroup, selectedGroupIds, activeCourse, mapLoaded]);
 
