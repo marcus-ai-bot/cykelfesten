@@ -20,7 +20,12 @@ export async function POST(request: NextRequest) {
     // Rate limiting - check both email and IP
     const clientIp = getClientIp(request);
     
-    const ipLimit = checkRateLimit(clientIp, AUTH_RATE_LIMIT.byIp);
+    const ipKey = `${AUTH_RATE_LIMIT.byIp.prefix}:${clientIp}`;
+    const ipLimit = await checkRateLimit(
+      ipKey,
+      AUTH_RATE_LIMIT.byIp.windowMinutes,
+      AUTH_RATE_LIMIT.byIp.maxCount
+    );
     if (!ipLimit.success) {
       return NextResponse.json(
         { 
@@ -34,7 +39,12 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const emailLimit = checkRateLimit(normalizedEmail, AUTH_RATE_LIMIT.byEmail);
+    const emailKey = `${AUTH_RATE_LIMIT.byEmail.prefix}:${normalizedEmail}`;
+    const emailLimit = await checkRateLimit(
+      emailKey,
+      AUTH_RATE_LIMIT.byEmail.windowMinutes,
+      AUTH_RATE_LIMIT.byEmail.maxCount
+    );
     if (!emailLimit.success) {
       return NextResponse.json(
         { 

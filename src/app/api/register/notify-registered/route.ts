@@ -7,12 +7,17 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 // Sends confirmation email to the person who registered
 // Body: { couple_id: string }
 
-const NOTIFY_RATE_LIMIT = { limit: 5, windowSeconds: 15 * 60, prefix: 'notify-reg' };
+const NOTIFY_RATE_LIMIT = { maxCount: 5, windowMinutes: 15, prefix: 'notify-reg' };
 
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
-    const rl = checkRateLimit(ip, NOTIFY_RATE_LIMIT);
+    const ipKey = `${NOTIFY_RATE_LIMIT.prefix}:${ip}`;
+    const rl = await checkRateLimit(
+      ipKey,
+      NOTIFY_RATE_LIMIT.windowMinutes,
+      NOTIFY_RATE_LIMIT.maxCount
+    );
     if (!rl.success) {
       return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
     }

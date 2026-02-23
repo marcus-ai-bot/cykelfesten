@@ -8,8 +8,8 @@ import { geocodeAddress } from '@/lib/geocode';
 // Server-side registration: insert couple + trigger emails
 
 const REGISTER_RATE_LIMIT = {
-  byIp: { limit: 10, windowSeconds: 15 * 60, prefix: 'register:ip' },
-  byEmail: { limit: 3, windowSeconds: 60 * 60, prefix: 'register:email' },
+  byIp: { maxCount: 10, windowMinutes: 15, prefix: 'register:ip' },
+  byEmail: { maxCount: 3, windowMinutes: 60, prefix: 'register:email' },
 };
 
 // Allowed fields for couple insert (whitelist)
@@ -120,7 +120,12 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limit by IP
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(ip, REGISTER_RATE_LIMIT.byIp);
+    const ipKey = `${REGISTER_RATE_LIMIT.byIp.prefix}:${ip}`;
+    const ipLimit = await checkRateLimit(
+      ipKey,
+      REGISTER_RATE_LIMIT.byIp.windowMinutes,
+      REGISTER_RATE_LIMIT.byIp.maxCount
+    );
     if (!ipLimit.success) {
       return NextResponse.json(
         { error: `För många anmälningar. Försök igen om ${ipLimit.retryAfterSeconds}s.` },
@@ -137,7 +142,12 @@ export async function POST(request: NextRequest) {
 
     // Rate limit by email
     if (formData.invited_email) {
-      const emailLimit = checkRateLimit(formData.invited_email, REGISTER_RATE_LIMIT.byEmail);
+      const emailKey = `${REGISTER_RATE_LIMIT.byEmail.prefix}:${formData.invited_email}`;
+      const emailLimit = await checkRateLimit(
+        emailKey,
+        REGISTER_RATE_LIMIT.byEmail.windowMinutes,
+        REGISTER_RATE_LIMIT.byEmail.maxCount
+      );
       if (!emailLimit.success) {
         return NextResponse.json(
           { error: `Denna e-postadress har redan registrerats nyligen.` },
