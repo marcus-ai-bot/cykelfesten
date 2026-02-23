@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SubPageHeader } from '@/components/organizer/SubPageHeader';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import { SplitWizard } from '@/components/organizer/SplitWizard';
 import { FUN_FACT_FIELDS, normaliseFunFacts, renderFunFact } from '@/lib/fun-facts';
 import type { FunFacts } from '@/lib/fun-facts';
 
@@ -51,6 +52,7 @@ export default function CoupleDetailPage() {
   const [form, setForm] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showSplitWizard, setShowSplitWizard] = useState(false);
   useEffect(() => {
     fetch(`/api/organizer/couples/${coupleId}`)
       .then(r => r.json())
@@ -107,23 +109,14 @@ export default function CoupleDetailPage() {
     }
   };
 
-  const handleSplit = async () => {
-    if (!confirm(`Koppla isär ${couple?.invited_name} och ${couple?.partner_name}? Partnern blir en egen anmälan.`)) return;
+  const handleSplitComplete = async () => {
+    setShowSplitWizard(false);
+    // Reload couple data
     try {
-      const res = await fetch(`/api/organizer/couples/${coupleId}/split`, { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccess(data.message);
-        // Reload couple data
-        const r2 = await fetch(`/api/organizer/couples/${coupleId}`);
-        const d2 = await r2.json();
-        if (d2.couple) { setCouple(d2.couple); setForm(d2.couple); }
-      } else {
-        setError(data.error || 'Kunde inte koppla isär');
-      }
-    } catch {
-      setError('Nätverksfel');
-    }
+      const r = await fetch(`/api/organizer/couples/${coupleId}`);
+      const d = await r.json();
+      if (d.couple) { setCouple(d.couple); setForm(d.couple); }
+    } catch { /* ignore */ }
   };
 
   if (loading) {
@@ -266,7 +259,7 @@ export default function CoupleDetailPage() {
           <h3 className="text-lg font-semibold text-red-700 mb-4">⚠️ Åtgärder</h3>
           <div className="space-y-3">
             {couple.partner_name && (
-              <button onClick={handleSplit} className="w-full text-left px-4 py-3 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors">
+              <button onClick={() => setShowSplitWizard(true)} className="w-full text-left px-4 py-3 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors">
                 ✂️ Koppla isär — {couple.invited_name} och {couple.partner_name} blir separata anmälningar
               </button>
             )}
@@ -275,6 +268,17 @@ export default function CoupleDetailPage() {
             </button>
           </div>
         </div>
+        {/* Split Wizard Modal */}
+        {showSplitWizard && couple.partner_name && (
+          <SplitWizard
+            eventId={eventId}
+            coupleId={coupleId}
+            invitedName={couple.invited_name}
+            partnerName={couple.partner_name}
+            onClose={() => setShowSplitWizard(false)}
+            onComplete={handleSplitComplete}
+          />
+        )}
       </main>
     </div>
   );
