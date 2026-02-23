@@ -67,34 +67,44 @@ export async function GET(request: NextRequest) {
   const supabase = isOrganizerPreview ? createAdminClient() : await createClient();
   
   try {
-    // 1. Verify couple exists and belongs to event
-    const { data: couple, error: coupleError } = await supabase
+    // 1. Verify couple exists and load event info in one query
+    const { data: coupleWithEvent, error: coupleError } = await supabase
       .from('couples')
-      .select('id, event_id')
+      .select(`
+        id,
+        event_id,
+        event:events!(
+          id,
+          event_date,
+          starter_time,
+          main_time,
+          dessert_time,
+          active_match_plan_id,
+          afterparty_time,
+          afterparty_door_code,
+          afterparty_byob,
+          afterparty_notes,
+          afterparty_location,
+          afterparty_hosts,
+          afterparty_description,
+          host_self_messages,
+          lips_sealed_messages,
+          mystery_host_messages
+        )
+      `)
       .eq('id', coupleId)
       .eq('event_id', eventId)
       .single();
     
-    if (coupleError || !couple) {
+    if (coupleError || !coupleWithEvent || !coupleWithEvent.event) {
       return NextResponse.json(
-        { error: 'Couple not found' },
+        { error: 'Couple or event not found' },
         { status: 404 }
       );
     }
-    
-    // 2. Get event info (including custom messages)
-    const { data: event, error: eventError } = await supabase
-      .from('events')
-      .select('*, host_self_messages, lips_sealed_messages, mystery_host_messages')
-      .eq('id', eventId)
-      .single();
-    
-    if (eventError || !event) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-    }
+
+    const couple = { id: coupleWithEvent.id, event_id: coupleWithEvent.event_id };
+    const event = coupleWithEvent.event;
     
     // 3. Get envelopes for this couple
     const { data: envelopes, error: envelopesError } = await supabase

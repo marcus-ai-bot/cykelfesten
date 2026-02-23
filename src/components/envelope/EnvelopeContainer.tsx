@@ -9,8 +9,9 @@
  * - Smooth transitions between states
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { LiveEnvelope } from './LiveEnvelope';
+import { createClient } from '@/lib/supabase/client';
 import type { EnvelopeStatusResponse, CourseEnvelopeStatus } from '@/types/database';
 
 interface EnvelopeContainerProps {
@@ -30,6 +31,7 @@ export function EnvelopeContainer({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   // Fetch envelope status
   const fetchStatus = useCallback(async () => {
@@ -61,37 +63,37 @@ export function EnvelopeContainer({
     fetchStatus();
   }, [fetchStatus]);
 
-  // Polling (skip if pollInterval is 0 or falsy)
+  // Realtime updates (skip in preview mode)
+  useEffect(() => {
+    if (!eventId || !coupleId || simulateTime) return;
+
+    const channel = supabase
+      .channel(`envelope-updates-${coupleId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'envelopes',
+          filter: `couple_id=eq.${coupleId}`,
+        },
+        () => {
+          fetchStatus();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [eventId, coupleId, simulateTime, supabase, fetchStatus]);
+
+  // Polling fallback (skip if pollInterval is 0 or falsy)
   useEffect(() => {
     if (!pollInterval) return;
     const interval = setInterval(fetchStatus, pollInterval);
     return () => clearInterval(interval);
   }, [fetchStatus, pollInterval]);
-
-  // Calculate next important event for adaptive polling
-  const getNextEventSeconds = (): number | null => {
-    if (!data) return null;
-    
-    const nextReveals = data.courses
-      .map(c => c.next_reveal?.in_seconds)
-      .filter((s): s is number => s !== null && s !== undefined);
-    
-    if (nextReveals.length === 0) return null;
-    return Math.min(...nextReveals);
-  };
-
-  // Adaptive poll: faster when close to reveal (skip in preview/no-poll mode)
-  useEffect(() => {
-    if (!pollInterval) return;
-    const nextSeconds = getNextEventSeconds();
-    if (nextSeconds === null) return;
-    
-    // If next reveal is within 2 minutes, poll faster
-    if (nextSeconds <= 120 && nextSeconds > 0) {
-      const fastPoll = setInterval(fetchStatus, 10000); // 10s
-      return () => clearInterval(fastPoll);
-    }
-  }, [data, fetchStatus, pollInterval]);
 
   if (loading) {
     return (
