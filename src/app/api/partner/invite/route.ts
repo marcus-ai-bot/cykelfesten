@@ -25,10 +25,11 @@ export async function POST(request: Request) {
       .from('couples')
       .select('*, events(slug, name)')
       .eq('id', couple_id)
+      .eq('cancelled', false)
       .single();
     
     if (coupleError || !couple) {
-      return NextResponse.json({ error: 'Par hittades inte' }, { status: 404 });
+      return NextResponse.json({ error: 'Par hittades inte eller har avbokats' }, { status: 404 });
     }
     
     if (!couple.partner_name) {
