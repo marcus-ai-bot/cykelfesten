@@ -83,6 +83,14 @@ export async function getOrganizer(): Promise<Organizer | null> {
   if (error || !session) {
     return null;
   }
+
+  const hoursUntilExpiry = (new Date(session.expires_at).getTime() - Date.now()) / (1000 * 60 * 60);
+  if (hoursUntilExpiry < 24) {
+    await supabase
+      .from('organizer_sessions')
+      .update({ expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() })
+      .eq('session_token', sessionToken);
+  }
   
   // Get organizer
   const { data: organizer } = await supabase
