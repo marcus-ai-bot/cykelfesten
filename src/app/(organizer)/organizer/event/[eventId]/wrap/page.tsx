@@ -166,8 +166,8 @@ function WrapPage() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'stats', label: '📊 Statistik' },
-    { id: 'preview', label: '👀 Preview' },
     { id: 'edit', label: '✏️ Komplettera' },
+    { id: 'preview', label: '👀 Preview' },
     { id: 'send', label: '📧 Skicka' },
   ];
 
