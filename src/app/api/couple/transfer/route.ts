@@ -70,40 +70,10 @@ export async function POST(request: Request) {
       });
       
     } else if (action === 'execute') {
-      // Swap invited and partner
-      const { error: updateError } = await supabase
-        .from('couples')
-        .update({
-          // Swap names
-          invited_name: couple.partner_name,
-          partner_name: couple.invited_name,
-          // Swap emails
-          invited_email: couple.partner_email || couple.invited_email,
-          partner_email: couple.invited_email,
-          // Swap phones
-          invited_phone: couple.partner_phone,
-          partner_phone: couple.invited_phone,
-          // Swap allergies
-          invited_allergies: couple.partner_allergies,
-          partner_allergies: couple.invited_allergies,
-          // Swap birth years
-          invited_birth_year: couple.partner_birth_year,
-          partner_birth_year: couple.invited_birth_year,
-          // Swap fun facts
-          invited_fun_facts: couple.partner_fun_facts,
-          partner_fun_facts: couple.invited_fun_facts,
-          // Swap pet allergies
-          invited_pet_allergy: couple.partner_pet_allergy,
-          partner_pet_allergy: couple.invited_pet_allergy,
-          // Swap addresses if partner had different
-          address: couple.partner_address || couple.address,
-          partner_address: couple.partner_address ? couple.address : null,
-          // Clear transfer request
-          transfer_requested_at: null,
-        })
-        .eq('id', couple_id);
+      const { error: swapError } = await supabase
+        .rpc('swap_couple_ownership', { p_couple_id: couple_id });
       
-      if (updateError) {
+      if (swapError) {
         return NextResponse.json({ error: 'Kunde inte överlåta' }, { status: 500 });
       }
       
