@@ -915,8 +915,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       <div className="relative flex-1 min-h-0">
         <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
 
-        {/* Sidebar (desktop) */}
-        <div className="hidden md:block absolute left-0 top-0 z-10 w-80">
+        {/* Sidebar (desktop) — hidden when group selected (card takes over) */}
+        <div className={`hidden md:block absolute left-0 top-0 z-10 w-80 transition-all duration-300 ${selectedGroup ? 'opacity-0 pointer-events-none -translate-x-4' : 'opacity-100 translate-x-0'}`}>
           <div className="bg-white/95 backdrop-blur shadow-lg rounded-r-xl border border-gray-200/80 max-h-[calc(100vh-8.5rem)] overflow-y-auto">
             <div className="p-4 pb-3 space-y-3 border-b border-gray-100">
               <input
@@ -951,7 +951,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
                             className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full ${role.role === 'host' ? 'text-white' : 'text-gray-600 bg-gray-100'}`}
                             style={role.role === 'host' && cfg ? { backgroundColor: cfg.color } : undefined}
                           >
-                            {role.role === 'host' ? 'Värd' : (role.hostName ? `Gäst hos ${role.hostName}` : 'Gäst')}
+                            {role.role === 'host' ? 'Värd' : (role.hostName ? `Gäst hos ${role.hostName.split(' & ')[0].split(' ')[0]}` : 'Gäst')}
                           </span>
                         )}
                       </div>
