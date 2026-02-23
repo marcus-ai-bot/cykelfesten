@@ -132,12 +132,27 @@ export async function GET(
   }
 
   // Build potential hosts per course: couples with address, not cancelled,
-  // not already a host for that course
-  const existingHostIds: Record<string, Set<string>> = {
-    starter: new Set((assignments ?? []).filter(a => a.course === 'starter').map(a => a.couple_id)),
-    main: new Set((assignments ?? []).filter(a => a.course === 'main').map(a => a.couple_id)),
-    dessert: new Set((assignments ?? []).filter(a => a.course === 'dessert').map(a => a.couple_id)),
+  // not already involved in that course (neither host NOR guest)
+  const involvedInCourse: Record<string, Set<string>> = {
+    starter: new Set<string>(),
+    main: new Set<string>(),
+    dessert: new Set<string>(),
   };
+
+  // Add existing hosts
+  for (const a of assignments ?? []) {
+    if (involvedInCourse[a.course]) {
+      involvedInCourse[a.course].add(a.couple_id);
+    }
+  }
+
+  // Add guests from pairings
+  for (const p of allPairingsDetailed ?? []) {
+    if (involvedInCourse[p.course]) {
+      involvedInCourse[p.course].add(p.host_couple_id);
+      involvedInCourse[p.course].add(p.guest_couple_id);
+    }
+  }
 
   const potentialHosts: Record<string, Array<{
     couple_id: string;
@@ -154,7 +169,7 @@ export async function GET(
       : c.invited_name;
 
     for (const course of courses) {
-      if (!existingHostIds[course].has(c.id)) {
+      if (!involvedInCourse[course].has(c.id)) {
         potentialHosts[course].push({
           couple_id: c.id,
           name: displayName,
