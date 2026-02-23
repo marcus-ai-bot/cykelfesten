@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       .from('couples')
       .select('*, events(id, name)')
       .eq('id', inviter_couple_id)
+      .eq('cancelled', false)
       .single();
     
     if (inviterError || !inviter) {
@@ -48,59 +49,45 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
-    // Find invitee by email in same event
-    const { data: invitee, error: inviteeError } = await supabase
-      .from('couples')
-      .select('*')
-      .eq('event_id', inviter.event_id)
-      .eq('invited_email', invitee_email.toLowerCase().trim())
-      .eq('cancelled', false)
-      .single();
-    
-    if (inviteeError || !invitee) {
-      // No existing registration - just add as new partner
-      return NextResponse.json({
-        success: true,
-        action: 'new_partner',
-        message: 'Email inte registrerat — lägg till som ny partner',
+    const { data: mergeResult, error: mergeError } = await supabase
+      .rpc('merge_couples', {
+        p_inviter_id: inviter_couple_id,
+        p_invitee_email: invitee_email.toLowerCase().trim(),
+        p_event_id: inviter.event_id,
       });
-    }
     
-    // Check if invitee is also a single
-    if (invitee.partner_name) {
-      return NextResponse.json({
-        error: `${invitee.invited_name} är redan registrerad med ${invitee.partner_name}. De måste separera först.`,
-      }, { status: 400 });
-    }
-    
-    // Merge: Add invitee as partner to inviter, cancel invitee's registration
-    const { error: updateError } = await supabase
-      .from('couples')
-      .update({
-        partner_name: invitee.invited_name,
-        partner_email: invitee.invited_email,
-        partner_phone: invitee.invited_phone,
-        partner_allergies: invitee.invited_allergies,
-        partner_birth_year: invitee.invited_birth_year,
-        partner_fun_facts: invitee.invited_fun_facts,
-        partner_pet_allergy: invitee.invited_pet_allergy,
-        partner_address: invitee.address !== inviter.address ? invitee.address : null,
-      })
-      .eq('id', inviter_couple_id);
-    
-    if (updateError) {
+    if (mergeError) {
+      if (mergeError.message?.includes('Invitee not found')) {
+        return NextResponse.json({
+          success: true,
+          action: 'new_partner',
+          message: 'Email inte registrerat — lägg till som ny partner',
+        });
+      }
+      if (mergeError.message?.includes('Invitee already has partner')) {
+        return NextResponse.json({
+          error: 'Personen är redan registrerad med en partner. De måste separera först.',
+        }, { status: 400 });
+      }
+      if (mergeError.message?.includes('Inviter already has partner')) {
+        return NextResponse.json({
+          error: 'Du har redan en partner. Ta bort partnern först.',
+        }, { status: 400 });
+      }
+      if (mergeError.message?.includes('Inviter not found')) {
+        return NextResponse.json({ error: 'Inviter hittades inte' }, { status: 404 });
+      }
+
       return NextResponse.json({ error: 'Kunde inte slå ihop' }, { status: 500 });
     }
+
+    const merged = Array.isArray(mergeResult) ? mergeResult[0] : mergeResult;
     
-    // Cancel the invitee's solo registration
-    await supabase
-      .from('couples')
-      .update({
-        cancelled: true,
-        cancelled_at: new Date().toISOString(),
-      })
-      .eq('id', invitee.id);
-    
+    const mergedName = merged?.invitee_name || invitee_email;
+    const addressSecondary = merged?.invitee_address && merged?.invitee_address !== merged?.inviter_address
+      ? merged.invitee_address
+      : null;
+
     // Log the merge
     await supabase.from('event_log').insert({
       event_id: inviter.event_id,
@@ -108,20 +95,20 @@ export async function POST(request: Request) {
       details: {
         inviter_id: inviter.id,
         inviter_name: inviter.invited_name,
-        invitee_id: invitee.id,
-        invitee_name: invitee.invited_name,
-        address_kept: inviter.address,
-        address_secondary: invitee.address !== inviter.address ? invitee.address : null,
+        invitee_id: merged?.invitee_id,
+        invitee_name: mergedName,
+        address_kept: merged?.inviter_address ?? inviter.address,
+        address_secondary: addressSecondary,
       },
     });
     
     return NextResponse.json({
       success: true,
       action: 'merged',
-      message: `${invitee.invited_name} är nu din partner! Deras soloregistrering är borttagen.`,
+      message: `${mergedName} är nu din partner! Deras soloregistrering är borttagen.`,
       merged_person: {
-        name: invitee.invited_name,
-        had_different_address: invitee.address !== inviter.address,
+        name: mergedName,
+        had_different_address: Boolean(addressSecondary),
       },
     });
     
