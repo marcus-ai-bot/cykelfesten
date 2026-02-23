@@ -131,6 +131,39 @@ export async function GET(
     );
   }
 
+  // Build potential hosts per course: couples with address, not cancelled,
+  // not already a host for that course
+  const existingHostIds: Record<string, Set<string>> = {
+    starter: new Set((assignments ?? []).filter(a => a.course === 'starter').map(a => a.couple_id)),
+    main: new Set((assignments ?? []).filter(a => a.course === 'main').map(a => a.couple_id)),
+    dessert: new Set((assignments ?? []).filter(a => a.course === 'dessert').map(a => a.couple_id)),
+  };
+
+  const potentialHosts: Record<string, Array<{
+    couple_id: string;
+    name: string;
+    address: string;
+  }>> = { starter: [], main: [], dessert: [] };
+
+  for (const c of allCouples) {
+    // Must have address to be a host
+    if (!c.address) continue;
+
+    const displayName = c.partner_name
+      ? `${c.invited_name} & ${c.partner_name}`
+      : c.invited_name;
+
+    for (const course of courses) {
+      if (!existingHostIds[course].has(c.id)) {
+        potentialHosts[course].push({
+          couple_id: c.id,
+          name: displayName,
+          address: c.address,
+        });
+      }
+    }
+  }
+
   // Format unplaced couples
   const unplacedFormatted = unplaced.map(c => ({
     id: c.id,
@@ -144,5 +177,6 @@ export async function GET(
   return NextResponse.json({
     unplaced: unplacedFormatted,
     hostsByCourse,
+    potentialHosts,
   });
 }

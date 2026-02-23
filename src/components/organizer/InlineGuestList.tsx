@@ -31,6 +31,12 @@ interface Couple {
   created_at: string;
 }
 
+interface HostInfo {
+  couple_id: string;
+  courses: string[];
+  guests: { name: string; course: string }[];
+}
+
 interface Props {
   eventId: string;
 }
@@ -38,6 +44,7 @@ interface Props {
 export function InlineGuestList({ eventId }: Props) {
   const [view, setView] = useState<'lista' | 'karta'>('lista');
   const [couples, setCouples] = useState<Couple[]>([]);
+  const [hostInfoMap, setHostInfoMap] = useState<Record<string, HostInfo>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
@@ -46,10 +53,39 @@ export function InlineGuestList({ eventId }: Props) {
   const [message, setMessage] = useState('');
 
   function loadData() {
-    fetch(`/api/organizer/events/${eventId}/guests`)
-      .then(r => r.json())
-      .then(data => { setCouples(data.couples || []); setLoading(false); })
-      .catch(() => setLoading(false));
+    Promise.all([
+      fetch(`/api/organizer/events/${eventId}/guests`).then(r => r.json()),
+      fetch(`/api/organizer/events/${eventId}/matching`).then(r => r.json()).catch(() => null),
+    ]).then(([guestData, matchData]) => {
+      setCouples(guestData.couples || []);
+
+      // Build host info map from pairings
+      const map: Record<string, HostInfo> = {};
+      const pairings = matchData?.pairings || [];
+      const allCouples = guestData.couples || [];
+      const coupleNameMap = new Map<string, string>(allCouples.map((c: Couple) => [
+        c.id,
+        c.partner_name ? `${c.invited_name} & ${c.partner_name}` : c.invited_name,
+      ]));
+
+      for (const p of pairings as Array<{ host_couple_id: string; guest_couple_id: string; course: string }>) {
+        const hostId = p.host_couple_id;
+        if (!map[hostId]) {
+          map[hostId] = { couple_id: hostId, courses: [], guests: [] };
+        }
+        if (!map[hostId].courses.includes(p.course)) {
+          map[hostId].courses.push(p.course);
+        }
+        if (p.guest_couple_id !== hostId) {
+          map[hostId].guests.push({
+            name: coupleNameMap.get(String(p.guest_couple_id)) || 'Okänt par',
+            course: String(p.course),
+          });
+        }
+      }
+      setHostInfoMap(map);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }
 
   useEffect(() => { loadData(); }, [eventId]);
@@ -291,8 +327,27 @@ export function InlineGuestList({ eventId }: Props) {
         <div className="space-y-2">
           {filtered.map(c => (
             <GuestRow key={c.id} couple={c} eventId={eventId}
+              hostInfo={hostInfoMap[c.id] || null}
               selected={selected.has(c.id)} onToggle={() => toggleSelect(c.id)}
-              onAction={(action) => singleAction(c.id, action)} />
+              onAction={(action) => singleAction(c.id, action)}
+              onResignHost={async (coupleId: string) => {
+                if (!confirm(
+                  `Avsäg värdskap för ${hostInfoMap[coupleId]?.guests.length ? hostInfoMap[coupleId].guests.map(g => g.name).join(', ') + ' blir oplacerade. ' : ''}Fortsätt?`
+                )) return;
+                setActing(true);
+                try {
+                  const res = await fetch(`/api/organizer/couples/${coupleId}/resign-host`, { method: 'POST' });
+                  const data = await res.json();
+                  if (res.ok) {
+                    const freedNames = data.freed_guests?.map((g: any) => g.name).join(', ') || '';
+                    setMessage(`✅ Värdskap avsagt. ${freedNames ? `Oplacerade: ${freedNames}` : ''}`);
+                    loadData();
+                  } else {
+                    setMessage(`❌ ${data.error || 'Kunde inte avsäga värdskap'}`);
+                  }
+                } catch { setMessage('❌ Nätverksfel'); }
+                finally { setActing(false); }
+              }} />
           ))}
         </div>
       )}
@@ -304,9 +359,9 @@ export function InlineGuestList({ eventId }: Props) {
 
 /* ── GuestRow ──────────────────────────────────────────── */
 
-function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
-  couple: Couple; eventId: string; selected: boolean; onToggle: () => void;
-  onAction: (action: string) => void;
+function GuestRow({ couple: c, eventId, hostInfo, selected, onToggle, onAction, onResignHost }: {
+  couple: Couple; eventId: string; hostInfo: HostInfo | null; selected: boolean; onToggle: () => void;
+  onAction: (action: string) => void; onResignHost: (coupleId: string) => void;
 }) {
   const [swipeMode, setSwipeMode] = useState<'approve' | 'reject' | 'context' | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -403,6 +458,13 @@ function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
                 className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">✏️ Redigera</Link>
               <Link href={`/organizer/event/${eventId}/guests/${c.id}/preferences`} onClick={() => setSwipeMode(null)}
                 className="w-full px-3 py-2 text-sm text-left rounded hover:bg-gray-50">🔀 Matchningspreferens</Link>
+              {hostInfo && hostInfo.courses.length > 0 && (
+                <>
+                  <div className="border-t border-gray-100 my-1" />
+                  <button onClick={() => { setSwipeMode(null); onResignHost(c.id); }}
+                    className="w-full px-3 py-2 text-sm text-left rounded hover:bg-red-50 text-red-600">🏠 Avsäg värdskap</button>
+                </>
+              )}
               <button onClick={() => setSwipeMode(null)}
                 className="w-full px-3 py-1.5 text-xs text-gray-400 text-center">Stäng</button>
             </div>
@@ -455,7 +517,7 @@ function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
             </svg>
           </button>
           {menuOpen && (
-            <RowMenu eventId={eventId} coupleId={c.id} onClose={() => setMenuOpen(false)} onAction={handleAction} />
+            <RowMenu eventId={eventId} coupleId={c.id} hostInfo={hostInfo} onClose={() => setMenuOpen(false)} onAction={handleAction} onResignHost={onResignHost} />
           )}
         </div>
       </motion.div>
@@ -463,8 +525,8 @@ function GuestRow({ couple: c, eventId, selected, onToggle, onAction }: {
   );
 }
 
-function RowMenu({ eventId, coupleId, onClose, onAction }: {
-  eventId: string; coupleId: string; onClose: () => void; onAction: (action: string) => void;
+function RowMenu({ eventId, coupleId, hostInfo, onClose, onAction, onResignHost }: {
+  eventId: string; coupleId: string; hostInfo: HostInfo | null; onClose: () => void; onAction: (action: string) => void; onResignHost: (coupleId: string) => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -493,6 +555,13 @@ function RowMenu({ eventId, coupleId, onClose, onAction }: {
         className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">✏️ Redigera</Link>
       <Link href={`/organizer/event/${eventId}/guests/${coupleId}/preferences`} onClick={onClose}
         className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">🔀 Matchningspreferens</Link>
+      {hostInfo && hostInfo.courses.length > 0 && (
+        <>
+          <div className="border-t border-gray-100 my-1" />
+          <button onClick={() => { onResignHost(coupleId); onClose(); }}
+            className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">🏠 Avsäg värdskap</button>
+        </>
+      )}
     </div>
   );
 }

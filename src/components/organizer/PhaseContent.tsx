@@ -733,9 +733,16 @@ interface HostOption {
   max_guests: number;
 }
 
+interface PotentialHost {
+  couple_id: string;
+  name: string;
+  address: string;
+}
+
 interface UnplacedData {
   unplaced: UnplacedCouple[];
   hostsByCourse: Record<string, HostOption[]>;
+  potentialHosts?: Record<string, PotentialHost[]>;
 }
 
 const COURSE_LABELS: Record<string, { label: string; icon: string }> = {
@@ -749,8 +756,8 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
-  // selections: coupleId -> { course, hostId }
-  const [selections, setSelections] = useState<Record<string, { course: string; hostId: string }>>({});
+  // selections: coupleId -> { course, hostId, isNewHost? }
+  const [selections, setSelections] = useState<Record<string, { course: string; hostId: string; isNewHost?: boolean }>>({});
   const [showNotifyDraft, setShowNotifyDraft] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -771,46 +778,89 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
 
   const courses = ['starter', 'main', 'dessert'];
 
-  const handleSelectionChange = (coupleId: string, course: string, hostId: string) => {
+  const handleSelectionChange = (coupleId: string, course: string, value: string) => {
+    const isNewHost = value.startsWith('new:');
+    const hostId = isNewHost ? value.slice(4) : value;
     setSelections(prev => ({
       ...prev,
-      [coupleId]: { course, hostId },
+      [coupleId]: { course, hostId, isNewHost },
     }));
   };
 
   const selectedCount = Object.values(selections).filter(s => s.hostId).length;
 
   const handleSave = async () => {
-    const placements = Object.entries(selections)
-      .filter(([, s]) => s.hostId)
-      .map(([coupleId, s]) => ({
-        guest_couple_id: coupleId,
-        host_couple_id: s.hostId,
-        course: s.course,
-      }));
-
-    if (placements.length === 0) return;
+    const allSelections = Object.entries(selections).filter(([, s]) => s.hostId);
+    if (allSelections.length === 0) return;
 
     setSaving(true);
     setMessage('');
 
     try {
-      const res = await fetch(`/api/organizer/events/${eventId}/place`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ placements }),
-      });
-      const json = await res.json();
-      if (res.ok) {
-        setMessage(`✅ ${json.pairings_created} par placerade!`);
-        setSelections({});
-        // Reload to refresh list
-        setLoading(true);
-        await loadData();
-        setTimeout(() => setMessage(''), 5000);
-      } else {
-        setMessage(`❌ ${json.error || 'Kunde inte placera'}`);
+      // Group by new hosts that need to be promoted first
+      const newHostSelections = allSelections.filter(([, s]) => s.isNewHost);
+      const existingHostSelections = allSelections.filter(([, s]) => !s.isNewHost);
+
+      // Promote new hosts first (group guests by new host + course)
+      const newHostGroups: Record<string, { course: string; guestIds: string[] }> = {};
+      for (const [coupleId, s] of newHostSelections) {
+        const key = `${s.hostId}:${s.course}`;
+        if (!newHostGroups[key]) {
+          newHostGroups[key] = { course: s.course, guestIds: [] };
+        }
+        newHostGroups[key].guestIds.push(coupleId);
       }
+
+      let totalCreated = 0;
+
+      for (const [key, group] of Object.entries(newHostGroups)) {
+        const hostId = key.split(':')[0];
+        const promoteRes = await fetch(`/api/organizer/events/${eventId}/promote-host`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            couple_id: hostId,
+            course: group.course,
+            guest_couple_ids: group.guestIds,
+          }),
+        });
+        const promoteData = await promoteRes.json();
+        if (!promoteRes.ok) {
+          setMessage(`❌ Kunde inte uppgradera värd: ${promoteData.error || 'Okänt fel'}`);
+          setSaving(false);
+          return;
+        }
+        totalCreated += promoteData.pairings_created || 0;
+      }
+
+      // Place with existing hosts
+      if (existingHostSelections.length > 0) {
+        const placements = existingHostSelections.map(([coupleId, s]) => ({
+          guest_couple_id: coupleId,
+          host_couple_id: s.hostId,
+          course: s.course,
+        }));
+
+        const res = await fetch(`/api/organizer/events/${eventId}/place`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ placements }),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          totalCreated += json.pairings_created || 0;
+        } else {
+          setMessage(`❌ ${json.error || 'Kunde inte placera'}`);
+          setSaving(false);
+          return;
+        }
+      }
+
+      setMessage(`✅ ${totalCreated} par placerade!`);
+      setSelections({});
+      setLoading(true);
+      await loadData();
+      setTimeout(() => setMessage(''), 5000);
     } catch {
       setMessage('❌ Nätverksfel');
     } finally {
@@ -881,7 +931,7 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
 
                       {/* Host dropdown */}
                       <select
-                        value={isSelectedForThisCourse ? sel.hostId : ''}
+                        value={isSelectedForThisCourse ? (sel.isNewHost ? `new:${sel.hostId}` : sel.hostId) : ''}
                         onChange={e => handleSelectionChange(couple.id, course, e.target.value)}
                         className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-w-[260px]"
                       >
@@ -900,6 +950,17 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
                             </option>
                           );
                         })}
+                        {/* Potential new hosts */}
+                        {data.potentialHosts && data.potentialHosts[course] && data.potentialHosts[course].length > 0 && (
+                          <>
+                            <option disabled>── Ny värd ──</option>
+                            {data.potentialHosts[course].map(ph => (
+                              <option key={`new-${ph.couple_id}`} value={`new:${ph.couple_id}`}>
+                                ★ {ph.name} — {ph.address} (ny värd)
+                              </option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
                   );
