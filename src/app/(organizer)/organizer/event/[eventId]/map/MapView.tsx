@@ -684,13 +684,17 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.setPaintProperty('unclustered-point', 'circle-stroke-width',
         ['case', ['in', ['get', 'id'], ['literal', ids]], 3, 1]);
 
-      // Dim other hosts
+      // Highlight selected host, dim others
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity',
         ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 1, 0.12]);
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-opacity',
         ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 1, 0.12]);
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-radius',
+        ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 16, 12]);
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-width',
+        ['case', ['==', ['get', 'hostId'], selectedGroup.hostId], 4, 3]);
 
-      // Zoom to group — mobile needs bottom padding for drawer peek
+      // Zoom to group — extra bottom padding for drawer peek
       const bounds = new mapboxgl.LngLatBounds();
       bounds.extend(selectedGroup.hostCoords);
       selectedGroup.guests.forEach((g) => bounds.extend(g.coords));
@@ -698,12 +702,12 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       map.fitBounds(bounds, {
         padding: {
           top: 80,
-          bottom: isMobile ? 140 : 80,  // Room for drawer peek
+          bottom: isMobile ? 220 : 80,  // Room for drawer peek + routes visible
           left: isMobile ? 40 : 380,
           right: 40,
         },
         duration: 500,
-        maxZoom: 16,
+        maxZoom: 15.5,
       });
 
     } else if (activeCourse) {
@@ -719,6 +723,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-opacity', 0.9);
       map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-opacity', 1);
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-radius', 12);
+      map.setPaintProperty(`host-${activeCourse}-fill`, 'circle-stroke-width', 3);
 
     } else {
       // === STATE: Idle (no course) ===
