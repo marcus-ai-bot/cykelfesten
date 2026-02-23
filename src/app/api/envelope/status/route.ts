@@ -123,7 +123,8 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('couple_id', coupleId)
-      .eq('match_plan_id', event.active_match_plan_id);
+      .eq('match_plan_id', event.active_match_plan_id)
+      .neq('cancelled', true);
     
     if (envelopesError) {
       console.error('Error fetching envelopes:', envelopesError);
@@ -166,7 +167,8 @@ export async function GET(request: NextRequest) {
     const { data: allEnvelopes } = await supabase
       .from('envelopes')
       .select('couple_id, host_couple_id, course')
-      .eq('match_plan_id', event.active_match_plan_id);
+      .eq('match_plan_id', event.active_match_plan_id)
+      .neq('cancelled', true);
     
     const hostCourseGuestLookup = new Map<string, Map<string, string[]>>();
     for (const envelope of allEnvelopes ?? []) {

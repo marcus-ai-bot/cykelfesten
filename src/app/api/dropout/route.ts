@@ -113,136 +113,192 @@ export async function POST(request: Request) {
       .eq('couple_id', couple_id)
       .single();
     
+    // Guest dropout cleanup (cancel envelopes + remove pairings)
+    if (!is_host_dropout && event.active_match_plan_id) {
+      const { error: envelopeCancelError } = await supabase
+        .from('envelopes')
+        .update({ cancelled: true })
+        .eq('couple_id', couple_id)
+        .eq('match_plan_id', event.active_match_plan_id);
+
+      if (envelopeCancelError) {
+        return NextResponse.json(
+          { error: 'Kunde inte uppdatera kuvert', details: envelopeCancelError.message },
+          { status: 500 }
+        );
+      }
+
+      const { error: pairingDeleteError } = await supabase
+        .from('course_pairings')
+        .delete()
+        .eq('guest_couple_id', couple_id)
+        .eq('match_plan_id', event.active_match_plan_id);
+
+      if (pairingDeleteError) {
+        return NextResponse.json(
+          { error: 'Kunde inte rensa matchningar', details: pairingDeleteError.message },
+          { status: 500 }
+        );
+      }
+    }
+
     let rematchResult = null;
     let affectedGuests: string[] = [];
     
     // If this is a host dropout, we need to re-match their guests
     if (assignment && is_host_dropout) {
-      // Fetch current active match plan
-      const { data: matchPlan } = await supabase
-        .from('match_plans')
-        .select('*')
-        .eq('id', event.active_match_plan_id)
+      const nowIso = new Date().toISOString();
+      const lockUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+      const { data: lockData, error: lockError } = await supabase
+        .from('events')
+        .update({ rematch_lock_until: lockUntil })
+        .eq('id', event.id)
+        .or(`rematch_lock_until.is.null,rematch_lock_until.lt.${nowIso}`)
+        .select('id')
         .single();
-      
-      if (matchPlan) {
-        // Find guests affected by this host dropping out
-        const { data: affectedPairings } = await supabase
-          .from('course_pairings')
-          .select('guest_couple_id')
-          .eq('match_plan_id', matchPlan.id)
-          .eq('host_couple_id', couple_id);
-        
-        affectedGuests = affectedPairings?.map(p => p.guest_couple_id) || [];
-        
-        // Fetch all active couples (excluding dropout)
-        const { data: activeCouples } = await supabase
-          .from('couples')
-          .select('*')
-          .eq('event_id', event.id)
-          .eq('cancelled', false);
-        
-        // Fetch all assignments
-        const { data: allAssignments } = await supabase
-          .from('assignments')
-          .select('*')
-          .eq('event_id', event.id);
-        
-        // Fetch blocked pairs
-        const { data: blockedPairs } = await supabase
-          .from('blocked_pairs')
-          .select('couple_a_id, couple_b_id')
-          .eq('event_id', event.id);
-        
-        const blocked: [string, string][] = (blockedPairs || []).map(bp => [
-          bp.couple_a_id,
-          bp.couple_b_id,
-        ]);
-        
-        // Determine frozen courses (envelopes already activated)
-        const { data: activatedEnvelopes } = await supabase
-          .from('envelopes')
-          .select('course')
-          .eq('match_plan_id', matchPlan.id)
-          .not('activated_at', 'is', null);
-        
-        const frozenCourses = [...new Set(activatedEnvelopes?.map(e => e.course as Course) || [])];
-        
-        // Create new match plan version
-        const newVersion = matchPlan.version + 1;
-        
-        const { data: newPlan, error: planError } = await supabase
+
+      if (lockError || !lockData) {
+        return NextResponse.json(
+          { error: 'Rematch pågår redan, försök igen' },
+          { status: 409 }
+        );
+      }
+
+      try {
+        // Fetch current active match plan
+        const { data: matchPlan } = await supabase
           .from('match_plans')
-          .insert({
-            event_id: event.id,
-            version: newVersion,
-            status: 'draft',
-            frozen_courses: frozenCourses,
-          })
-          .select()
+          .select('*')
+          .eq('id', event.active_match_plan_id)
           .single();
         
-        if (!planError && newPlan) {
-          // Run re-match
-          rematchResult = runRematch({
-            event,
-            couples: activeCouples as Couple[],
-            assignments: allAssignments as Assignment[],
-            blocked_pairs: blocked,
-            frozen_courses: frozenCourses,
-            match_plan_id: newPlan.id,
-          });
-          
-          // Save new pairings
-          await supabase
+        if (matchPlan) {
+          // Find guests affected by this host dropping out
+          const { data: affectedPairings } = await supabase
             .from('course_pairings')
-            .insert(rematchResult.course_pairings);
+            .select('guest_couple_id')
+            .eq('match_plan_id', matchPlan.id)
+            .eq('host_couple_id', couple_id);
           
-          // Save new envelopes
-          const envelopesWithTimes = setEnvelopeTimes(
-            rematchResult.envelopes,
-            event
-          );
-          await supabase.from('envelopes').insert(envelopesWithTimes);
+          affectedGuests = affectedPairings?.map(p => p.guest_couple_id) || [];
           
-          // Update match plan stats
-          await supabase
+          // Fetch all active couples (excluding dropout)
+          const { data: activeCouples } = await supabase
+            .from('couples')
+            .select('*')
+            .eq('event_id', event.id)
+            .eq('cancelled', false);
+          
+          // Fetch all assignments
+          const { data: allAssignments } = await supabase
+            .from('assignments')
+            .select('*')
+            .eq('event_id', event.id);
+          
+          // Fetch blocked pairs
+          const { data: blockedPairs } = await supabase
+            .from('blocked_pairs')
+            .select('couple_a_id, couple_b_id')
+            .eq('event_id', event.id);
+          
+          const blocked: [string, string][] = (blockedPairs || []).map(bp => [
+            bp.couple_a_id,
+            bp.couple_b_id,
+          ]);
+          
+          // Determine frozen courses (envelopes already activated)
+          const { data: activatedEnvelopes } = await supabase
+            .from('envelopes')
+            .select('course')
+            .eq('match_plan_id', matchPlan.id)
+            .not('activated_at', 'is', null);
+          
+          const frozenCourses = [...new Set(activatedEnvelopes?.map(e => e.course as Course) || [])];
+          
+          // Create new match plan version
+          const newVersion = matchPlan.version + 1;
+          
+          const { data: newPlan, error: planError } = await supabase
             .from('match_plans')
-            .update({
-              stats: rematchResult.stats,
-            })
-            .eq('id', newPlan.id);
-          
-          // Mark old plan as superseded
-          await supabase
-            .from('match_plans')
-            .update({
-              status: 'superseded',
-              superseded_at: new Date().toISOString(),
-              superseded_by: newPlan.id,
-            })
-            .eq('id', matchPlan.id);
-          
-          // Update event active match plan
-          await supabase
-            .from('events')
-            .update({ active_match_plan_id: newPlan.id })
-            .eq('id', event.id);
-          
-          // Log re-match
-          await supabase.from('event_log').insert({
-            event_id: event.id,
-            match_plan_id: newPlan.id,
-            action: 'rematch_completed',
-            details: {
-              trigger: 'host_dropout',
-              dropout_couple_id: couple_id,
-              affected_guests: affectedGuests.length,
+            .insert({
+              event_id: event.id,
+              version: newVersion,
+              status: 'draft',
               frozen_courses: frozenCourses,
-              new_version: newVersion,
-            },
-          });
+            })
+            .select()
+            .single();
+          
+          if (!planError && newPlan) {
+            // Run re-match
+            rematchResult = runRematch({
+              event,
+              couples: activeCouples as Couple[],
+              assignments: allAssignments as Assignment[],
+              blocked_pairs: blocked,
+              frozen_courses: frozenCourses,
+              match_plan_id: newPlan.id,
+            });
+
+            const pairingsForDb = rematchResult.course_pairings.map(({ forced, ...rest }) => rest);
+            
+            // Save new pairings
+            await supabase
+              .from('course_pairings')
+              .insert(pairingsForDb);
+            
+            // Save new envelopes
+            const envelopesWithTimes = setEnvelopeTimes(
+              rematchResult.envelopes,
+              event
+            );
+            await supabase.from('envelopes').insert(envelopesWithTimes);
+            
+            // Update match plan stats
+            await supabase
+              .from('match_plans')
+              .update({
+                stats: rematchResult.stats,
+              })
+              .eq('id', newPlan.id);
+            
+            // Mark old plan as superseded
+            await supabase
+              .from('match_plans')
+              .update({
+                status: 'superseded',
+                superseded_at: new Date().toISOString(),
+                superseded_by: newPlan.id,
+              })
+              .eq('id', matchPlan.id);
+            
+            // Update event active match plan
+            await supabase
+              .from('events')
+              .update({ active_match_plan_id: newPlan.id })
+              .eq('id', event.id);
+            
+            // Log re-match
+            await supabase.from('event_log').insert({
+              event_id: event.id,
+              match_plan_id: newPlan.id,
+              action: 'rematch_completed',
+              details: {
+                trigger: 'host_dropout',
+                dropout_couple_id: couple_id,
+                affected_guests: affectedGuests.length,
+                frozen_courses: frozenCourses,
+                new_version: newVersion,
+              },
+            });
+          }
         }
+      } finally {
+        await supabase
+          .from('events')
+          .update({ rematch_lock_until: null })
+          .eq('id', event.id);
       }
     }
     
