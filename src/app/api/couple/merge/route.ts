@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
+import { getOrganizer, checkEventAccess } from '@/lib/auth';
 
 /**
  * Merge Singles API
@@ -18,6 +19,11 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
+    const organizer = await getOrganizer();
+    if (!organizer) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = createAdminClient();
     
     // Get inviter (the one doing the inviting)
@@ -29,6 +35,11 @@ export async function POST(request: Request) {
     
     if (inviterError || !inviter) {
       return NextResponse.json({ error: 'Inviter hittades inte' }, { status: 404 });
+    }
+
+    const { hasAccess } = await checkEventAccess(organizer.id, inviter.event_id);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
     if (inviter.partner_name) {

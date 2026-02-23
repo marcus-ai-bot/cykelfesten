@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
+import { getOrganizer, checkEventAccess } from '@/lib/auth';
 
 /**
  * Transfer Ownership API
@@ -17,6 +18,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'couple_id och action krävs' }, { status: 400 });
     }
     
+    const organizer = await getOrganizer();
+    if (!organizer) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = createAdminClient();
     
     const { data: couple, error: coupleError } = await supabase
@@ -27,6 +33,11 @@ export async function POST(request: Request) {
     
     if (coupleError || !couple) {
       return NextResponse.json({ error: 'Par hittades inte' }, { status: 404 });
+    }
+
+    const { hasAccess } = await checkEventAccess(organizer.id, couple.event_id);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
     if (!couple.partner_name) {

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/server';
 import { runRematch, setEnvelopeTimes } from '@/lib/matching';
+import { getOrganizer, checkEventAccess } from '@/lib/auth';
+import { verifyToken } from '@/lib/tokens';
 import type { Assignment, Couple, Event, Course } from '@/types/database';
 
 /**
@@ -40,6 +43,27 @@ export async function POST(request: Request) {
     }
     
     const event = couple.events as Event;
+
+    // Auth: organizer with access OR matching guest session
+    const organizer = await getOrganizer();
+    if (organizer) {
+      const { hasAccess } = await checkEventAccess(organizer.id, event.id);
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } else {
+      const cookieStore = await cookies();
+      const session = cookieStore.get('guest_session')?.value;
+      const payload = session ? verifyToken(session) : null;
+      const guestEmail = payload && payload.type === 'guest' ? payload.email.toLowerCase().trim() : null;
+      const invitedEmail = couple.invited_email ? String(couple.invited_email).toLowerCase().trim() : null;
+      const partnerEmail = couple.partner_email ? String(couple.partner_email).toLowerCase().trim() : null;
+      const emailMatches = guestEmail && (guestEmail === invitedEmail || guestEmail === partnerEmail);
+
+      if (!emailMatches) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
     
     // Check dropout window
     const eventDate = new Date(event.event_date);
