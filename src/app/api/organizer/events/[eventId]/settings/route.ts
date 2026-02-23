@@ -54,6 +54,7 @@ export async function PATCH(
   const allowed = ['name', 'event_date', 'city', 'description', 'status',
     'starter_time', 'main_time', 'dessert_time',
     'afterparty_title', 'afterparty_location', 'afterparty_time', 'afterparty_description',
+    'afterparty_teasing_at', 'afterparty_revealed_at',
     'course_timing_offsets'];
   const filtered: Record<string, any> = {};
   for (const key of allowed) {

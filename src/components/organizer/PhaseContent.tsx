@@ -282,6 +282,7 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
   const [saving, setSaving] = useState(false);
   const [delaying, setDelaying] = useState(false);
   const [activating, setActivating] = useState<string | null>(null);
+  const [afterpartyStatus, setAfterpartyStatus] = useState<{ teasing: boolean; revealed: boolean }>({ teasing: false, revealed: false });
   const [message, setMessage] = useState('');
 
   const loadData = useCallback(async () => {
@@ -295,6 +296,10 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
       if (settingsRes.ok && settingsData.event) {
         setEvent(settingsData.event);
         setCourseOffsets(settingsData.event.course_timing_offsets || {});
+        setAfterpartyStatus({
+          teasing: !!settingsData.event.afterparty_teasing_at,
+          revealed: !!settingsData.event.afterparty_revealed_at,
+        });
       }
       if (timingRes.ok && timingData.timing) setTiming(timingData.timing);
     } catch { /* ignore */ }
@@ -588,6 +593,97 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
               ))}
             </div>
           </div>
+
+          {/* Afterparty activation */}
+          {event?.afterparty_time && (
+            <div>
+              <p className="text-xs text-gray-500 font-medium mb-2">🎉 Efterfest-reveal</p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={async () => {
+                    if (!confirm('Aktivera teasing för efterfesten? Gästerna ser tid + BYOB-info.')) return;
+                    setActivating('afterparty-tease'); setMessage('');
+                    try {
+                      const res = await fetch('/api/admin/activate-afterparty', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ event_id: eventId, action: 'tease' }),
+                      });
+                      if (res.ok) {
+                        setAfterpartyStatus(s => ({ ...s, teasing: true }));
+                        setMessage('✅ Efterfest-teasing aktiverad!');
+                        setTimeout(() => setMessage(''), 3000);
+                      } else setMessage('❌ Kunde inte aktivera');
+                    } catch { setMessage('❌ Nätverksfel'); }
+                    finally { setActivating(null); }
+                  }}
+                  disabled={!!activating || !isActive || afterpartyStatus.teasing}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                    afterpartyStatus.teasing
+                      ? 'bg-purple-100 text-purple-500 cursor-default'
+                      : 'bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-40'
+                  }`}
+                >
+                  {activating === 'afterparty-tease' ? '...' : afterpartyStatus.teasing ? '✓ Teasing' : '🤫 Teasing'}
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Avslöja efterfesten? Gästerna ser full adress + karta.')) return;
+                    setActivating('afterparty-reveal'); setMessage('');
+                    try {
+                      const res = await fetch('/api/admin/activate-afterparty', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ event_id: eventId, action: 'reveal' }),
+                      });
+                      if (res.ok) {
+                        setAfterpartyStatus({ teasing: true, revealed: true });
+                        setMessage('✅ Efterfest avslöjad! 🎉');
+                        setTimeout(() => setMessage(''), 3000);
+                      } else setMessage('❌ Kunde inte avslöja');
+                    } catch { setMessage('❌ Nätverksfel'); }
+                    finally { setActivating(null); }
+                  }}
+                  disabled={!!activating || !isActive || afterpartyStatus.revealed}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                    afterpartyStatus.revealed
+                      ? 'bg-purple-100 text-purple-500 cursor-default'
+                      : 'bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-40'
+                  }`}
+                >
+                  {activating === 'afterparty-reveal' ? '...' : afterpartyStatus.revealed ? '✓ Avslöjad' : '🎉 Avslöja'}
+                </button>
+                {(afterpartyStatus.teasing || afterpartyStatus.revealed) && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Återställ efterfest-reveal? Gästerna ser den som låst igen.')) return;
+                      setActivating('afterparty-reset'); setMessage('');
+                      try {
+                        const res = await fetch('/api/admin/activate-afterparty', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ event_id: eventId, action: 'reset' }),
+                        });
+                        if (res.ok) {
+                          setAfterpartyStatus({ teasing: false, revealed: false });
+                          setMessage('✅ Efterfest-reveal återställd');
+                          setTimeout(() => setMessage(''), 3000);
+                        } else setMessage('❌ Kunde inte återställa');
+                      } catch { setMessage('❌ Nätverksfel'); }
+                      finally { setActivating(null); }
+                    }}
+                    disabled={!!activating || !isActive}
+                    className="px-3 py-1.5 bg-gray-50 text-gray-500 rounded-lg hover:bg-gray-100 disabled:opacity-40 text-sm font-medium transition"
+                  >
+                    {activating === 'afterparty-reset' ? '...' : '↩ Återställ'}
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Auto: Teasing 30 min före, avslöjad vid {event.afterparty_time?.slice(0, 5)}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

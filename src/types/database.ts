@@ -38,6 +38,8 @@ export interface Event {
   afterparty_byob: boolean | null;
   afterparty_notes: string | null;
   afterparty_hosts: string | null;
+  afterparty_teasing_at: string | null;
+  afterparty_revealed_at: string | null;
   host_self_messages: Record<string, unknown> | null;
   lips_sealed_messages: Record<string, unknown> | null;
   mystery_host_messages: Record<string, unknown> | null;
@@ -337,11 +339,23 @@ export interface AfterpartyLocation {
   coordinates: { lat: number; lng: number } | null;
 }
 
+export type AfterpartyState = 'LOCKED' | 'TEASING' | 'REVEALED';
+
 export interface AfterpartyStatus {
-  state: 'LOCKED' | 'OPEN';
-  reveals_at: string;
-  location: string | null;
+  state: AfterpartyState;
+  time: string | null;          // e.g. "23:00"
+  byob: boolean;
+  notes: string | null;
   description: string | null;
+  // Only revealed in REVEALED state
+  location: string | null;
+  door_code: string | null;
+  host_names: string[];
+  coordinates: { lat: number; lng: number } | null;
+  cycling_minutes_from_dessert: number | null;
+  // Timing
+  teasing_at: string | null;    // ISO timestamp when teasing activates
+  revealed_at: string | null;   // ISO timestamp when full reveal activates
 }
 
 export interface CustomMessage {

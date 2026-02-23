@@ -20,6 +20,7 @@ import type {
   EnvelopeStatusResponse, 
   CourseEnvelopeStatus, 
   EnvelopeState,
+  AfterpartyState,
   Course,
   LiveEnvelope,
   RevealedClue,
@@ -87,6 +88,9 @@ export async function GET(request: NextRequest) {
           afterparty_location,
           afterparty_hosts,
           afterparty_description,
+          afterparty_teasing_at,
+          afterparty_revealed_at,
+          afterparty_coordinates,
           host_self_messages,
           lips_sealed_messages,
           mystery_host_messages
@@ -340,10 +344,44 @@ export async function GET(request: NextRequest) {
     }
     
     // 8. Build afterparty status
-    const afterpartyRevealTime = event.dessert_time; // Reveal at dessert start
-    const afterpartyState = now >= new Date(`${event.event_date}T${afterpartyRevealTime}`) 
-      ? 'OPEN' as const 
-      : 'LOCKED' as const;
+    // Determine afterparty state: LOCKED → TEASING → REVEALED
+    // Manual activation via afterparty_teasing_at / afterparty_revealed_at takes priority
+    // Otherwise auto-calculate: TEASING = 30 min before afterparty_time, REVEALED = at afterparty_time
+    const afterpartyTime = event.afterparty_time;
+    let afterpartyState: AfterpartyState = 'LOCKED';
+    
+    if (event.afterparty_revealed_at && now >= new Date(event.afterparty_revealed_at)) {
+      afterpartyState = 'REVEALED';
+    } else if (event.afterparty_teasing_at && now >= new Date(event.afterparty_teasing_at)) {
+      afterpartyState = 'TEASING';
+    } else if (afterpartyTime && event.event_date) {
+      // Auto-calculate based on afterparty_time
+      const afterpartyDateTime = new Date(`${event.event_date}T${afterpartyTime}`);
+      const teasingAutoTime = new Date(afterpartyDateTime.getTime() - 30 * 60 * 1000); // 30 min before
+      if (now >= afterpartyDateTime) {
+        afterpartyState = 'REVEALED';
+      } else if (now >= teasingAutoTime) {
+        afterpartyState = 'TEASING';
+      }
+    }
+
+    // Get dessert envelope for cycling distance calculation to afterparty
+    const dessertEnvelope = envelopes?.find(e => e.course === 'dessert') as EnvelopeWithHost | undefined;
+    const dessertHostCoords = dessertEnvelope?.host_couple?.coordinates;
+    const afterpartyCoords = event.afterparty_coordinates as { x: number; y: number } | null;
+    let cyclingMinFromDessert: number | null = null;
+    if (dessertHostCoords && afterpartyCoords) {
+      // Simple distance estimate: haversine → cycling time
+      const R = 6371;
+      const dLat = (afterpartyCoords.y - dessertHostCoords.y) * Math.PI / 180;
+      const dLon = (afterpartyCoords.x - dessertHostCoords.x) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(dessertHostCoords.y * Math.PI / 180) * Math.cos(afterpartyCoords.y * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distKm = R * c;
+      cyclingMinFromDessert = Math.round(distKm * 4); // ~15 km/h
+    }
     
     // Default messages if not set
     const defaultHostSelf = [
@@ -366,9 +404,23 @@ export async function GET(request: NextRequest) {
       courses,
       afterparty: {
         state: afterpartyState,
-        reveals_at: `${event.event_date}T${event.afterparty_time ?? event.dessert_time}`,
-        location: afterpartyState === 'OPEN' ? event.afterparty_location : null,
-        description: afterpartyState === 'OPEN' ? event.afterparty_description : null,
+        time: afterpartyTime?.slice(0, 5) ?? null,
+        byob: event.afterparty_byob ?? false,
+        notes: afterpartyState !== 'LOCKED' ? (event.afterparty_notes ?? null) : null,
+        description: afterpartyState !== 'LOCKED' ? (event.afterparty_description ?? null) : null,
+        // Only in REVEALED state
+        location: afterpartyState === 'REVEALED' ? (event.afterparty_location ?? null) : null,
+        door_code: afterpartyState === 'REVEALED' ? (event.afterparty_door_code ?? null) : null,
+        host_names: afterpartyState === 'REVEALED' && event.afterparty_hosts
+          ? event.afterparty_hosts.split(',').map((n: string) => n.trim())
+          : [],
+        coordinates: afterpartyState === 'REVEALED' && afterpartyCoords
+          ? { lat: afterpartyCoords.y, lng: afterpartyCoords.x }
+          : null,
+        cycling_minutes_from_dessert: afterpartyState === 'REVEALED' ? cyclingMinFromDessert : null,
+        // Timing info
+        teasing_at: event.afterparty_teasing_at ?? null,
+        revealed_at: event.afterparty_revealed_at ?? null,
       },
       messages: {
         host_self: event.host_self_messages?.length ? event.host_self_messages : defaultHostSelf,

@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { LiveEnvelope } from './LiveEnvelope';
+import { AfterpartyCard } from './AfterpartyCard';
 import { createClient } from '@/lib/supabase/client';
 import type { EnvelopeStatusResponse, CourseEnvelopeStatus } from '@/types/database';
 
@@ -136,18 +137,12 @@ export function EnvelopeContainer({
         />
       ))}
 
-      {/* Afterparty */}
-      {data.afterparty.state === 'OPEN' && data.afterparty.location && (
-        <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">🎉</span>
-            <h3 className="font-semibold text-purple-800">Efterfest</h3>
-          </div>
-          <p className="text-purple-700">{data.afterparty.location}</p>
-          {data.afterparty.description && (
-            <p className="text-sm text-purple-600 mt-1">{data.afterparty.description}</p>
-          )}
-        </div>
+      {/* Afterparty card — 4th card */}
+      {data.afterparty && (
+        <AfterpartyCard
+          afterparty={data.afterparty}
+          isPreview={!!simulateTime}
+        />
       )}
 
       {/* Debug/status info */}
