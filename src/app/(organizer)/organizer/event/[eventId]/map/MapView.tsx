@@ -652,8 +652,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
       // Animate route lines drawing in
       if (routeAnimRef.current) cancelAnimationFrame(routeAnimRef.current);
-      const DASH_TOTAL = 40; // dash units for full line length
-      const ANIM_DURATION = 800; // ms
+      const DASH_TOTAL = 50; // dash units for full line length
+      const ANIM_DURATION = 1500; // ms — slow enough to feel like cycling
       const startTime = performance.now();
       map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [0, DASH_TOTAL]);
       function animateRoutes(now: number) {
