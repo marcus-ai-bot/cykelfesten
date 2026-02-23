@@ -184,14 +184,30 @@ export async function GET(request: NextRequest) {
       hostCourseGuestLookup.set(envelope.host_couple_id, byCourse);
     }
     
-    // Build shuffled clue pool from all participants
-    const allFunFacts: string[] = [];
-    for (const c of allCouples ?? []) {
-      allFunFacts.push(...funFactsToStrings(c.invited_fun_facts));
-      allFunFacts.push(...funFactsToStrings(c.partner_fun_facts));
+    // Build shuffled clue pool PER course (only couples at that table)
+    // We'll build it per-envelope below instead of globally
+    const coupleMap = new Map((allCouples ?? []).map(c => [c.id, c]));
+    
+    function buildCluePoolForTable(hostCoupleId: string, courseType: string): string[] {
+      const facts: string[] = [];
+      // Add host's fun facts
+      const host = coupleMap.get(hostCoupleId);
+      if (host) {
+        facts.push(...funFactsToStrings(host.invited_fun_facts));
+        facts.push(...funFactsToStrings(host.partner_fun_facts));
+      }
+      // Add guests' fun facts
+      const guestIds = hostCourseGuestLookup.get(hostCoupleId)?.get(courseType) ?? [];
+      for (const guestId of guestIds) {
+        const guest = coupleMap.get(guestId);
+        if (guest) {
+          facts.push(...funFactsToStrings(guest.invited_fun_facts));
+          facts.push(...funFactsToStrings(guest.partner_fun_facts));
+        }
+      }
+      // Shuffle
+      return facts.sort(() => Math.random() - 0.5);
     }
-    // Shuffle the pool
-    const shuffledCluePool = allFunFacts.sort(() => Math.random() - 0.5);
     
     // 7. Build response for each course
     const courses: CourseEnvelopeStatus[] = [];
@@ -288,7 +304,7 @@ export async function GET(request: NextRequest) {
         type: courseType,
         state,
         clues: revealedClues,
-        clue_pool: showCluePool ? shuffledCluePool : null,
+        clue_pool: showCluePool ? buildCluePoolForTable(envelope.host_couple_id!, courseType) : null,
         street: shouldShowStreet(state) && hostStreetInfo ? {
           name: hostStreetInfo.street_name ?? '',
           range: `${hostStreetInfo.number_range_low}-${hostStreetInfo.number_range_high}`,
