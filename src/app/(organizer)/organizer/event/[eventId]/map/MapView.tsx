@@ -70,6 +70,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   const routeAnimRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const allBoundsRef = useRef<mapboxgl.LngLatBounds | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const sidebarListRef = useRef<HTMLDivElement | null>(null);
+  const sidebarRowRefs = useRef(new Map<string, HTMLDivElement>());
 
   /* ── Course config with real event times ─────────── */
 
@@ -235,6 +238,28 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
     return mealGroups[activeCourse].findIndex((g: MealGroup) => g.hostId === selectedGroup.hostId);
   }, [selectedGroup, activeCourse, mealGroups]);
 
+  const coupleRoles = useMemo(() => {
+    if (!activeCourse || activeCourse === 'afterparty') return new Map<string, { role: 'host' | 'guest'; hostName?: string }>();
+    const roles = new Map<string, { role: 'host' | 'guest'; hostName?: string }>();
+    for (const group of mealGroups[activeCourse]) {
+      roles.set(group.hostId, { role: 'host' });
+      for (const guest of group.guests) {
+        roles.set(guest.id, { role: 'guest', hostName: group.hostName });
+      }
+    }
+    return roles;
+  }, [activeCourse, mealGroups]);
+
+  const sortedCouples = useMemo(() => {
+    return [...data.couples].sort((a, b) => a.name.localeCompare(b.name));
+  }, [data.couples]);
+
+  const filteredCouples = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return sortedCouples;
+    return sortedCouples.filter((c) => c.name.toLowerCase().includes(query));
+  }, [sortedCouples, searchQuery]);
+
   /* ── Find meal group for any couple ─────────────── */
 
   const findGroupHostId = useCallback((coupleId: string, course: Course): string | null => {
@@ -322,6 +347,11 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   const findGroupHostIdRef = useRef(findGroupHostId);
   findGroupHostIdRef.current = findGroupHostId;
 
+  const setSidebarRowRef = useCallback((id: string) => (el: HTMLDivElement | null) => {
+    if (el) sidebarRowRefs.current.set(id, el);
+    else sidebarRowRefs.current.delete(id);
+  }, []);
+
   /* ── Actions ────────────────────────────────────── */
 
   const toggleCourse = useCallback((course: Course | 'afterparty') => {
@@ -355,6 +385,12 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       setSelectedGroupHostId(groups[next].hostId);
     }
   }, [activeCourse, mealGroups, selectedGroupHostId]);
+
+  useEffect(() => {
+    if (!selectedGroupHostId) return;
+    const el = sidebarRowRefs.current.get(selectedGroupHostId);
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [selectedGroupHostId, filteredCouples]);
 
   /* ── Fetch data ─────────────────────────────────── */
 
@@ -811,6 +847,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   const isCourse = activeCourse && activeCourse !== 'afterparty';
   const cfg = isCourse ? courseConfig[activeCourse] : null;
   const groups = isCourse ? mealGroups[activeCourse] : [];
+  const totalCouples = data.couples.length;
+  const filteredCount = filteredCouples.length;
+  const countLabel = totalCouples === filteredCount ? `${totalCouples} par` : `${filteredCount} av ${totalCouples} par`;
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -875,6 +914,54 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       {/* Map + overlays */}
       <div className="relative flex-1 min-h-0">
         <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+
+        {/* Sidebar (desktop) */}
+        <div className="hidden md:block absolute left-0 top-0 z-10 w-80">
+          <div className="bg-white/95 backdrop-blur shadow-lg rounded-r-xl border border-gray-200/80 max-h-[calc(100vh-8.5rem)] overflow-y-auto">
+            <div className="p-4 pb-3 space-y-3 border-b border-gray-100">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Sök par..."
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300"
+              />
+              <div className="text-xs text-gray-500">{countLabel}</div>
+            </div>
+
+            <div ref={sidebarListRef} className="py-1">
+              {filteredCouples.map((couple) => {
+                const role = isCourse ? coupleRoles.get(couple.id) : null;
+                const isSelected = selectedGroupIds?.has(couple.id);
+                return (
+                  <div key={couple.id} ref={setSidebarRowRef(couple.id)} className="px-1">
+                    <button
+                      type="button"
+                      onClick={() => handlePinClick(couple.id)}
+                      className={`w-full text-left px-3 py-2.5 border-l-4 rounded-r-lg transition ${isSelected ? 'bg-orange-50' : 'bg-transparent'} hover:bg-gray-50 border-transparent`}
+                      style={isSelected && cfg ? { borderColor: cfg.color } : undefined}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">{couple.name}</div>
+                          <div className="text-xs text-gray-500 truncate">{couple.address}</div>
+                        </div>
+                        {role && (
+                          <span
+                            className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full ${role.role === 'host' ? 'text-white' : 'text-gray-600 bg-gray-100'}`}
+                            style={role.role === 'host' && cfg ? { backgroundColor: cfg.color } : undefined}
+                          >
+                            {role.role === 'host' ? 'Värd' : (role.hostName ? `Gäst hos ${role.hostName}` : 'Gäst')}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
         {/* Meal Group Info Card */}
         {selectedGroup && activeCourse && cfg && (
