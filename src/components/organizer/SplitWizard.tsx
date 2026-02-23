@@ -60,7 +60,7 @@ export function SplitWizard({
   onClose,
   onComplete,
 }: SplitWizardProps) {
-  type Step = 'confirm' | 'splitting' | 'choose-invited' | 'choose-partner' | 'place-orphans' | 'summary';
+  type Step = 'confirm' | 'splitting' | 'transfer-host' | 'choose-invited' | 'choose-partner' | 'place-orphans' | 'summary';
 
   const [step, setStep] = useState<Step>('confirm');
   const [error, setError] = useState('');
@@ -70,11 +70,14 @@ export function SplitWizard({
   const [invitedAction, setInvitedAction] = useState<'keep' | 'cancel' | 'resign' | null>(null);
   const [partnerAction, setPartnerAction] = useState<'keep' | 'cancel' | 'resign' | null>(null);
 
-  // Host info (fetched after split to know who is host)
+  // Host info — NOTE: after split, original couple (invitedName) keeps ALL assignments
   const [invitedIsHost, setInvitedIsHost] = useState(false);
   const [partnerIsHost, setPartnerIsHost] = useState(false);
   const [invitedHostCourses, setInvitedHostCourses] = useState<string[]>([]);
   const [partnerHostCourses, setPartnerHostCourses] = useState<string[]>([]);
+
+  // Transfer host: who should take over hosting?
+  const [hostTransferTo, setHostTransferTo] = useState<'invited' | 'partner' | 'neither' | null>(null);
 
   // Freed guests from resign
   const [freedGuests, setFreedGuests] = useState<FreedGuest[]>([]);
@@ -89,10 +92,11 @@ export function SplitWizard({
   const addAction = (msg: string) => setActions(prev => [...prev, msg]);
 
   // Fetch host assignments for both people after split
-  const fetchAssignments = useCallback(async (origId: string, newId: string | null) => {
+  // Returns the host courses for the original couple
+  const fetchAssignments = useCallback(async (origId: string, newId: string | null): Promise<string[]> => {
     try {
       const res = await fetch(`/api/organizer/events/${eventId}/unplaced`);
-      if (!res.ok) return;
+      if (!res.ok) return [];
       const data: UnplacedData = await res.json();
       setUnplacedData(data);
 
@@ -111,7 +115,8 @@ export function SplitWizard({
       setInvitedHostCourses(origHostCourses);
       setPartnerIsHost(newHostCourses.length > 0);
       setPartnerHostCourses(newHostCourses);
-    } catch { /* ignore */ }
+      return origHostCourses;
+    } catch { return []; }
   }, [eventId]);
 
   // Step 1: Confirm & execute split
@@ -130,8 +135,16 @@ export function SplitWizard({
       addAction(`✂️ ${invitedName} och ${partnerName} isärkopplade`);
 
       // Fetch assignments to know who is host
-      await fetchAssignments(coupleId, data.new_id);
-      setStep('choose-invited');
+      // NOTE: After split, ALL assignments belong to the original couple (invitedName)
+      const hostCourses = await fetchAssignments(coupleId, data.new_id);
+      
+      if (hostCourses.length > 0) {
+        // The original couple was a host — ask who takes over
+        setStep('transfer-host');
+      } else {
+        // Not a host — skip to per-person decisions
+        setStep('choose-invited');
+      }
     } catch {
       setError('Nätverksfel');
       setStep('confirm');
@@ -139,6 +152,65 @@ export function SplitWizard({
   };
 
   // Execute action for a person
+  // Handle host transfer decision
+  const handleTransferHost = async () => {
+    if (!hostTransferTo) return;
+    setError('');
+
+    try {
+      if (hostTransferTo === 'partner' && newCoupleId) {
+        // Transfer hosting from original (invitedName) to partner's new entry
+        const res = await fetch(`/api/organizer/events/${eventId}/transfer-host`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from_couple_id: coupleId,
+            to_couple_id: newCoupleId,
+            courses: invitedHostCourses,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || 'Kunde inte överföra värdskap');
+          return;
+        }
+        const courseLabels = invitedHostCourses.map(c => COURSE_LABELS[c] || c).join(', ');
+        addAction(`🏠 ${partnerName} tar över värdskapet (${courseLabels})`);
+        // Update state: partner is now host, invited is not
+        setPartnerIsHost(true);
+        setPartnerHostCourses(invitedHostCourses);
+        setInvitedIsHost(false);
+        setInvitedHostCourses([]);
+      } else if (hostTransferTo === 'invited') {
+        // Original keeps hosting — nothing to do
+        const courseLabels = invitedHostCourses.map(c => COURSE_LABELS[c] || c).join(', ');
+        addAction(`🏠 ${invitedName} behåller värdskapet (${courseLabels})`);
+      } else if (hostTransferTo === 'neither') {
+        // Neither keeps hosting — resign
+        const res = await fetch(`/api/organizer/couples/${coupleId}/resign-host`, {
+          method: 'POST',
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || 'Kunde inte avsäga värdskap');
+          return;
+        }
+        const courseLabels = invitedHostCourses.map(c => COURSE_LABELS[c] || c).join(', ');
+        addAction(`🏠 Värdskap avsagt (${courseLabels})`);
+        if (data.freed_guests?.length > 0) {
+          setFreedGuests(data.freed_guests);
+          addAction(`👥 ${data.freed_guests.length} gäster behöver ny placering`);
+        }
+        setInvitedIsHost(false);
+        setInvitedHostCourses([]);
+      }
+
+      setStep('choose-invited');
+    } catch {
+      setError('Nätverksfel');
+    }
+  };
+
   const executeAction = async (
     targetCoupleId: string,
     targetName: string,
@@ -315,10 +387,60 @@ export function SplitWizard({
             </div>
           )}
 
+          {/* Step: Transfer host */}
+          {step === 'transfer-host' && (
+            <>
+              <StepIndicator current={1} total={4} />
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+                <h3 className="font-semibold text-indigo-900 mb-1">
+                  🏠 Vem tar över värdskapet?
+                </h3>
+                <p className="text-sm text-indigo-700">
+                  {invitedName} & {partnerName} var värd för{' '}
+                  {invitedHostCourses.map(c => COURSE_LABELS[c] || c).join(', ')}.
+                  Vem ska fortsätta som värd?
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <ActionOption
+                  selected={hostTransferTo === 'invited'}
+                  onClick={() => setHostTransferTo('invited')}
+                  icon="👤"
+                  label={`${invitedName} behåller värdskapet`}
+                  description="Gästerna stannar, adressen behålls"
+                />
+                <ActionOption
+                  selected={hostTransferTo === 'partner'}
+                  onClick={() => setHostTransferTo('partner')}
+                  icon="👤"
+                  label={`${partnerName} tar över värdskapet`}
+                  description="Värdskap, gäster och kuvert överförs"
+                />
+                <ActionOption
+                  selected={hostTransferTo === 'neither'}
+                  onClick={() => setHostTransferTo('neither')}
+                  icon="🚪"
+                  label="Ingen — avsäg värdskapet"
+                  description="Gästerna frigörs och behöver ny värd"
+                  danger
+                />
+              </div>
+
+              <button
+                onClick={handleTransferHost}
+                disabled={!hostTransferTo}
+                className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-sm hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                Nästa →
+              </button>
+            </>
+          )}
+
           {/* Step: Choose action for invited person */}
           {step === 'choose-invited' && (
             <>
-              <StepIndicator current={1} total={3} />
+              <StepIndicator current={2} total={4} />
               <PersonActionCard
                 name={invitedName}
                 isHost={invitedIsHost}
@@ -339,7 +461,7 @@ export function SplitWizard({
           {/* Step: Choose action for partner */}
           {step === 'choose-partner' && (
             <>
-              <StepIndicator current={2} total={3} />
+              <StepIndicator current={3} total={4} />
               <PersonActionCard
                 name={partnerName}
                 isHost={partnerIsHost}
@@ -360,7 +482,7 @@ export function SplitWizard({
           {/* Step: Place orphaned guests */}
           {step === 'place-orphans' && (
             <>
-              <StepIndicator current={3} total={3} />
+              <StepIndicator current={4} total={4} />
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <h3 className="font-semibold text-amber-900 mb-1">
                   👥 Gäster utan värd
