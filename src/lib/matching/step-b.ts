@@ -40,6 +40,8 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
   const warnings: MatchingWarning[] = [];
   const allPairings: StepBOutput['course_pairings'] = [];
   const allEnvelopes: StepBOutput['envelopes'] = [];
+  const forcedPairings = new Set<string>();
+  const forcedGuests = new Set<string>();
   
   // Build lookup maps
   const coupleMap = new Map(couples.filter(c => !c.cancelled).map(c => [c.id, c]));
@@ -113,75 +115,95 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
     // Sort guests randomly for fair distribution
     const shuffledGuests = [...guestCoupleIds].sort(() => Math.random() - 0.5);
     
-    // Assign guests to hosts
-    for (const guestId of shuffledGuests) {
+    const assignGuestToHost = (guestId: string, allowBlocked: boolean) => {
       const guest = coupleMap.get(guestId)!;
-      
-      // Find best host for this guest
       let bestHost: HostSlot | null = null;
       let bestScore = -Infinity;
-      
+
       for (const host of hostSlots) {
         // Hard constraint: capacity
         if (host.assignedPersons + guest.person_count > host.maxGuests) continue;
-        
+
         // Hard constraint: no eating at own place
         if (host.coupleId === guestId) continue;
-        
-        // Hard constraint: blocked pairs
-        if (isBlocked(guestId, host.coupleId)) continue;
-        if (host.assignedGuests.some(g => isBlocked(guestId, g))) continue;
-        
+
+        // Hard constraint: blocked pairs (optional)
+        if (!allowBlocked) {
+          if (isBlocked(guestId, host.coupleId)) continue;
+          if (host.assignedGuests.some(g => isBlocked(guestId, g))) continue;
+        }
+
         // Soft constraint: unique meetings (penalize but don't block)
         const violatesUniqueness = wouldViolateUniqueness(guestId, host.coupleId, host.assignedGuests);
-        
+
         // Score: prefer less-filled hosts, penalize duplicate meetings
         const fillRatio = host.assignedPersons / host.maxGuests;
         let score = -fillRatio; // Lower fill = higher score
-        
+
         if (violatesUniqueness) {
           score -= 100; // Heavy penalty but still possible
         }
-        
+
         if (score > bestScore) {
           bestScore = score;
           bestHost = host;
         }
       }
-      
-      if (bestHost) {
-        bestHost.assignedGuests.push(guestId);
-        bestHost.assignedPersons += guest.person_count;
-        
-        // Record meetings for uniqueness tracking
-        // Meeting with host
-        const hostKey = getMeetingKey(guestId, bestHost.coupleId);
-        meetingCounts.set(hostKey, (meetingCounts.get(hostKey) || 0) + 1);
-        
-        // Meetings with other guests at same venue
-        for (const otherGuestId of bestHost.assignedGuests) {
-          if (otherGuestId !== guestId) {
-            const guestKey = getMeetingKey(guestId, otherGuestId);
-            meetingCounts.set(guestKey, (meetingCounts.get(guestKey) || 0) + 1);
-          }
+
+      if (!bestHost) return null;
+
+      bestHost.assignedGuests.push(guestId);
+      bestHost.assignedPersons += guest.person_count;
+
+      // Record meetings for uniqueness tracking
+      const hostKey = getMeetingKey(guestId, bestHost.coupleId);
+      meetingCounts.set(hostKey, (meetingCounts.get(hostKey) || 0) + 1);
+
+      for (const otherGuestId of bestHost.assignedGuests) {
+        if (otherGuestId !== guestId) {
+          const guestKey = getMeetingKey(guestId, otherGuestId);
+          meetingCounts.set(guestKey, (meetingCounts.get(guestKey) || 0) + 1);
         }
-      } else {
-        warnings.push({
-          type: 'capacity',
-          message: `Kunde inte placera ${guest.invited_name} för ${course}`,
-          couple_ids: [guestId],
-        });
+      }
+
+      return bestHost;
+    };
+
+    // Assign guests to hosts (strict pass)
+    const unmatchedGuests: string[] = [];
+    for (const guestId of shuffledGuests) {
+      const host = assignGuestToHost(guestId, false);
+      if (!host) unmatchedGuests.push(guestId);
+    }
+
+    // Relaxed pass for unmatched guests (ignore blocked pairs)
+    if (unmatchedGuests.length > 0) {
+      for (const guestId of unmatchedGuests) {
+        const guest = coupleMap.get(guestId)!;
+        const host = assignGuestToHost(guestId, true);
+        if (host) {
+          forcedPairings.add(`${course}:${host.coupleId}:${guestId}`);
+          forcedGuests.add(guestId);
+        } else {
+          warnings.push({
+            type: 'capacity',
+            message: `Kunde inte placera ${guest.invited_name} för ${course}`,
+            couple_ids: [guestId],
+          });
+        }
       }
     }
     
     // Generate pairings and envelopes
     for (const host of hostSlots) {
       for (const guestId of host.assignedGuests) {
+        const forced = forcedPairings.has(`${course}:${host.coupleId}:${guestId}`);
         allPairings.push({
           match_plan_id,
           course,
           host_couple_id: host.coupleId,
           guest_couple_id: guestId,
+          ...(forced ? { forced: true } : {}),
         });
       }
       
@@ -213,6 +235,14 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
     }
   }
   
+  if (forcedGuests.size > 0) {
+    warnings.push({
+      type: 'block',
+      message: `${forcedGuests.size} par tilldelades med relaxerade regler pga blockerade par`,
+      couple_ids: Array.from(forcedGuests),
+    });
+  }
+
   // Validate uniqueness constraint
   for (const [key, count] of meetingCounts) {
     if (count > 1) {
@@ -246,6 +276,7 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
       capacity_utilization: totalCapacity > 0 
         ? Math.round((totalAssigned / totalCapacity) * 100) / 100 
         : 0,
+      forced_assignments: forcedGuests.size,
     },
   };
 }

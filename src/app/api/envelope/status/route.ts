@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         event_id,
-        event:events!(
+        event:events(
           id,
           event_date,
           starter_time,
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
     }
 
     const couple = { id: coupleWithEvent.id, event_id: coupleWithEvent.event_id };
-    const event = coupleWithEvent.event;
+    const event = Array.isArray(coupleWithEvent.event) ? coupleWithEvent.event[0] : coupleWithEvent.event;
     
     // 3. Get envelopes for this couple
     const { data: envelopes, error: envelopesError } = await supabase

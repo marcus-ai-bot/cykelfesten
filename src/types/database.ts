@@ -121,6 +121,7 @@ export interface MatchPlanStats {
   couples_matched: number;
   preference_satisfaction: number;
   capacity_utilization: number;
+  forced_assignments?: number;
 }
 
 export interface CoursePairing {
