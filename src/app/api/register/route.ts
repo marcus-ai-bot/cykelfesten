@@ -152,6 +152,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: errors.join('. ') }, { status: 400 });
     }
 
+    // Normalize emails
+    if (clean.invited_email) clean.invited_email = (clean.invited_email as string).toLowerCase().trim();
+    if (clean.partner_email) clean.partner_email = (clean.partner_email as string).toLowerCase().trim();
+
     const supabase = createAdminClient();
 
     // Get event
@@ -211,8 +215,17 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
+      if ((insertError as any).code === '23505') {
+        return NextResponse.json(
+          { error: 'Denna e-postadress är redan registrerad för detta event.' },
+          { status: 409 }
+        );
+      }
       console.error('Insert couple error:', insertError);
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Kunde inte spara registreringen. Försök igen.' },
+        { status: 500 }
+      );
     }
 
     // Send emails (fire-and-forget, but server-side so they actually run)
