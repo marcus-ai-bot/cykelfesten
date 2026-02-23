@@ -79,6 +79,7 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
             </div>
           )}
           <LiveControlPanel eventId={eventId} isActive={isActive} />
+          <UnplacedCouplesPanel eventId={eventId} />
           <GuestMessagePanel eventId={eventId} isActive={isActive} />
           <ActionCard
             href={`/organizer/event/${eventId}/map`}
@@ -686,6 +687,244 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── UnplacedCouplesPanel ───────────────────────────────── */
+
+interface UnplacedCouple {
+  id: string;
+  name: string;
+  address: string;
+  person_count: number;
+}
+
+interface HostOption {
+  couple_id: string;
+  name: string;
+  address: string;
+  current_guests: number;
+  max_guests: number;
+}
+
+interface UnplacedData {
+  unplaced: UnplacedCouple[];
+  hostsByCourse: Record<string, HostOption[]>;
+}
+
+const COURSE_LABELS: Record<string, { label: string; icon: string }> = {
+  starter: { label: 'Förrätt', icon: '🥗' },
+  main: { label: 'Huvudrätt', icon: '🍖' },
+  dessert: { label: 'Dessert', icon: '🍰' },
+};
+
+function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
+  const [data, setData] = useState<UnplacedData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  // selections: coupleId -> { course, hostId }
+  const [selections, setSelections] = useState<Record<string, { course: string; hostId: string }>>({});
+  const [showNotifyDraft, setShowNotifyDraft] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/unplaced`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [eventId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  if (loading) return null;
+  if (!data || data.unplaced.length === 0) return null;
+
+  const courses = ['starter', 'main', 'dessert'];
+
+  const handleSelectionChange = (coupleId: string, course: string, hostId: string) => {
+    setSelections(prev => ({
+      ...prev,
+      [coupleId]: { course, hostId },
+    }));
+  };
+
+  const selectedCount = Object.values(selections).filter(s => s.hostId).length;
+
+  const handleSave = async () => {
+    const placements = Object.entries(selections)
+      .filter(([, s]) => s.hostId)
+      .map(([coupleId, s]) => ({
+        guest_couple_id: coupleId,
+        host_couple_id: s.hostId,
+        course: s.course,
+      }));
+
+    if (placements.length === 0) return;
+
+    setSaving(true);
+    setMessage('');
+
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/place`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placements }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setMessage(`✅ ${json.pairings_created} par placerade!`);
+        setSelections({});
+        // Reload to refresh list
+        setLoading(true);
+        await loadData();
+        setTimeout(() => setMessage(''), 5000);
+      } else {
+        setMessage(`❌ ${json.error || 'Kunde inte placera'}`);
+      }
+    } catch {
+      setMessage('❌ Nätverksfel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl shadow-sm border-2 border-red-200 bg-red-50/30 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 p-5">
+        <span className="text-2xl">⚠️</span>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900">
+            Oplacerade par
+            <span className="ml-2 text-sm font-normal text-red-600">
+              ({data.unplaced.length} st)
+            </span>
+          </h3>
+          <p className="text-xs text-gray-500">
+            Par som saknar placering i aktiv matchning. Välj värd per rätt nedan.
+          </p>
+        </div>
+      </div>
+
+      {message && (
+        <div className={`text-sm px-5 py-2 mx-5 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {message}
+        </div>
+      )}
+
+      <div className="px-5 pb-5 space-y-4">
+        {/* Per-course grouping: for each course, show available hosts and unplaced couples */}
+        {courses.map(course => {
+          const hosts = data.hostsByCourse[course] || [];
+          const { label, icon } = COURSE_LABELS[course];
+
+          // Only show course if there are hosts with capacity
+          const hostsWithRoom = hosts.filter(h => h.max_guests - h.current_guests > 0);
+          if (hostsWithRoom.length === 0 && hosts.length === 0) return null;
+
+          return (
+            <div key={course} className="bg-white rounded-lg border border-gray-100 p-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                {icon} {label}
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  ({hostsWithRoom.length} värdar med plats)
+                </span>
+              </h4>
+
+              <div className="space-y-2">
+                {data.unplaced.map(couple => {
+                  const sel = selections[couple.id];
+                  const isSelectedForThisCourse = sel?.course === course;
+
+                  return (
+                    <div
+                      key={`${couple.id}-${course}`}
+                      className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0"
+                    >
+                      {/* Couple info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {couple.name}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate">{couple.address}</p>
+                      </div>
+
+                      {/* Host dropdown */}
+                      <select
+                        value={isSelectedForThisCourse ? sel.hostId : ''}
+                        onChange={e => handleSelectionChange(couple.id, course, e.target.value)}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-w-[260px]"
+                      >
+                        <option value="">Välj värd...</option>
+                        {hosts.map(host => {
+                          const available = host.max_guests - host.current_guests;
+                          const hasRoom = available >= couple.person_count;
+                          return (
+                            <option
+                              key={host.couple_id}
+                              value={host.couple_id}
+                              disabled={!hasRoom}
+                            >
+                              {host.name} — {host.address} ({host.current_guests}/{host.max_guests} pers)
+                              {!hasRoom ? ' ⛔' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Save button */}
+        {selectedCount > 0 && (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold rounded-xl transition text-sm"
+          >
+            {saving ? 'Sparar...' : `💾 Spara ${selectedCount} placering${selectedCount > 1 ? 'ar' : ''}`}
+          </button>
+        )}
+
+        {/* Notify hosts draft button */}
+        <div className="pt-2 border-t border-gray-100">
+          <button
+            onClick={() => setShowNotifyDraft(!showNotifyDraft)}
+            className="text-sm text-amber-700 hover:text-amber-800 font-medium transition"
+          >
+            📩 Fråga värdar om extra kapacitet
+          </button>
+
+          {showNotifyDraft && (
+            <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-xs text-amber-600 font-medium mb-2">
+                Förhandsvisning av meddelande:
+              </p>
+              <div className="bg-white rounded-lg p-3 text-sm text-gray-700 border border-amber-100">
+                <p>Hej! 👋</p>
+                <p className="mt-1">
+                  Vi har par som behöver ny värd. Kan du ta emot 1-2 par extra?
+                </p>
+                <p className="mt-1 text-gray-400 italic">
+                  [Länk till svarsformulär kommer här]
+                </p>
+              </div>
+              <p className="text-[10px] text-amber-500 mt-2">
+                ⚠️ Meddelandet skickas <strong>inte</strong> automatiskt. Kopiera och skicka manuellt vid behov.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
