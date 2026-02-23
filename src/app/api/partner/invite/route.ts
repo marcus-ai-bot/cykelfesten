@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email';
 import { randomBytes } from 'crypto';
+import { getOrganizer, checkEventAccess } from '@/lib/auth';
+import { verifyToken } from '@/lib/tokens';
+import { cookies } from 'next/headers';
 
 /**
  * Partner Invite API
@@ -27,6 +30,41 @@ export async function POST(request: Request) {
       .eq('id', couple_id)
       .eq('cancelled', false)
       .single();
+    
+    if (coupleError || !couple) {
+      return NextResponse.json({ error: 'Par hittades inte eller har avbokats' }, { status: 404 });
+    }
+
+    // Auth: organizer OR verified guest matching this couple
+    const organizer = await getOrganizer();
+    let authorized = false;
+    const eventId = Array.isArray(couple.events) ? couple.events[0]?.id : couple.events?.id;
+
+    if (organizer && eventId) {
+      const access = await checkEventAccess(organizer.id, eventId);
+      authorized = access.hasAccess;
+    }
+
+    if (!authorized) {
+      const cookieStore = await cookies();
+      const guestSession = cookieStore.get('guest_session')?.value;
+      if (guestSession) {
+        try {
+          const payload = verifyToken(guestSession);
+          if (payload) {
+            const guestEmail = (typeof payload === 'object' && 'email' in payload ? (payload as any).email : '').toLowerCase();
+            authorized = (
+              couple.invited_email?.toLowerCase() === guestEmail ||
+              couple.partner_email?.toLowerCase() === guestEmail
+            );
+          }
+        } catch {}
+      }
+    }
+
+    if (!authorized) {
+      return NextResponse.json({ error: 'Inte behörig' }, { status: 401 });
+    }
     
     if (coupleError || !couple) {
       return NextResponse.json({ error: 'Par hittades inte eller har avbokats' }, { status: 404 });
