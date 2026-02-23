@@ -187,10 +187,12 @@ export async function POST(request: Request) {
       }
     }
     
+    const pairingsForDb = matchResult.stepB.course_pairings.map(({ forced, ...rest }) => rest);
+
     // Save course pairings (Step B)
     const { error: pairError } = await supabase
       .from('course_pairings')
-      .insert(matchResult.stepB.course_pairings);
+      .insert(pairingsForDb);
     
     if (pairError) {
       console.error('Pairing error:', pairError);
@@ -223,7 +225,7 @@ export async function POST(request: Request) {
     const populateResult = populateLivingEnvelopeData({
       event: event as Event,
       couples: couples as Couple[],
-      pairings: matchResult.stepB.course_pairings,
+      pairings: pairingsForDb,
       envelopes: matchResult.stepB.envelopes,
       timing: eventTiming as EventTiming | undefined,
       // cyclingDistances could be fetched from OpenRouteService here
@@ -320,6 +322,7 @@ export async function POST(request: Request) {
           couples_matched: matchResult.stepB.stats.couples_matched,
           preference_satisfaction: matchResult.stepA.stats.preference_satisfaction,
           capacity_utilization: matchResult.stepB.stats.capacity_utilization,
+          forced_assignments: matchResult.stepB.stats.forced_assignments,
         },
       })
       .eq('id', matchPlan.id);
@@ -353,6 +356,7 @@ export async function POST(request: Request) {
         couples_matched: matchResult.stepB.stats.couples_matched,
         preference_satisfaction: matchResult.stepA.stats.preference_satisfaction,
         capacity_utilization: matchResult.stepB.stats.capacity_utilization,
+        forced_assignments: matchResult.stepB.stats.forced_assignments,
         pairings_created: matchResult.stepB.course_pairings.length,
         envelopes_created: envelopesWithTimes.length,
         // Living Envelope stats

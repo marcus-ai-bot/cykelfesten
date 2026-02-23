@@ -122,6 +122,12 @@ export default function MatchingPage() {
         {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4">{error}</div>}
         {success && <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-4">{success}</div>}
 
+        {matchPlan?.stats?.forced_assignments > 0 && (
+          <div className="bg-amber-50 text-amber-700 p-4 rounded-lg mb-4">
+            ⚠️ {matchPlan.stats.forced_assignments} par tilldelades med relaxerade regler pga blockerade par.
+          </div>
+        )}
+
         {couples.length < 3 && (
           <div className="bg-amber-50 text-amber-700 p-4 rounded-lg mb-6">
             ⚠️ Det behövs minst 3 par för att köra matchning. Just nu: {couples.length} par.

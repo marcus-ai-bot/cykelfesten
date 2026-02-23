@@ -130,6 +130,7 @@ export interface CoursePairing {
   course: Course;
   host_couple_id: string;
   guest_couple_id: string;
+  forced?: boolean;
   created_at: string;
 }
 
@@ -199,6 +200,7 @@ export interface StepBOutput {
   stats: {
     couples_matched: number;
     capacity_utilization: number;
+    forced_assignments: number;
   };
 }
 
