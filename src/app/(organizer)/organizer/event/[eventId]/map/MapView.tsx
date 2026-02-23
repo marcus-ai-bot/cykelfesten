@@ -67,6 +67,7 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
   const [activeCourse, setActiveCourse] = useState<Course | 'afterparty' | null>(null);
   const [selectedGroupHostId, setSelectedGroupHostId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const routeAnimRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const allBoundsRef = useRef<mapboxgl.LngLatBounds | null>(null);
 
@@ -645,9 +646,33 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       // === STATE: Group selected ===
       const ids = Array.from(selectedGroupIds || []);
 
-      // Bold only this group
+      // Bold only this group — with draw-in animation
       map.setFilter(`route-${activeCourse}-bold`, ['==', ['get', 'hostId'], selectedGroup.hostId]);
       map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.08);
+
+      // Animate route lines drawing in
+      if (routeAnimRef.current) cancelAnimationFrame(routeAnimRef.current);
+      const DASH_TOTAL = 40; // dash units for full line length
+      const ANIM_DURATION = 800; // ms
+      const startTime = performance.now();
+      map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [0, DASH_TOTAL]);
+      function animateRoutes(now: number) {
+        const elapsed = now - startTime;
+        const t = Math.min(elapsed / ANIM_DURATION, 1);
+        // Ease out cubic
+        const eased = 1 - Math.pow(1 - t, 3);
+        const drawn = eased * DASH_TOTAL;
+        const gap = DASH_TOTAL - drawn;
+        map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [drawn, gap]);
+        if (t < 1) {
+          routeAnimRef.current = requestAnimationFrame(animateRoutes);
+        } else {
+          // Animation done — set solid line
+          map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [1, 0]);
+          routeAnimRef.current = null;
+        }
+      }
+      routeAnimRef.current = requestAnimationFrame(animateRoutes);
 
       // Dim everything except group
       map.setPaintProperty('unclustered-point', 'circle-opacity',
@@ -683,7 +708,9 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
     } else if (activeCourse) {
       // === STATE: Course active, no selection ===
+      if (routeAnimRef.current) { cancelAnimationFrame(routeAnimRef.current); routeAnimRef.current = null; }
       map.setFilter(`route-${activeCourse}-bold`, ['==', 'hostId', '__none__']);
+      map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [1, 0]);
       map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.25);
 
       map.setPaintProperty('unclustered-point', 'circle-opacity', 0.25);
