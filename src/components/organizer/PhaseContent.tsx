@@ -546,7 +546,10 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
                   return (
                     <div>
                       <div className="flex items-center justify-between py-2">
-                        <span className="text-sm text-gray-700">🎉 Efterfest</span>
+                        <button onClick={() => setExpandedCourse(expandedCourse === 'afterparty' ? null : 'afterparty')}
+                          className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900 transition">
+                          🎉 Efterfest <span className="text-[10px] text-gray-400">{expandedCourse === 'afterparty' ? '▲' : '▼'}</span>
+                        </button>
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => adjustAp(-5)} disabled={saving}
                             className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">−</button>
@@ -571,6 +574,28 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
                         )}
                         <p className="text-[10px] text-gray-300 mt-1">Alla cyklar hit efter desserten</p>
                       </div>
+                      {expandedCourse === 'afterparty' && (
+                        <div className="ml-6 mb-2 space-y-1.5 border-l-2 border-gray-100 pl-3">
+                          {[
+                            { key: 'teasing', label: '🤫 Teasing', minutesBefore: 30 },
+                            { key: 'revealed', label: '🎉 Avslöjad', minutesBefore: 0 },
+                          ].map(({ key, label, minutesBefore }) => {
+                            const [h, m] = apTime.split(':').map(Number);
+                            const baseMinutes = h * 60 + m - minutesBefore;
+                            const revealTime = `${String(Math.floor(((baseMinutes % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((baseMinutes % 60) + 60) % 60).padStart(2, '0')}`;
+                            const isActive = key === 'teasing' ? afterpartyStatus.teasing : afterpartyStatus.revealed;
+                            return (
+                              <div key={key} className="flex items-center justify-between">
+                                <span className={`text-xs ${isActive ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                                  {label} {isActive && '✓'}
+                                </span>
+                                <span className="text-xs font-mono text-gray-400 min-w-[3rem] text-center">{revealTime}</span>
+                              </div>
+                            );
+                          })}
+                          <p className="text-[10px] text-gray-300 mt-1">Teasing 30 min före · Avslöjas vid efterfest-tid</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
