@@ -221,8 +221,9 @@ export async function POST(
     });
 
   if (envError) {
+    console.error('Envelope insert error in reassign:', envError);
     return NextResponse.json(
-      { error: 'Pairing created but envelope failed', details: envError.message },
+      { error: `Pairing skapad men kuvert misslyckades: ${envError.message}`, details: envError.message },
       { status: 500 }
     );
   }

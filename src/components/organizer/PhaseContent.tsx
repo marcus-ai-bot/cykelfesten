@@ -931,28 +931,31 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
   };
 
   return (
-    <div className="rounded-xl shadow-sm border-2 border-red-200 bg-red-50/30 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-3 p-5">
-        <span className="text-2xl">⚠️</span>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900">
-            Oplacerade par
-            <span className="ml-2 text-sm font-normal text-red-600">
-              ({data.unplaced.length} st)
-            </span>
-          </h3>
-          <p className="text-xs text-gray-500">
-            Par som saknar placering i aktiv matchning. Välj värd per rätt nedan.
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       {message && (
-        <div className={`text-sm px-5 py-2 mx-5 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+        <div className={`text-sm px-5 py-3 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
           {message}
         </div>
       )}
+
+      {/* Fully unplaced couples */}
+      {data.unplaced.length > 0 && (
+      <div className="rounded-xl shadow-sm border-2 border-red-200 bg-red-50/30 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 p-5">
+          <span className="text-2xl">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900">
+              Oplacerade par
+              <span className="ml-2 text-sm font-normal text-red-600">
+                ({data.unplaced.length} st)
+              </span>
+            </h3>
+            <p className="text-xs text-gray-500">
+              Par som saknar placering i aktiv matchning. Välj värd per rätt nedan.
+            </p>
+          </div>
+        </div>
 
       <div className="px-5 pb-5 space-y-4">
         {/* Per-course grouping: for each course, show available hosts and unplaced couples */}
@@ -1031,6 +1034,9 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
             </div>
           );
         })}
+      </div>
+      </div>
+      )}
 
         {/* Per-course gaps (partially placed couples) */}
         {totalPartiallyMissing > 0 && (
@@ -1158,7 +1164,6 @@ function UnplacedCouplesPanel({ eventId }: { eventId: string }) {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
