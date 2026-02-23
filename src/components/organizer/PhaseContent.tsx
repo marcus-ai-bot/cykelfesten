@@ -304,7 +304,7 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
   useEffect(() => { loadData(); }, [loadData]);
 
   async function saveTime(field: string, value: string, oldTime: string) {
-    const label = field === 'starter_time' ? 'Förrätt' : field === 'main_time' ? 'Huvudrätt' : 'Dessert';
+    const label = field === 'starter_time' ? 'Förrätt' : field === 'main_time' ? 'Huvudrätt' : field === 'afterparty_time' ? 'Efterfest' : 'Dessert';
     const newTime = value.slice(0, 5);
     setSaving(true); setMessage('');
     try {
@@ -316,14 +316,18 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
       if (res.ok) {
         const data = await res.json();
         setEvent(data.event);
-        const recalcRes = await fetch('/api/admin/recalc-envelope-times', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event_id: eventId }),
-        });
-        const recalcData = await recalcRes.json().catch(() => ({}));
-        const count = recalcData.updated || '';
-        setMessage(`✅ ${label}: ${oldTime} → ${newTime}${count ? ` (${count} kuverttider uppdaterade)` : ''}`);
+        if (field !== 'afterparty_time') {
+          const recalcRes = await fetch('/api/admin/recalc-envelope-times', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_id: eventId }),
+          });
+          const recalcData = await recalcRes.json().catch(() => ({}));
+          const count = recalcData.updated || '';
+          setMessage(`✅ ${label}: ${oldTime} → ${newTime}${count ? ` (${count} kuverttider uppdaterade)` : ''}`);
+        } else {
+          setMessage(`✅ ${label}: ${oldTime} → ${newTime}`);
+        }
         setTimeout(() => setMessage(''), 4000);
       }
     } catch { setMessage('❌ Nätverksfel'); }
@@ -521,6 +525,49 @@ function LiveControlPanel({ eventId, isActive }: { eventId: string; isActive: bo
                     </div>
                   );
                 })}
+
+                {/* Afterparty row — shown only if afterparty_time exists */}
+                {event.afterparty_time && (() => {
+                  const apTime = event.afterparty_time?.slice(0, 5) || '00:00';
+                  const adjustAp = (min: number) => {
+                    const [h, m] = apTime.split(':').map(Number);
+                    const total = h * 60 + m + min;
+                    const newH = Math.floor(((total % 1440) + 1440) % 1440 / 60);
+                    const newM = ((total % 60) + 60) % 60;
+                    const newTime = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:00`;
+                    saveTime('afterparty_time', newTime, apTime);
+                  };
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between py-2">
+                        <span className="text-sm text-gray-700">🎉 Efterfest</span>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => adjustAp(-5)} disabled={saving}
+                            className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">−</button>
+                          <span className="text-sm font-mono font-semibold text-gray-900 min-w-[3rem] text-center">{apTime}</span>
+                          <button onClick={() => adjustAp(5)} disabled={saving}
+                            className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 disabled:opacity-40 text-xs font-bold flex items-center justify-center">+</button>
+                        </div>
+                      </div>
+                      {/* Afterparty details */}
+                      <div className="ml-6 mb-2 space-y-0.5">
+                        {event.afterparty_location && (
+                          <p className="text-xs text-gray-500">📍 {event.afterparty_location}</p>
+                        )}
+                        {event.afterparty_door_code && (
+                          <p className="text-xs text-gray-500">🔑 Portkod: <span className="font-mono font-medium text-gray-700">{event.afterparty_door_code}</span></p>
+                        )}
+                        {event.afterparty_byob && (
+                          <p className="text-xs text-amber-600">🍻 Ta med egen dryck</p>
+                        )}
+                        {event.afterparty_notes && (
+                          <p className="text-xs text-gray-400 italic">{event.afterparty_notes}</p>
+                        )}
+                        <p className="text-[10px] text-gray-300 mt-1">Alla cyklar hit efter desserten</p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
