@@ -6,7 +6,19 @@ import {
   parseCourseSchedules,
   type CourseTimingOffsets,
 } from '@/lib/envelope/timing';
+import { getCyclingDistance, type Coordinates } from '@/lib/geo';
 import type { Course } from '@/types/database';
+
+function parsePoint(point: unknown): Coordinates | null {
+  if (!point || typeof point !== 'string') return null;
+  // PostGIS POINT format: "POINT(lng lat)" or "(lng,lat)"
+  const match = String(point).match(/\(?\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)?/);
+  if (!match) return null;
+  const lng = parseFloat(match[1]);
+  const lat = parseFloat(match[2]);
+  if (isNaN(lng) || isNaN(lat)) return null;
+  return { lat, lng };
+}
 
 /**
  * POST /api/organizer/events/[eventId]/reassign
@@ -62,7 +74,7 @@ export async function POST(
   // Validate guest couple
   const { data: guestCouple } = await supabase
     .from('couples')
-    .select('id, invited_name, partner_name, cancelled')
+    .select('id, invited_name, partner_name, cancelled, coordinates')
     .eq('id', guest_couple_id)
     .eq('event_id', eventId)
     .single();
@@ -94,7 +106,7 @@ export async function POST(
   // Validate new host is not cancelled
   const { data: newHostCouple } = await supabase
     .from('couples')
-    .select('id, invited_name, partner_name, address, address_notes, cancelled')
+    .select('id, invited_name, partner_name, address, address_notes, cancelled, coordinates')
     .eq('id', new_host_couple_id)
     .eq('event_id', eventId)
     .single();
@@ -193,10 +205,24 @@ export async function POST(
 
   const courseOffsets: CourseTimingOffsets = event.course_timing_offsets || {};
 
+  // Calculate cycling distance between guest and new host
+  const guestCoords = parsePoint(guestCouple.coordinates);
+  const hostCoords = parsePoint(newHostCouple.coordinates);
+  let cyclingDistanceKm: number | null = null;
+  let cyclingMinutes: number | null = null;
+
+  if (guestCoords && hostCoords) {
+    try {
+      const dist = await getCyclingDistance(guestCoords, hostCoords);
+      cyclingDistanceKm = dist.distance_km;
+      cyclingMinutes = dist.duration_min;
+    } catch { /* fallback to null */ }
+  }
+
   const times = calculateEnvelopeTimes(
     courseStartTimes[course],
     timing ?? {},
-    undefined,
+    cyclingMinutes ?? undefined,
     courseOffsets[course]
   );
 
@@ -210,7 +236,8 @@ export async function POST(
       destination_address: newHostCouple.address,
       destination_notes: newHostCouple.address_notes ?? null,
       scheduled_at: courseStartTimes[course].toISOString(),
-      
+      cycling_distance_km: cyclingDistanceKm,
+      cycling_minutes: cyclingMinutes,
       current_state: 'LOCKED' as const,
       teasing_at: times.teasing_at.toISOString(),
       clue_1_at: times.clue_1_at.toISOString(),
