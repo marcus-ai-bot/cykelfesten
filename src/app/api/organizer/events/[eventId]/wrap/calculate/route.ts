@@ -73,19 +73,35 @@ export async function POST(
 
   const supabase = createAdminClient();
 
-  const { data: couples } = await supabase
-    .from('couples')
-    .select('*')
-    .eq('event_id', eventId)
-    .eq('cancelled', false);
-
-  if (!couples?.length) return NextResponse.json({ error: 'Inga par' }, { status: 400 });
-
   const { data: event } = await supabase
     .from('events')
-    .select('active_match_plan_id, wrap_stats, afterparty_coordinates')
+    .select('active_match_plan_id, wrap_stats, afterparty_coordinates, wrap_calculating_since')
     .eq('id', eventId)
     .single();
+
+  const now = new Date();
+  if (event?.wrap_calculating_since) {
+    const since = new Date(event.wrap_calculating_since);
+    if (now.getTime() - since.getTime() < 5 * 60 * 1000) {
+      return NextResponse.json({ error: 'Beräkning pågår redan' }, { status: 409 });
+    }
+  }
+
+  const { error: lockError } = await supabase
+    .from('events')
+    .update({ wrap_calculating_since: now.toISOString() })
+    .eq('id', eventId);
+
+  if (lockError) return NextResponse.json({ error: 'Kunde inte starta beräkning' }, { status: 500 });
+
+  try {
+    const { data: couples } = await supabase
+      .from('couples')
+      .select('*')
+      .eq('event_id', eventId)
+      .eq('cancelled', false);
+
+    if (!couples?.length) return NextResponse.json({ error: 'Inga par' }, { status: 400 });
 
   const matchPlanId = event?.active_match_plan_id;
   const afterpartyCoord = parsePoint(event?.afterparty_coordinates);
@@ -456,4 +472,10 @@ export async function POST(
     stats: newStats,
     routes: routeSummaries,
   });
+  } finally {
+    await supabase
+      .from('events')
+      .update({ wrap_calculating_since: null })
+      .eq('id', eventId);
+  }
 }
