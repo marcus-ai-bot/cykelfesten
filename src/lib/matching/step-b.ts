@@ -44,7 +44,7 @@ export function matchGuestsToHosts(input: StepBInput): StepBOutput {
   const forcedGuests = new Set<string>();
   
   // Build lookup maps
-  const coupleMap = new Map(couples.filter(c => !c.cancelled).map(c => [c.id, c]));
+  const coupleMap = new Map(couples.filter(c => !c.cancelled && c.confirmed !== false).map(c => [c.id, c]));
   const assignmentMap = new Map(assignments.map(a => [a.couple_id, a]));
   
   // Track meetings across courses for uniqueness constraint

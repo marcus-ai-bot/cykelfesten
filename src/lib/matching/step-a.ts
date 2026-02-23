@@ -26,8 +26,8 @@ interface CourseStats {
 export function assignCourses(input: StepAInput): StepAOutput {
   const { event_id, couples } = input;
   
-  // Filter out cancelled couples
-  const activeCouples = couples.filter(c => !c.cancelled);
+  // Filter out cancelled and unconfirmed couples
+  const activeCouples = couples.filter(c => !c.cancelled && c.confirmed !== false);
   
   if (activeCouples.length < 3) {
     throw new Error('Minst 3 par krävs för att köra matchning');

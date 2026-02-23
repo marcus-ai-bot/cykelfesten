@@ -27,6 +27,7 @@ export async function GET(
     .select('*')
     .eq('event_id', eventId)
     .neq('cancelled', true)
+    .eq('confirmed', true)
     .order('invited_name');
 
   // Latest match plan
