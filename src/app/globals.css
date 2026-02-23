@@ -35,7 +35,7 @@ body {
   100% { transform: translateY(0); }
 }
 .animate-pulse-once {
-  animation: pulse-once 0.8s ease-out 0.3s 1;
+  animation: pulse-once 0.8s ease-out 0.3s 2;
 }
 
 /* Hide scrollbar but keep scroll functionality */

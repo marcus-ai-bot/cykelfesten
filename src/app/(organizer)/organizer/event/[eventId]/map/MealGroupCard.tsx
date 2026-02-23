@@ -177,7 +177,7 @@ function MobileDrawer(props: Props) {
           ref={handleRef}
           className="flex flex-col items-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none select-none"
         >
-          <div className={`w-10 h-1.5 rounded-full bg-gray-300 ${
+          <div className={`w-12 h-2 rounded-full bg-gray-300 ${
             pulsed ? 'animate-pulse-once' : ''
           }`} />
         </div>
