@@ -487,6 +487,26 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
         });
       });
 
+      // Animated route overlay (growing lines on group select)
+      map.addSource('route-anim', { type: 'geojson', data: empty });
+      map.addLayer({
+        id: 'route-anim-line', type: 'line', source: 'route-anim',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.85 },
+      });
+
+      // Route origin dots (where guests start cycling from)
+      map.addSource('route-origins', { type: 'geojson', data: empty });
+      map.addLayer({
+        id: 'route-origins-dot', type: 'circle', source: 'route-origins',
+        paint: {
+          'circle-radius': 10,
+          'circle-color': '#0f172a',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2,
+        },
+      });
+
       // Default pins (on top)
       map.addLayer({
         id: 'unclustered-point', type: 'circle', source: 'couples',
@@ -647,33 +667,62 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       // === STATE: Group selected ===
       const ids = Array.from(selectedGroupIds || []);
 
-      // Bold only this group — with draw-in animation
-      map.setFilter(`route-${activeCourse}-bold`, ['==', ['get', 'hostId'], selectedGroup.hostId]);
+      // Hide the static bold layer — we use animated overlay instead
+      map.setFilter(`route-${activeCourse}-bold`, ['==', 'hostId', '__none__']);
       map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.08);
 
-      // Animate route lines drawing in
+      // Get route geometries for this group
+      const courseRouteFC = routeFeatures[activeCourse as Course];
+      const groupRoutes = courseRouteFC?.features.filter(
+        (f) => f.properties?.hostId === selectedGroup.hostId
+      ) || [];
+      const color = (activeCourse && activeCourse !== 'afterparty') ? courseConfig[activeCourse].color : '#f97316';
+
+      // Place origin dots at route start points
+      const originFeatures = groupRoutes.map((f) => ({
+        type: 'Feature' as const,
+        properties: {},
+        geometry: { type: 'Point' as const, coordinates: f.geometry.coordinates[0] },
+      }));
+      (map.getSource('route-origins') as mapboxgl.GeoJSONSource)?.setData({
+        type: 'FeatureCollection', features: originFeatures,
+      });
+
+      // Animate growing lines from guest origins toward host
       if (routeAnimRef.current) cancelAnimationFrame(routeAnimRef.current);
-      const DASH_TOTAL = 50; // dash units for full line length
-      const ANIM_DURATION = 3500; // ms — slow draw like cycling pace
+      const ANIM_DURATION = 3000;
       const startTime = performance.now();
-      map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [0, DASH_TOTAL]);
-      function animateRoutes(now: number) {
+      const allCoords = groupRoutes.map((f) => f.geometry.coordinates);
+
+      function animateGrow(now: number) {
         const elapsed = now - startTime;
         const t = Math.min(elapsed / ANIM_DURATION, 1);
-        // Ease out cubic
-        const eased = 1 - Math.pow(1 - t, 3);
-        const drawn = eased * DASH_TOTAL;
-        const gap = DASH_TOTAL - drawn;
-        map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [drawn, gap]);
+        const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+
+        const features = allCoords.map((coords, i) => {
+          // How many coordinates to show
+          const endIdx = Math.max(1, Math.round(eased * (coords.length - 1)));
+          return {
+            type: 'Feature' as const,
+            properties: { color },
+            geometry: {
+              type: 'LineString' as const,
+              coordinates: coords.slice(0, endIdx + 1),
+            },
+          };
+        });
+
+        (map.getSource('route-anim') as mapboxgl.GeoJSONSource)?.setData({
+          type: 'FeatureCollection', features,
+        });
+
         if (t < 1) {
-          routeAnimRef.current = requestAnimationFrame(animateRoutes);
+          routeAnimRef.current = requestAnimationFrame(animateGrow);
         } else {
-          // Animation done — set solid line
-          map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [1, 0]);
           routeAnimRef.current = null;
         }
       }
-      routeAnimRef.current = requestAnimationFrame(animateRoutes);
+      routeAnimRef.current = requestAnimationFrame(animateGrow);
 
       // Hide clusters when group is selected
       if (map.getLayer('clusters')) map.setLayoutProperty('clusters', 'visibility', 'none');
@@ -726,8 +775,11 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
       if (map.getLayer('clusters')) map.setLayoutProperty('clusters', 'visibility', 'visible');
       if (map.getLayer('cluster-count')) map.setLayoutProperty('cluster-count', 'visibility', 'visible');
       if (routeAnimRef.current) { cancelAnimationFrame(routeAnimRef.current); routeAnimRef.current = null; }
+      // Clear animated overlay + origin dots
+      const emptyFC = { type: 'FeatureCollection' as const, features: [] };
+      (map.getSource('route-anim') as mapboxgl.GeoJSONSource)?.setData(emptyFC);
+      (map.getSource('route-origins') as mapboxgl.GeoJSONSource)?.setData(emptyFC);
       map.setFilter(`route-${activeCourse}-bold`, ['==', 'hostId', '__none__']);
-      map.setPaintProperty(`route-${activeCourse}-bold`, 'line-dasharray', [1, 0]);
       map.setPaintProperty(`route-${activeCourse}-line`, 'line-opacity', 0.25);
 
       map.setPaintProperty('unclustered-point', 'circle-opacity', 0.25);
@@ -743,12 +795,16 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
     } else {
       // === STATE: Idle (no course) ===
+      if (routeAnimRef.current) { cancelAnimationFrame(routeAnimRef.current); routeAnimRef.current = null; }
+      const emptyFC2 = { type: 'FeatureCollection' as const, features: [] };
+      (map.getSource('route-anim') as mapboxgl.GeoJSONSource)?.setData(emptyFC2);
+      (map.getSource('route-origins') as mapboxgl.GeoJSONSource)?.setData(emptyFC2);
       map.setPaintProperty('unclustered-point', 'circle-opacity', 0.7);
       map.setPaintProperty('unclustered-point', 'circle-stroke-opacity', 1);
       map.setPaintProperty('unclustered-point', 'circle-radius', 8);
       map.setPaintProperty('unclustered-point', 'circle-color', '#475569');
     }
-  }, [selectedGroup, selectedGroupIds, activeCourse, mapLoaded, routeFeatures]);
+  }, [selectedGroup, selectedGroupIds, activeCourse, mapLoaded, routeFeatures, courseConfig]);
 
   /* ── Render ─────────────────────────────────────── */
 
