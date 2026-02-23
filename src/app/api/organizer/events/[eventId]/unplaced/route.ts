@@ -44,6 +44,7 @@ export async function GET(
     .select('id, invited_name, partner_name, address, person_count')
     .eq('event_id', eventId)
     .eq('cancelled', false)
+    .eq('confirmed', true)
     .order('invited_name');
 
   if (!allCouples?.length) {
