@@ -491,8 +491,8 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
         id: 'unclustered-point', type: 'circle', source: 'couples',
         filter: ['!', ['has', 'point_count']],
         paint: {
-          'circle-radius': 6,
-          'circle-color': '#64748b',
+          'circle-radius': 8,
+          'circle-color': '#475569',
           'circle-opacity': 0.7,
           'circle-stroke-color': '#ffffff',
           'circle-stroke-width': 1.5,
