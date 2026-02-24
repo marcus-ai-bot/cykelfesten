@@ -291,16 +291,18 @@ async function handleReassign(
 
   result.pairingsRemoved = removedPairings?.length ?? 0;
 
-  const { data: cancelledEnvelopes } = await supabase
+  // DELETE old envelopes (not just cancel) to avoid unique constraint violation
+  // when creating the replacement envelope. The unique constraint is on
+  // (match_plan_id, couple_id, course) and doesn't exclude cancelled rows.
+  const { data: deletedEnvelopes } = await supabase
     .from('envelopes')
-    .update({ cancelled: true })
+    .delete()
     .eq('match_plan_id', matchPlanId)
     .eq('couple_id', coupleId)
     .eq('course', course)
-    .eq('cancelled', false)
     .select('id');
 
-  result.envelopesCancelled = cancelledEnvelopes?.length ?? 0;
+  result.envelopesCancelled = deletedEnvelopes?.length ?? 0;
 
   const { error: pairingError } = await supabase
     .from('course_pairings')
