@@ -621,30 +621,41 @@ function LiveTimeline({ eventId }: { eventId: string }) {
   };
   const courseIcons: Record<string, string> = { starter: '🥗', main: '🍖', dessert: '🍰' };
 
+  const [open, setOpen] = useState(false);
+
   return (
-    <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-200">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-indigo-800">📅 Kuverttider (live från DB)</h2>
-      </div>
-      <select value={selectedCouple} onChange={e => setSelectedCouple(e.target.value)}
-        className="w-full mb-3 px-3 py-2 border border-indigo-200 rounded-lg text-sm bg-white">
-        {couples.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
-      {loading ? (
-        <p className="text-sm text-indigo-400">Laddar...</p>
-      ) : times.length === 0 ? (
-        <p className="text-sm text-indigo-400">Inga kuvert — kör matchning först</p>
-      ) : (
-        <div className="space-y-1.5 text-sm">
-          {times.map((t, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="font-mono text-indigo-800 w-12 text-right">{t.display}</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-              <span className={`${courseColors[t.course] || 'text-gray-600'}`}>
-                {courseIcons[t.course] ? `${courseIcons[t.course]} ` : ''}{t.label}
-              </span>
+    <div className="bg-indigo-50 rounded-xl border border-indigo-200">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-indigo-100/50 rounded-xl transition-colors"
+      >
+        <span className="text-sm text-indigo-600 font-medium">🔍 Felsökning: Visa kuverttider (live från DB)</span>
+        <span className={`text-indigo-400 transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </button>
+      {open && (
+        <div className="px-5 pb-5">
+          <select value={selectedCouple} onChange={e => setSelectedCouple(e.target.value)}
+            className="w-full mb-3 px-3 py-2 border border-indigo-200 rounded-lg text-sm bg-white">
+            {couples.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {loading ? (
+            <p className="text-sm text-indigo-400">Laddar...</p>
+          ) : times.length === 0 ? (
+            <p className="text-sm text-indigo-400">Inga kuvert — kör matchning först</p>
+          ) : (
+            <div className="space-y-1.5 text-sm">
+              {times.map((t, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="font-mono text-indigo-800 w-12 text-right">{t.display}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                  <span className={`${courseColors[t.course] || 'text-gray-600'}`}>
+                    {courseIcons[t.course] ? `${courseIcons[t.course]} ` : ''}{t.label}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
