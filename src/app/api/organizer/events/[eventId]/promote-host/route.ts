@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { requireEventAccess } from '@/lib/auth';
+import { cascadeChanges } from '@/lib/matching/cascade';
 import {
   calculateEnvelopeTimes,
   parseCourseSchedules,
@@ -129,19 +130,14 @@ export async function POST(
     .eq('course', course);
 
   if (guestPairings && guestPairings.length > 0) {
-    const guestPairingIds = guestPairings.map(p => p.id);
-    await supabase
-      .from('course_pairings')
-      .delete()
-      .in('id', guestPairingIds);
-
-    // Cancel the corresponding envelopes
-    await supabase
-      .from('envelopes')
-      .update({ cancelled: true })
-      .eq('match_plan_id', matchPlanId)
-      .eq('couple_id', couple_id)
-      .eq('course', course);
+    await cascadeChanges({
+      supabase,
+      eventId,
+      matchPlanId,
+      type: 'promote_host',
+      coupleId: couple_id,
+      details: { course },
+    });
   }
 
   // If guest_couple_ids provided, place them with the new host
