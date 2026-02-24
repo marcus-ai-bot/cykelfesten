@@ -90,6 +90,16 @@ export async function POST(
     return NextResponse.json({ error: 'Couple has no host assignments' }, { status: 400 });
   }
 
+  // NOTE: cascade resign_host always removes ALL host roles for the couple.
+  // Per-course resign requires cascade changes — not yet supported.
+  // If courses param was provided but doesn't cover all host assignments, warn.
+  if (courses && courses.length < hostAssignments.length) {
+    const allCourses = hostAssignments.map(a => a.course);
+    const extra = allCourses.filter(c => !courses.includes(c));
+    // For now, resign all — but warn that extra courses will also be resigned
+    console.warn(`resign-host: requested ${courses.join(',')} but will also resign ${extra.join(',')}`);
+  }
+
   const cascade = await cascadeChanges({
     supabase,
     eventId,
@@ -105,9 +115,13 @@ export async function POST(
     );
   }
 
-  const warnings: string[] = [];
+  const warnings: string[] = [...(cascade.errors ?? [])];
   if (cascade.pairingsRemoved === 0) {
     warnings.push('No host pairings found for couple');
+  }
+  if (courses && courses.length < hostAssignments.length) {
+    const extra = hostAssignments.map(a => a.course).filter(c => !courses.includes(c as Course));
+    warnings.push(`Also resigned from: ${extra.join(', ')} (per-course resign not yet supported)`);
   }
 
   // Log

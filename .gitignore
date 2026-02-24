@@ -40,3 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env.local
+BROWSER-TEST-REPORT.md
+CASCADE-FIX-PROPOSAL.md
+CASCADE-STATUS.md
+DESTRUCTIVE_TEST_REPORT.md
+EDGE-CASE-REPORT.md
+SMOKE-TEST-RESULTS.md
+test-matching.mjs
