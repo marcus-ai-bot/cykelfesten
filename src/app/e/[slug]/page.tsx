@@ -89,7 +89,6 @@ export default async function EventPage({ params }: Props) {
               <ScheduleItem 
                 time={typedEvent.afterparty_time} 
                 label="Efterfest" 
-                location={typedEvent.afterparty_location}
                 offset={typedEvent.time_offset_minutes}
               />
             )}
