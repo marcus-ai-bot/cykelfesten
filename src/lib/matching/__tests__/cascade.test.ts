@@ -8,8 +8,10 @@ class MockQuery {
   private table: string;
   private db: MockSupabase;
   private filters: ((row: Row) => boolean)[] = [];
-  private action: 'select' | 'update' | 'delete' | null = null;
+  private action: 'select' | 'update' | 'delete' | 'insert' | null = null;
   private payload: Row | null = null;
+  private insertRows: Row[] | null = null;
+  private columns?: string;
 
   constructor(db: MockSupabase, table: string) {
     this.db = db;
@@ -26,9 +28,22 @@ class MockQuery {
     return this;
   }
 
-  select() {
+  not(column: string, operator: string, value: any) {
+    if (operator === 'eq') {
+      this.filters.push(row => row[column] !== value);
+      return this;
+    }
+    if (operator === 'in' && Array.isArray(value)) {
+      this.filters.push(row => !value.includes(row[column]));
+      return this;
+    }
+    return this;
+  }
+
+  select(columns?: string) {
     this.action = this.action ?? 'select';
-    return this.execute();
+    this.columns = columns;
+    return this;
   }
 
   single() {
@@ -49,8 +64,9 @@ class MockQuery {
 
   insert(rows: Row | Row[]) {
     const list = Array.isArray(rows) ? rows : [rows];
-    this.db.tables[this.table].push(...list);
-    return Promise.resolve({ data: list, error: null });
+    this.action = 'insert';
+    this.insertRows = list;
+    return this;
   }
 
   private filteredRows() {
@@ -59,6 +75,8 @@ class MockQuery {
   }
 
   private execute() {
+    if (!this.action) this.action = 'select';
+
     if (this.action === 'update' && this.payload) {
       const rows = this.filteredRows();
       rows.forEach(row => Object.assign(row, this.payload));
@@ -67,8 +85,19 @@ class MockQuery {
 
     if (this.action === 'delete') {
       const rows = this.filteredRows();
-      this.db.tables[this.table] = this.db.tables[this.table].filter(row => !rows.includes(row));
+      if (this.table === 'envelopes') {
+        rows.forEach(row => {
+          row.cancelled = true;
+        });
+      } else {
+        this.db.tables[this.table] = this.db.tables[this.table].filter(row => !rows.includes(row));
+      }
       return Promise.resolve({ data: rows, error: null });
+    }
+
+    if (this.action === 'insert' && this.insertRows) {
+      this.db.tables[this.table].push(...this.insertRows);
+      return Promise.resolve({ data: this.insertRows, error: null });
     }
 
     const rows = this.filteredRows();
@@ -80,6 +109,13 @@ class MockQuery {
       data: result.data?.[0] ?? null,
       error: null,
     }));
+  }
+
+  then<TResult1 = any, TResult2 = never>(
+    onfulfilled?: ((value: { data: Row[]; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ) {
+    return this.execute().then(onfulfilled, onrejected);
   }
 }
 
