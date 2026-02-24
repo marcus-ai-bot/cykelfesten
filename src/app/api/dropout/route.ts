@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/server';
 import { runRematch, setEnvelopeTimes } from '@/lib/matching';
+import { cascadeChanges } from '@/lib/matching/cascade';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
 import { verifyToken } from '@/lib/tokens';
 import type { Assignment, Couple, Event, Course } from '@/types/database';
@@ -115,28 +116,17 @@ export async function POST(request: Request) {
     
     // Guest dropout cleanup (cancel envelopes + remove pairings)
     if (!is_host_dropout && event.active_match_plan_id) {
-      const { error: envelopeCancelError } = await supabase
-        .from('envelopes')
-        .update({ cancelled: true })
-        .eq('couple_id', couple_id)
-        .eq('match_plan_id', event.active_match_plan_id);
+      const cascade = await cascadeChanges({
+        supabase,
+        eventId: event.id,
+        matchPlanId: event.active_match_plan_id,
+        type: 'guest_dropout',
+        coupleId: couple_id,
+      });
 
-      if (envelopeCancelError) {
+      if (!cascade.success) {
         return NextResponse.json(
-          { error: 'Kunde inte uppdatera kuvert', details: envelopeCancelError.message },
-          { status: 500 }
-        );
-      }
-
-      const { error: pairingDeleteError } = await supabase
-        .from('course_pairings')
-        .delete()
-        .eq('guest_couple_id', couple_id)
-        .eq('match_plan_id', event.active_match_plan_id);
-
-      if (pairingDeleteError) {
-        return NextResponse.json(
-          { error: 'Kunde inte rensa matchningar', details: pairingDeleteError.message },
+          { error: 'Kunde inte rensa matchningar', details: cascade.errors.join(', ') },
           { status: 500 }
         );
       }
@@ -182,6 +172,21 @@ export async function POST(request: Request) {
             .eq('host_couple_id', couple_id);
           
           affectedGuests = affectedPairings?.map(p => p.guest_couple_id) || [];
+
+          const cascade = await cascadeChanges({
+            supabase,
+            eventId: event.id,
+            matchPlanId: matchPlan.id,
+            type: 'host_dropout',
+            coupleId: couple_id,
+          });
+
+          if (!cascade.success) {
+            return NextResponse.json(
+              { error: 'Kunde inte rensa matchningar', details: cascade.errors.join(', ') },
+              { status: 500 }
+            );
+          }
           
           // Fetch all active couples (excluding dropout)
           const { data: activeCouples } = await supabase

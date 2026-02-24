@@ -6,6 +6,7 @@ import {
   parseCourseSchedules,
   type CourseTimingOffsets,
 } from '@/lib/envelope/timing';
+import { cascadeChanges } from '@/lib/matching/cascade';
 import type { Course } from '@/types/database';
 
 interface Placement {
@@ -131,45 +132,74 @@ export async function POST(
 
   const courseOffsets: CourseTimingOffsets = event.course_timing_offsets || {};
 
-  // Create pairings
-  const pairingsToInsert = placements.map(p => ({
-    match_plan_id: matchPlanId,
-    course: p.course,
-    host_couple_id: p.host_couple_id,
-    guest_couple_id: p.guest_couple_id,
-  }));
-
-  const { error: pairingError } = await supabase
+  const { data: existingPairings } = await supabase
     .from('course_pairings')
-    .insert(pairingsToInsert);
+    .select('guest_couple_id, course')
+    .eq('match_plan_id', matchPlanId)
+    .in('guest_couple_id', guestIds);
 
-  if (pairingError) {
-    console.error('Pairing insert error:', pairingError);
-    return NextResponse.json(
-      { error: 'Failed to create pairings', details: pairingError.message },
-      { status: 500 }
-    );
+  const { data: existingEnvelopes } = await supabase
+    .from('envelopes')
+    .select('couple_id, course')
+    .eq('match_plan_id', matchPlanId)
+    .in('couple_id', guestIds)
+    .eq('cancelled', false);
+
+  const existingPairingKeys = new Set(
+    (existingPairings ?? []).map(p => `${p.guest_couple_id}:${p.course}`)
+  );
+  const existingEnvelopeKeys = new Set(
+    (existingEnvelopes ?? []).map(e => `${e.couple_id}:${e.course}`)
+  );
+
+  for (const placement of placements) {
+    const key = `${placement.guest_couple_id}:${placement.course}`;
+    if (existingPairingKeys.has(key) || existingEnvelopeKeys.has(key)) {
+      return NextResponse.json(
+        { error: `Guest ${placement.guest_couple_id} already has a placement for ${placement.course}` },
+        { status: 409 }
+      );
+    }
   }
 
-  // Create envelopes with timing for each placed guest
-  const envelopesToInsert = placements.map(p => {
-    const host = hostCoupleMap.get(p.host_couple_id);
+  const envelopesToInsert: any[] = [];
+
+  for (const placement of placements) {
+    const cascade = await cascadeChanges({
+      supabase,
+      eventId,
+      matchPlanId,
+      type: 'reassign',
+      coupleId: placement.guest_couple_id,
+      details: {
+        course: placement.course,
+        newHostCoupleId: placement.host_couple_id,
+      },
+    });
+
+    if (!cascade.success) {
+      return NextResponse.json(
+        { error: cascade.errors.join(', ') || 'Failed to place guest' },
+        { status: 500 }
+      );
+    }
+
+    const host = hostCoupleMap.get(placement.host_couple_id);
     const times = calculateEnvelopeTimes(
-      courseStartTimes[p.course],
+      courseStartTimes[placement.course],
       timing ?? {},
-      undefined, // No cycling distance available for manual placement
-      courseOffsets[p.course]
+      undefined,
+      courseOffsets[placement.course]
     );
 
-    return {
+    envelopesToInsert.push({
       match_plan_id: matchPlanId,
-      couple_id: p.guest_couple_id,
-      course: p.course,
-      host_couple_id: p.host_couple_id,
+      couple_id: placement.guest_couple_id,
+      course: placement.course,
+      host_couple_id: placement.host_couple_id,
       destination_address: host?.address ?? null,
       destination_notes: host?.address_notes ?? null,
-      scheduled_at: courseStartTimes[p.course].toISOString(),
-      
+      scheduled_at: courseStartTimes[placement.course].toISOString(),
       current_state: 'LOCKED' as const,
       teasing_at: times.teasing_at.toISOString(),
       clue_1_at: times.clue_1_at.toISOString(),
@@ -177,8 +207,8 @@ export async function POST(
       street_at: times.street_at.toISOString(),
       number_at: times.number_at.toISOString(),
       opened_at: times.opened_at.toISOString(),
-    };
-  });
+    });
+  }
 
   const { error: envError } = await supabase
     .from('envelopes')

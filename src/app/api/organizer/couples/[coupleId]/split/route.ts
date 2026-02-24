@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer } from '@/lib/auth';
+import { cascadeChanges } from '@/lib/matching/cascade';
 
 // POST /api/organizer/couples/[coupleId]/split
 // Split a couple into two solo entries
@@ -81,6 +82,25 @@ export async function POST(
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  const { data: event } = await supabase
+    .from('events')
+    .select('id, active_match_plan_id')
+    .eq('id', couple.event_id)
+    .single();
+
+  if (event?.active_match_plan_id) {
+    await cascadeChanges({
+      supabase,
+      eventId: event.id,
+      matchPlanId: event.active_match_plan_id,
+      type: 'split',
+      coupleId,
+      details: {
+        newCoupleId: newCouple.id,
+      },
+    });
   }
 
   return NextResponse.json({

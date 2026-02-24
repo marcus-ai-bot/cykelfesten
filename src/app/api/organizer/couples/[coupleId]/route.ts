@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer } from '@/lib/auth';
+import { cascadeChanges } from '@/lib/matching/cascade';
+import { checkDuplicateAddressWarning, checkRevealFreezeWarning } from '@/lib/matching/policy';
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -120,6 +122,8 @@ export async function PATCH(
     }
   }
 
+  const addressUpdated = 'address' in filtered || 'address_notes' in filtered;
+
   const { data, error } = await supabase
     .from('couples')
     .update(filtered)
@@ -131,7 +135,52 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ couple: data });
+  const warnings: string[] = [];
+
+  if (addressUpdated && data.address) {
+    const { data: event } = await supabase
+      .from('events')
+      .select('id, active_match_plan_id')
+      .eq('id', couple.event_id)
+      .single();
+
+    if (event?.active_match_plan_id) {
+      const revealWarning = await checkRevealFreezeWarning({
+        supabase,
+        matchPlanId: event.active_match_plan_id,
+        hostCoupleId: coupleId,
+      });
+
+      if (revealWarning) {
+        warnings.push(revealWarning.message);
+      }
+
+      await cascadeChanges({
+        supabase,
+        eventId: event.id,
+        matchPlanId: event.active_match_plan_id,
+        type: 'address_change',
+        coupleId,
+        details: {
+          newAddress: data.address,
+          newAddressNotes: data.address_notes ?? null,
+        },
+      });
+    }
+
+    const duplicateWarning = await checkDuplicateAddressWarning({
+      supabase,
+      eventId: couple.event_id,
+      address: data.address,
+      coupleId,
+    });
+
+    if (duplicateWarning) {
+      warnings.push(duplicateWarning.message);
+    }
+  }
+
+  return NextResponse.json({ couple: data, warnings });
 }
 
 // DELETE /api/organizer/couples/[coupleId] — soft-delete (cancel)
@@ -163,6 +212,31 @@ export async function DELETE(
     .single();
 
   if (!access) return NextResponse.json({ error: 'No access' }, { status: 403 });
+
+  const { data: event } = await supabase
+    .from('events')
+    .select('id, active_match_plan_id')
+    .eq('id', couple.event_id)
+    .single();
+
+  if (event?.active_match_plan_id) {
+    const { data: hostAssignments } = await supabase
+      .from('assignments')
+      .select('id')
+      .eq('event_id', couple.event_id)
+      .eq('couple_id', coupleId)
+      .eq('is_host', true);
+
+    const isHost = (hostAssignments ?? []).length > 0;
+
+    await cascadeChanges({
+      supabase,
+      eventId: event.id,
+      matchPlanId: event.active_match_plan_id,
+      type: isHost ? 'host_dropout' : 'guest_dropout',
+      coupleId,
+    });
+  }
 
   const { error } = await supabase
     .from('couples')

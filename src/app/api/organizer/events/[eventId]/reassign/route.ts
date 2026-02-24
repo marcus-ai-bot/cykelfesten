@@ -7,6 +7,8 @@ import {
   type CourseTimingOffsets,
 } from '@/lib/envelope/timing';
 import { getCyclingDistance, type Coordinates } from '@/lib/geo';
+import { cascadeChanges } from '@/lib/matching/cascade';
+import { checkCapacityWarning } from '@/lib/matching/policy';
 import type { Course } from '@/types/database';
 
 function parsePoint(point: unknown): Coordinates | null {
@@ -116,22 +118,15 @@ export async function POST(
   }
 
   // Check capacity (warn but don't block)
-  const { data: currentPairings } = await supabase
-    .from('course_pairings')
-    .select('guest_couple_id')
-    .eq('match_plan_id', matchPlanId)
-    .eq('host_couple_id', new_host_couple_id)
-    .eq('course', course);
-
-  const { data: guestCouples } = await supabase
-    .from('couples')
-    .select('id, person_count')
-    .eq('event_id', eventId)
-    .in('id', (currentPairings ?? []).map(p => p.guest_couple_id));
-
-  const currentGuestCount = (guestCouples ?? []).reduce((sum, c) => sum + (c.person_count ?? 2), 0);
-  const guestPersonCount = guestCouple.partner_name ? 2 : 1; // After split it might be 1
-  const overCapacity = (currentGuestCount + guestPersonCount) > hostAssignment.max_guests;
+  const capacityWarning = await checkCapacityWarning({
+    supabase,
+    eventId,
+    matchPlanId,
+    hostCoupleId: new_host_couple_id,
+    course,
+    guestCoupleId: guest_couple_id,
+  });
+  const overCapacity = Boolean(capacityWarning);
 
   // --- Remove old pairing + envelope for this guest + course ---
   let oldHostName: string | null = null;
@@ -155,36 +150,23 @@ export async function POST(
     oldHostName = oldHost
       ? (oldHost.partner_name ? `${oldHost.invited_name} & ${oldHost.partner_name}` : oldHost.invited_name)
       : null;
-
-    // Delete old pairing
-    await supabase
-      .from('course_pairings')
-      .delete()
-      .eq('id', oldPairing.id);
-
-    // Cancel old envelope
-    await supabase
-      .from('envelopes')
-      .update({ cancelled: true })
-      .eq('match_plan_id', matchPlanId)
-      .eq('couple_id', guest_couple_id)
-      .eq('course', course)
-      .eq('host_couple_id', oldPairing.host_couple_id);
   }
 
-  // --- Create new pairing ---
-  const { error: pairingError } = await supabase
-    .from('course_pairings')
-    .insert({
-      match_plan_id: matchPlanId,
+  const cascade = await cascadeChanges({
+    supabase,
+    eventId,
+    matchPlanId,
+    type: 'reassign',
+    coupleId: guest_couple_id,
+    details: {
       course,
-      host_couple_id: new_host_couple_id,
-      guest_couple_id: guest_couple_id,
-    });
+      newHostCoupleId: new_host_couple_id,
+    },
+  });
 
-  if (pairingError) {
+  if (!cascade.success) {
     return NextResponse.json(
-      { error: 'Failed to create new pairing', details: pairingError.message },
+      { error: cascade.errors.join(', ') || 'Failed to reassign guest' },
       { status: 500 }
     );
   }
@@ -275,6 +257,7 @@ export async function POST(
       old_host: oldHostName,
       new_host: newHostName,
       over_capacity: overCapacity,
+      capacity_warning: capacityWarning?.message ?? null,
     },
   });
 
@@ -285,5 +268,6 @@ export async function POST(
     old_host: oldHostName,
     new_host: newHostName,
     over_capacity: overCapacity,
+    capacity_warning: capacityWarning?.message ?? null,
   });
 }

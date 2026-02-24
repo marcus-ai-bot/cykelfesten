@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer } from '@/lib/auth';
+import { cascadeChanges } from '@/lib/matching/cascade';
 
 /**
  * POST /api/organizer/couples/[coupleId]/resign-host
@@ -71,23 +72,22 @@ export async function POST(
     return NextResponse.json({ error: 'Couple is not a host in any course' }, { status: 400 });
   }
 
-  // Collect affected guest IDs and courses
-  const affectedGuests: { couple_id: string; course: string }[] = [];
-  const affectedCourses = new Set<string>();
+  const cascade = await cascadeChanges({
+    supabase,
+    eventId: couple.event_id,
+    matchPlanId,
+    type: 'resign_host',
+    coupleId,
+  });
 
-  for (const pairing of hostPairings) {
-    // Don't include self-hosting pairings (where host == guest)
-    if (pairing.guest_couple_id !== coupleId) {
-      affectedGuests.push({
-        couple_id: pairing.guest_couple_id,
-        course: pairing.course,
-      });
-    }
-    affectedCourses.add(pairing.course);
+  if (!cascade.success) {
+    return NextResponse.json(
+      { error: cascade.errors.join(', ') || 'Failed to resign host' },
+      { status: 500 }
+    );
   }
 
-  // Get names of affected guests for the response
-  const guestIds = [...new Set(affectedGuests.map(g => g.couple_id))];
+  const guestIds = cascade.unplacedGuests;
   let guestNames: { id: string; name: string }[] = [];
   if (guestIds.length > 0) {
     const { data: guestCouples } = await supabase
@@ -103,47 +103,7 @@ export async function POST(
     }));
   }
 
-  // Delete host pairings (all pairings where this couple is host)
-  const hostPairingIds = hostPairings.map(p => p.id);
-  const { error: deleteError } = await supabase
-    .from('course_pairings')
-    .delete()
-    .in('id', hostPairingIds);
-
-  if (deleteError) {
-    console.error('Failed to delete host pairings:', deleteError);
-    return NextResponse.json(
-      { error: 'Failed to remove host pairings', details: deleteError.message },
-      { status: 500 }
-    );
-  }
-
-  // Cancel envelopes for the affected guests (for the courses where this couple was host)
-  if (guestIds.length > 0) {
-    for (const course of affectedCourses) {
-      const courseGuestIds = affectedGuests
-        .filter(g => g.course === course)
-        .map(g => g.couple_id);
-
-      if (courseGuestIds.length > 0) {
-        await supabase
-          .from('envelopes')
-          .update({ cancelled: true })
-          .eq('match_plan_id', matchPlanId)
-          .eq('host_couple_id', coupleId)
-          .eq('course', course)
-          .in('couple_id', courseGuestIds);
-      }
-    }
-  }
-
-  // Remove the host assignment for this couple
-  await supabase
-    .from('assignments')
-    .delete()
-    .eq('event_id', couple.event_id)
-    .eq('couple_id', coupleId)
-    .eq('is_host', true);
+  const affectedCourses = new Set(hostPairings.map(p => p.course));
 
   // Log in event_log
   const coupleName = couple.partner_name
@@ -160,7 +120,7 @@ export async function POST(
       couple_name: coupleName,
       courses: [...affectedCourses],
       freed_guests: guestNames,
-      pairings_removed: hostPairingIds.length,
+      pairings_removed: cascade.pairingsRemoved,
     },
   });
 
@@ -169,6 +129,6 @@ export async function POST(
     couple_name: coupleName,
     courses: [...affectedCourses],
     freed_guests: guestNames,
-    pairings_removed: hostPairingIds.length,
+    pairings_removed: cascade.pairingsRemoved,
   });
 }
