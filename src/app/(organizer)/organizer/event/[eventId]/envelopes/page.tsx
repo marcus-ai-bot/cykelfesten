@@ -617,9 +617,13 @@ function LiveTimeline({ eventId }: { eventId: string }) {
   }, [eventId, selectedCouple]);
 
   const courseColors: Record<string, string> = {
-    starter: 'text-green-700', main: 'text-orange-700', dessert: 'text-pink-700', '': 'text-gray-400',
+    starter: 'text-green-700',
+    main: 'text-orange-700',
+    dessert: 'text-pink-700',
+    afterparty: 'text-purple-700',
+    '': 'text-gray-400',
   };
-  const courseIcons: Record<string, string> = { starter: '🥗', main: '🍖', dessert: '🍰' };
+  const courseIcons: Record<string, string> = { starter: '🥗', main: '🍖', dessert: '🍰', afterparty: '🎉' };
 
   const [open, setOpen] = useState(false);
 

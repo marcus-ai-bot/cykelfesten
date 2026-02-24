@@ -20,7 +20,6 @@ import type {
   EnvelopeStatusResponse, 
   CourseEnvelopeStatus, 
   EnvelopeState,
-  AfterpartyState,
   Course,
   LiveEnvelope,
   RevealedClue,
@@ -211,8 +210,11 @@ export async function GET(request: NextRequest) {
     
     // 7. Build response for each course
     const courses: CourseEnvelopeStatus[] = [];
+    const mealCourses: Course[] = ['starter', 'main', 'dessert'];
+    const afterpartyEnvelope = envelopes?.find(e => e.course === 'afterparty');
+    const courseTypes: Course[] = afterpartyEnvelope ? [...mealCourses, 'afterparty'] : mealCourses;
     
-    for (const courseType of ['starter', 'main', 'dessert'] as Course[]) {
+    for (const courseType of courseTypes) {
       const envelope = envelopes?.find(e => e.course === courseType) as EnvelopeWithHost | undefined;
       
       if (!envelope) {
@@ -232,25 +234,25 @@ export async function GET(request: NextRequest) {
           is_self_host: false,
           host_has_fun_facts: false,
           cycling_meters: null,
-          dessert_stats: null,
-          afterparty_practical: null,
-          afterparty_location: null,
         });
         continue;
       }
       
+      const isAfterparty = courseType === 'afterparty';
+
       // Calculate current state
       const state = calculateState(envelope, now);
+      const hostCoupleId = envelope.host_couple_id;
       
       // Get clues for this host + course
-      const hostClues = courseClues?.find(
-        c => c.couple_id === envelope.host_couple_id && c.course_type === courseType
-      );
+      const hostClues = hostCoupleId
+        ? courseClues?.find(c => c.couple_id === hostCoupleId && c.course_type === courseType)
+        : null;
       
       // Get street info for host
-      const hostStreetInfo = streetInfos?.find(
-        s => s.couple_id === envelope.host_couple_id
-      );
+      const hostStreetInfo = hostCoupleId
+        ? streetInfos?.find(s => s.couple_id === hostCoupleId)
+        : null;
       
       // Build revealed clues based on state
       const revealedClues = getRevealedClues(
@@ -262,141 +264,74 @@ export async function GET(request: NextRequest) {
       );
       
       // Check if host has fun facts
-      const hostHasFunFacts = countFunFacts(envelope.host_couple?.invited_fun_facts) > 0 
-        || countFunFacts(envelope.host_couple?.partner_fun_facts) > 0;
+      const hostHasFunFacts = !!hostCoupleId && (
+        countFunFacts(envelope.host_couple?.invited_fun_facts) > 0 
+        || countFunFacts(envelope.host_couple?.partner_fun_facts) > 0
+      );
       
       // Clue pool: show all participants' clues at CLUE_1 for starter/main (not dessert, not self-host)
-      const isSelfHost = envelope.host_couple_id === coupleId;
-      const showCluePool = state === 'CLUE_1' && courseType !== 'dessert' && !isSelfHost;
-      
-      // Dessert-specific: calculate stats and afterparty info
-      const isDessert = courseType === 'dessert';
-      const totalCouples = allCouples?.length ?? 0;
-      
-      // Calculate total cycling distance (rough estimate: sum all envelopes)
-      const totalDistanceKm = Math.round(((envelopes?.reduce(
-        (sum, e) => sum + (e.cycling_distance_km ?? 0),
-        0
-      ) ?? 0) * 10)) / 10;
-      
-      // Estimate vegetarian dishes from actual dietary preferences if available
-      const isVegetarian = (allergies: unknown) =>
-        Array.isArray(allergies) && allergies.some(a =>
-          typeof a === 'string' && /vegetarisk|vegetarian|vegan/.test(a.toLowerCase())
-        );
-      const hasDietaryData = (allCouples ?? []).some(c =>
-        Array.isArray(c.invited_allergies) || Array.isArray(c.partner_allergies) || Array.isArray(c.replacement_allergies)
-      );
-      const vegetarianPeople = (allCouples ?? []).reduce((sum, c) => {
-        let count = 0;
-        if (isVegetarian(c.invited_allergies)) count++;
-        if (c.partner_name && isVegetarian(c.partner_allergies)) count++;
-        if (isVegetarian(c.replacement_allergies)) count++;
-        return sum + count;
-      }, 0);
-      const vegetarianDishes = hasDietaryData ? vegetarianPeople : Math.floor(totalCouples * 0.3);
-      
-      // Afterparty cycling time from this couple's location
-      const afterpartyCyclingMin = estimateCyclingMinutes(envelope.cycling_distance_km) ?? 10;
-      
+      const isSelfHost = hostCoupleId === coupleId;
+      const showCluePool = state === 'CLUE_1' && courseType !== 'dessert' && courseType !== 'afterparty' && !isSelfHost;
+      const afterpartyCoords = parsePoint(event.afterparty_coordinates);
+
       // Build course status
       const courseStatus: CourseEnvelopeStatus = {
         type: courseType,
         state,
         clues: revealedClues,
-        clue_pool: showCluePool ? buildCluePoolForTable(envelope.host_couple_id!, courseType) : null,
-        street: shouldShowStreet(state) && hostStreetInfo ? {
+        clue_pool: showCluePool && hostCoupleId ? buildCluePoolForTable(hostCoupleId, courseType) : null,
+        street: !isAfterparty && shouldShowStreet(state) && hostStreetInfo ? {
           name: hostStreetInfo.street_name ?? '',
           range: `${hostStreetInfo.number_range_low}-${hostStreetInfo.number_range_high}`,
           cycling_minutes: estimateCyclingMinutes(envelope.cycling_distance_km) ?? 0,
         } : null,
-        number: shouldShowNumber(state) ? hostStreetInfo?.street_number ?? null : null,
-        full_address: state === 'OPEN' ? {
-          street: hostStreetInfo?.street_name ?? '',
-          number: hostStreetInfo?.street_number ?? 0,
-          apartment: hostStreetInfo?.apartment ?? null,
-          door_code: hostStreetInfo?.door_code ?? null,
-          city: hostStreetInfo?.city ?? '',
-          coordinates: envelope.host_couple?.coordinates 
-            ? { lat: envelope.host_couple.coordinates.y, lng: envelope.host_couple.coordinates.x }
-            : null,
-        } : null,
+        number: !isAfterparty && shouldShowNumber(state) ? hostStreetInfo?.street_number ?? null : null,
+        full_address: state === 'OPEN'
+          ? (isAfterparty
+            ? {
+              street: envelope.destination_address ?? '',
+              number: 0,
+              apartment: null,
+              door_code: envelope.destination_notes ?? null,
+              city: '',
+              coordinates: afterpartyCoords,
+            }
+            : {
+              street: hostStreetInfo?.street_name ?? '',
+              number: hostStreetInfo?.street_number ?? 0,
+              apartment: hostStreetInfo?.apartment ?? null,
+              door_code: hostStreetInfo?.door_code ?? null,
+              city: hostStreetInfo?.city ?? '',
+              coordinates: envelope.host_couple?.coordinates 
+                ? { lat: envelope.host_couple.coordinates.y, lng: envelope.host_couple.coordinates.x }
+                : null,
+            })
+          : null,
         next_reveal: getNextReveal(envelope, state, now),
-        starts_at: getCourseStartTime(event, courseType),
-        host_names: state === 'OPEN' ? [
+        starts_at: isAfterparty ? envelope.scheduled_at : getCourseStartTime(event, courseType),
+        host_names: !isAfterparty && state === 'OPEN' ? [
           envelope.host_couple?.invited_name,
           envelope.host_couple?.partner_name,
         ].filter((n): n is string => !!n) : null,
-        allergies_summary: isSelfHost && state !== 'LOCKED'
-          ? getAllergiesSummary(envelope.host_couple_id, courseType, hostCourseGuestLookup, allCouples)
+        allergies_summary: !isAfterparty && isSelfHost && state !== 'LOCKED'
+          ? getAllergiesSummary(hostCoupleId, courseType, hostCourseGuestLookup, allCouples)
           : null,
         is_self_host: isSelfHost,
         host_has_fun_facts: hostHasFunFacts,
         cycling_meters: envelope.cycling_distance_km != null ? Math.round(envelope.cycling_distance_km * 1000) : null,
-        // Dessert-specific reveals
-        dessert_stats: isDessert && ['CLUE_1', 'CLUE_2', 'STREET', 'NUMBER', 'OPEN'].includes(state) ? {
-          total_couples: totalCouples,
-          total_distance_km: totalDistanceKm,
-          total_dishes: totalCouples * 3, // 3 courses
-          vegetarian_dishes: vegetarianDishes,
-        } : null,
-        afterparty_practical: isDessert && ['CLUE_2', 'STREET', 'NUMBER', 'OPEN'].includes(state) ? {
-          time: event.afterparty_time ?? '21:00',
-          door_code: event.afterparty_door_code ?? null,
-          bring_own_drinks: event.afterparty_byob ?? true,
-          notes: event.afterparty_notes ?? null,
-        } : null,
-        afterparty_location: isDessert && ['STREET', 'NUMBER', 'OPEN'].includes(state) ? {
-          address: event.afterparty_location ?? 'TBA',
-          host_names: event.afterparty_hosts?.split(',').map((n: string) => n.trim()) ?? [],
-          cycling_minutes_sober: afterpartyCyclingMin,
-          cycling_minutes_tipsy: Math.round(afterpartyCyclingMin * 1.5),
-          cycling_minutes_drunk: Math.round(afterpartyCyclingMin * 2.5),
-          coordinates: null, // TODO: add afterparty coordinates
-        } : null,
       };
+
+      if (isAfterparty && courseStatus.state !== 'LOCKED') {
+        courseStatus.afterparty_time = event.afterparty_time;
+        courseStatus.afterparty_byob = event.afterparty_byob;
+        courseStatus.afterparty_notes = event.afterparty_notes;
+        courseStatus.afterparty_description = event.afterparty_description;
+        if (courseStatus.state === 'OPEN') {
+          courseStatus.afterparty_hosts = event.afterparty_hosts;
+        }
+      }
       
       courses.push(courseStatus);
-    }
-    
-    // 8. Build afterparty status
-    // Determine afterparty state: LOCKED → TEASING → REVEALED
-    // Manual activation via afterparty_teasing_at / afterparty_revealed_at takes priority
-    // Otherwise auto-calculate: TEASING = 30 min before afterparty_time, REVEALED = at afterparty_time
-    const afterpartyTime = event.afterparty_time;
-    let afterpartyState: AfterpartyState = 'LOCKED';
-    
-    if (event.afterparty_revealed_at && now >= new Date(event.afterparty_revealed_at)) {
-      afterpartyState = 'REVEALED';
-    } else if (event.afterparty_teasing_at && now >= new Date(event.afterparty_teasing_at)) {
-      afterpartyState = 'TEASING';
-    } else if (afterpartyTime && event.event_date) {
-      // Auto-calculate based on afterparty_time
-      const afterpartyDateTime = new Date(`${event.event_date}T${afterpartyTime}`);
-      const teasingAutoTime = new Date(afterpartyDateTime.getTime() - 30 * 60 * 1000); // 30 min before
-      if (now >= afterpartyDateTime) {
-        afterpartyState = 'REVEALED';
-      } else if (now >= teasingAutoTime) {
-        afterpartyState = 'TEASING';
-      }
-    }
-
-    // Get dessert envelope for cycling distance calculation to afterparty
-    const dessertEnvelope = envelopes?.find(e => e.course === 'dessert') as EnvelopeWithHost | undefined;
-    const dessertHostCoords = dessertEnvelope?.host_couple?.coordinates;
-    const afterpartyCoords = event.afterparty_coordinates as { x: number; y: number } | null;
-    let cyclingMinFromDessert: number | null = null;
-    if (dessertHostCoords && afterpartyCoords) {
-      // Simple distance estimate: haversine → cycling time
-      const R = 6371;
-      const dLat = (afterpartyCoords.y - dessertHostCoords.y) * Math.PI / 180;
-      const dLon = (afterpartyCoords.x - dessertHostCoords.x) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(dessertHostCoords.y * Math.PI / 180) * Math.cos(afterpartyCoords.y * Math.PI / 180) *
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      const distKm = R * c;
-      cyclingMinFromDessert = Math.round(distKm * 4); // ~15 km/h
     }
     
     // Default messages if not set
@@ -418,26 +353,6 @@ export async function GET(request: NextRequest) {
       event_id: eventId,
       couple_id: coupleId,
       courses,
-      afterparty: {
-        state: afterpartyState,
-        time: afterpartyTime?.slice(0, 5) ?? null,
-        byob: event.afterparty_byob ?? false,
-        notes: afterpartyState !== 'LOCKED' ? (event.afterparty_notes ?? null) : null,
-        description: afterpartyState !== 'LOCKED' ? (event.afterparty_description ?? null) : null,
-        // Only in REVEALED state
-        location: afterpartyState === 'REVEALED' ? (event.afterparty_location ?? null) : null,
-        door_code: afterpartyState === 'REVEALED' ? (event.afterparty_door_code ?? null) : null,
-        host_names: afterpartyState === 'REVEALED' && event.afterparty_hosts
-          ? event.afterparty_hosts.split(',').map((n: string) => n.trim())
-          : [],
-        coordinates: afterpartyState === 'REVEALED' && afterpartyCoords
-          ? { lat: afterpartyCoords.y, lng: afterpartyCoords.x }
-          : null,
-        cycling_minutes_from_dessert: afterpartyState === 'REVEALED' ? cyclingMinFromDessert : null,
-        // Timing info
-        teasing_at: event.afterparty_teasing_at ?? null,
-        revealed_at: event.afterparty_revealed_at ?? null,
-      },
       messages: {
         host_self: event.host_self_messages?.length ? event.host_self_messages : defaultHostSelf,
         lips_sealed: event.lips_sealed_messages?.length ? event.lips_sealed_messages : defaultLipsSealed,
@@ -458,6 +373,20 @@ export async function GET(request: NextRequest) {
 
 // Helper functions
 
+function parsePoint(point: unknown): { lat: number; lng: number } | null {
+  if (!point) return null;
+  if (typeof point === 'string') {
+    const match = point.match(/\(([^,]+),([^)]+)\)/);
+    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+  }
+  if (typeof point === 'object' && point !== null) {
+    const p = point as Record<string, unknown>;
+    if (p.lat != null && p.lng != null) return { lat: Number(p.lat), lng: Number(p.lng) };
+    if (p.x != null && p.y != null) return { lat: Number(p.y), lng: Number(p.x) };
+  }
+  return null;
+}
+
 function calculateState(envelope: EnvelopeWithHost, now: Date): EnvelopeState {
   // Check states in reverse order (most advanced first)
   if (envelope.opened_at && now >= new Date(envelope.opened_at)) return 'OPEN';
@@ -469,11 +398,15 @@ function calculateState(envelope: EnvelopeWithHost, now: Date): EnvelopeState {
   return 'LOCKED';
 }
 
-function getCourseStartTime(event: { event_date: string; starter_time: string; main_time: string; dessert_time: string }, course: Course): string {
-  const timeMap: Record<Course, string> = {
+function getCourseStartTime(
+  event: { event_date: string; starter_time: string; main_time: string; dessert_time: string; afterparty_time?: string | null },
+  course: Course
+): string {
+  const timeMap: Record<Course, string | null | undefined> = {
     starter: event.starter_time,
     main: event.main_time,
     dessert: event.dessert_time,
+    afterparty: event.afterparty_time ?? '22:00:00',
   };
   return `${event.event_date}T${timeMap[course]}`;
 }

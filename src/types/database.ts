@@ -1,6 +1,8 @@
 // Auto-generated types for Cykelfesten database
 
-export type Course = 'starter' | 'main' | 'dessert';
+export type Course = 'starter' | 'main' | 'dessert' | 'afterparty';
+
+export type MealCourse = 'starter' | 'main' | 'dessert';
 
 export type EventStatus = 'draft' | 'open' | 'matched' | 'locked' | 'in_progress' | 'completed';
 
@@ -183,7 +185,7 @@ export interface StepAOutput {
   assignments: Omit<Assignment, 'id' | 'created_at' | 'notified_at'>[];
   stats: {
     preference_satisfaction: number;
-    capacity_per_course: Record<Course, number>;
+    capacity_per_course: Record<MealCourse, number>;
   };
 }
 
@@ -193,7 +195,7 @@ export interface StepBInput {
   assignments: Assignment[];
   couples: Couple[];
   blocked_pairs: [string, string][];
-  frozen_courses: Course[];
+  frozen_courses: MealCourse[];
 }
 
 export interface StepBOutput {
@@ -309,53 +311,12 @@ export interface CourseEnvelopeStatus {
   is_self_host: boolean;  // True if the guest IS the host for this course
   host_has_fun_facts: boolean;  // True if host has any fun facts
   cycling_meters: number | null;  // Distance to destination
-  // Dessert special: afterparty reveals
-  dessert_stats: DessertStats | null;  // CLUE_1 for dessert
-  afterparty_practical: AfterpartyPractical | null;  // CLUE_2 for dessert
-  afterparty_location: AfterpartyLocation | null;  // STREET/NUMBER for dessert
-}
-
-// Dessert special reveals (afterparty info)
-export interface DessertStats {
-  total_couples: number;
-  total_distance_km: number;
-  total_dishes: number;
-  vegetarian_dishes: number;
-}
-
-export interface AfterpartyPractical {
-  time: string;
-  door_code: string | null;
-  bring_own_drinks: boolean;
-  notes: string | null;
-}
-
-export interface AfterpartyLocation {
-  address: string;
-  host_names: string[];
-  cycling_minutes_sober: number;
-  cycling_minutes_tipsy: number;
-  cycling_minutes_drunk: number;
-  coordinates: { lat: number; lng: number } | null;
-}
-
-export type AfterpartyState = 'LOCKED' | 'TEASING' | 'REVEALED';
-
-export interface AfterpartyStatus {
-  state: AfterpartyState;
-  time: string | null;          // e.g. "23:00"
-  byob: boolean;
-  notes: string | null;
-  description: string | null;
-  // Only revealed in REVEALED state
-  location: string | null;
-  door_code: string | null;
-  host_names: string[];
-  coordinates: { lat: number; lng: number } | null;
-  cycling_minutes_from_dessert: number | null;
-  // Timing
-  teasing_at: string | null;    // ISO timestamp when teasing activates
-  revealed_at: string | null;   // ISO timestamp when full reveal activates
+  // Optional fields for afterparty envelopes
+  afterparty_time?: string | null;
+  afterparty_byob?: boolean | null;
+  afterparty_notes?: string | null;
+  afterparty_description?: string | null;
+  afterparty_hosts?: string | null;
 }
 
 export interface CustomMessage {
@@ -368,7 +329,6 @@ export interface EnvelopeStatusResponse {
   event_id: string;
   couple_id: string;
   courses: CourseEnvelopeStatus[];
-  afterparty: AfterpartyStatus;
   messages: {
     host_self: CustomMessage[];
     lips_sealed: CustomMessage[];

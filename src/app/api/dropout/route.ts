@@ -5,7 +5,7 @@ import { runRematch, setEnvelopeTimes } from '@/lib/matching';
 import { cascadeChanges } from '@/lib/matching/cascade';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
 import { verifyToken } from '@/lib/tokens';
-import type { Assignment, Couple, Event, Course } from '@/types/database';
+import type { Assignment, Couple, Event, Course, MealCourse } from '@/types/database';
 
 /**
  * Dropout API
@@ -219,7 +219,10 @@ export async function POST(request: Request) {
             .eq('match_plan_id', matchPlan.id)
             .not('activated_at', 'is', null);
           
-          const frozenCourses = [...new Set(activatedEnvelopes?.map(e => e.course as Course) || [])];
+          const frozenCourses = [...new Set(
+            (activatedEnvelopes?.map(e => e.course as Course) || [])
+              .filter((course): course is MealCourse => course !== 'afterparty')
+          )];
           
           // Create new match plan version
           const newVersion = matchPlan.version + 1;

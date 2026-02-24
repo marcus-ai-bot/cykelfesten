@@ -91,7 +91,8 @@ export function parseCourseSchedules(
   starterTime: string,
   mainTime: string,
   dessertTime: string,
-  timeOffsetMinutes: number = 0
+  timeOffsetMinutes: number = 0,
+  afterpartyTime?: string | null
 ): Record<Course, Date> {
   const parseTime = (time: string): Date => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -115,6 +116,7 @@ export function parseCourseSchedules(
     starter: parseTime(starterTime),
     main: parseTime(mainTime),
     dessert: parseTime(dessertTime),
+    afterparty: parseTime(afterpartyTime ?? '22:00'),
   };
 }
 

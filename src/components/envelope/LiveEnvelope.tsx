@@ -436,33 +436,6 @@ function EnvelopeContent({ course, isOpen, hostSelfMessages, lipsSealedMessages,
         </motion.div>
       )}
 
-      {/* DESSERT SPECIAL: Stats reveal (CLUE_1) */}
-      {course.type === 'dessert' && course.dessert_stats && (
-        <motion.div variants={itemVariants} className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-4 space-y-2">
-          <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-1">
-            📊 Kvällens statistik
-          </h4>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-white/60 rounded-lg p-2 text-center">
-              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.total_couples}</p>
-              <p className="text-xs text-gray-600">par deltog</p>
-            </div>
-            <div className="bg-white/60 rounded-lg p-2 text-center">
-              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.total_distance_km}</p>
-              <p className="text-xs text-gray-600">km cyklades</p>
-            </div>
-            <div className="bg-white/60 rounded-lg p-2 text-center">
-              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.total_dishes}</p>
-              <p className="text-xs text-gray-600">rätter serverades</p>
-            </div>
-            <div className="bg-white/60 rounded-lg p-2 text-center">
-              <p className="text-2xl font-bold text-amber-600">{course.dessert_stats.vegetarian_dishes}</p>
-              <p className="text-xs text-gray-600">vegetariska</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       {/* Afterparty info moved to dedicated AfterpartyCard component */}
 
       {/* TEASING message */}

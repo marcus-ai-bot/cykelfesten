@@ -6,16 +6,16 @@
  * States:
  *  LOCKED   — Grey card, "Kommer efter desserten"
  *  TEASING  — Active card with time, BYOB info, anticipation
- *  REVEALED — Full info: address, door code, map link, cycling distance
+ *  OPEN — Full info: address, door code, map link, cycling distance
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import type { AfterpartyStatus, AfterpartyState } from '@/types/database';
+import type { CourseEnvelopeStatus, FullAddressReveal } from '@/types/database';
 
 interface AfterpartyCardProps {
-  afterparty: AfterpartyStatus;
+  envelope: CourseEnvelopeStatus;
   isPreview?: boolean;
   className?: string;
 }
@@ -106,15 +106,34 @@ function fireAfterpartyConfetti() {
 // Main Component
 // ============================================
 
-export function AfterpartyCard({ afterparty, isPreview = false, className = '' }: AfterpartyCardProps) {
+function formatAddress(address: FullAddressReveal | null): string | null {
+  if (!address) return null;
+  const numberPart = address.number && address.number > 0 ? ` ${address.number}` : '';
+  const apartment = address.apartment ? `, ${address.apartment}` : '';
+  const city = address.city ? `, ${address.city}` : '';
+  const base = `${address.street}${numberPart}${apartment}${city}`.trim();
+  return base || null;
+}
+
+export function AfterpartyCard({ envelope, isPreview = false, className = '' }: AfterpartyCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasConfettiFired, setHasConfettiFired] = useState(false);
-  const state = afterparty.state;
+  const state = envelope.state;
   const isClickable = state !== 'LOCKED';
+  const timeLabel = envelope.afterparty_time ? envelope.afterparty_time.slice(0, 5) : null;
+  const addressLabel = formatAddress(envelope.full_address ?? null);
+  const doorCode = envelope.full_address?.door_code ?? null;
+  const hostNames = envelope.afterparty_hosts
+    ? envelope.afterparty_hosts.split(',').map(name => name.trim()).filter(Boolean)
+    : [];
+  const cyclingMinutes = envelope.cycling_meters != null
+    ? Math.round((envelope.cycling_meters / 1000) * 4)
+    : null;
+  const coordinates = envelope.full_address?.coordinates ?? null;
 
-  // Fire confetti on REVEALED state
+  // Fire confetti on OPEN state
   useEffect(() => {
-    if (state === 'REVEALED' && !hasConfettiFired && !isPreview) {
+    if (state === 'OPEN' && !hasConfettiFired && !isPreview) {
       setIsOpen(true);
       setTimeout(fireAfterpartyConfetti, 300);
       setHasConfettiFired(true);
@@ -131,7 +150,7 @@ export function AfterpartyCard({ afterparty, isPreview = false, className = '' }
   const handleClick = useCallback(() => {
     if (!isClickable) return;
     setIsOpen(!isOpen);
-    if (!isOpen && state === 'REVEALED' && !isPreview) {
+    if (!isOpen && state === 'OPEN' && !isPreview) {
       setTimeout(fireAfterpartyConfetti, 300);
     }
   }, [isClickable, isOpen, state, isPreview]);
@@ -141,7 +160,7 @@ export function AfterpartyCard({ afterparty, isPreview = false, className = '' }
     switch (state) {
       case 'LOCKED': return 'bg-gray-100 border-gray-200';
       case 'TEASING': return 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300';
-      case 'REVEALED': return 'bg-gradient-to-br from-purple-100 to-pink-100 border-purple-400';
+      case 'OPEN': return 'bg-gradient-to-br from-purple-100 to-pink-100 border-purple-400';
       default: return 'bg-gray-100 border-gray-200';
     }
   };
@@ -150,7 +169,7 @@ export function AfterpartyCard({ afterparty, isPreview = false, className = '' }
     switch (state) {
       case 'LOCKED': return 'Kommer efter desserten';
       case 'TEASING': return 'Kvällen är inte slut! 🎶';
-      case 'REVEALED': return 'Nu kör vi! 🥳';
+      case 'OPEN': return 'Nu kör vi! 🥳';
       default: return '';
     }
   };
@@ -234,28 +253,28 @@ export function AfterpartyCard({ afterparty, isPreview = false, className = '' }
                     <motion.div variants={itemVariants} className="text-center py-2">
                       <p className="text-3xl mb-2">🎶</p>
                       <p className="text-purple-800 font-semibold text-lg">Kvällen är inte slut!</p>
-                      {afterparty.time && (
+                      {timeLabel && (
                         <p className="text-purple-600 mt-1">
-                          Efterfesten börjar <span className="font-bold text-purple-800">{afterparty.time}</span>
+                          Efterfesten börjar <span className="font-bold text-purple-800">{timeLabel}</span>
                         </p>
                       )}
                     </motion.div>
 
-                    {afterparty.byob && (
+                    {envelope.afterparty_byob && (
                       <motion.div variants={itemVariants} className="bg-white/60 rounded-lg p-3 text-center">
                         <p className="text-purple-700 text-sm">🍷 Ta med egen dryck (BYOB)</p>
                       </motion.div>
                     )}
 
-                    {afterparty.description && (
+                    {envelope.afterparty_description && (
                       <motion.div variants={itemVariants} className="bg-white/60 rounded-lg p-3">
-                        <p className="text-purple-700 text-sm">{afterparty.description}</p>
+                        <p className="text-purple-700 text-sm">{envelope.afterparty_description}</p>
                       </motion.div>
                     )}
 
-                    {afterparty.notes && (
+                    {envelope.afterparty_notes && (
                       <motion.div variants={itemVariants} className="text-sm text-purple-600 italic text-center">
-                        {afterparty.notes}
+                        {envelope.afterparty_notes}
                       </motion.div>
                     )}
 
@@ -265,32 +284,32 @@ export function AfterpartyCard({ afterparty, isPreview = false, className = '' }
                   </>
                 )}
 
-                {/* REVEALED content */}
-                {state === 'REVEALED' && (
+                {/* OPEN content */}
+                {state === 'OPEN' && (
                   <>
                     <motion.div variants={itemVariants} className="text-center py-2">
                       <p className="text-4xl mb-2">🥳</p>
                       <p className="text-purple-800 font-bold text-xl">Efterfesten väntar!</p>
-                      {afterparty.time && (
+                      {timeLabel && (
                         <p className="text-purple-600 mt-1">
-                          Klockan <span className="font-bold">{afterparty.time}</span>
+                          Klockan <span className="font-bold">{timeLabel}</span>
                         </p>
                       )}
                     </motion.div>
 
                     {/* Address */}
-                    {afterparty.location && (
+                    {addressLabel && (
                       <motion.div variants={itemVariants} className="bg-white/70 rounded-lg p-4 space-y-2">
-                        <p className="text-purple-900 font-bold text-lg">📍 {afterparty.location}</p>
-                        {afterparty.host_names.length > 0 && (
+                        <p className="text-purple-900 font-bold text-lg">📍 {addressLabel}</p>
+                        {hostNames.length > 0 && (
                           <p className="text-purple-700 text-sm">
-                            👋 {afterparty.host_names.length === 1 ? 'Värd' : 'Värdar'}:{' '}
-                            {afterparty.host_names.join(' & ')}
+                            👋 {hostNames.length === 1 ? 'Värd' : 'Värdar'}:{' '}
+                            {hostNames.join(' & ')}
                           </p>
                         )}
-                        {afterparty.door_code && (
+                        {doorCode && (
                           <p className="text-purple-700 text-sm">
-                            🔑 Portkod: <span className="font-mono font-bold text-purple-900">{afterparty.door_code}</span>
+                            🔑 Portkod: <span className="font-mono font-bold text-purple-900">{doorCode}</span>
                           </p>
                         )}
                       </motion.div>
@@ -298,42 +317,42 @@ export function AfterpartyCard({ afterparty, isPreview = false, className = '' }
 
                     {/* BYOB + notes */}
                     <motion.div variants={itemVariants} className="flex flex-wrap gap-2">
-                      {afterparty.byob && (
+                      {envelope.afterparty_byob && (
                         <span className="inline-flex items-center gap-1 bg-purple-200 text-purple-800 text-sm px-3 py-1.5 rounded-full">
                           🍷 BYOB
                         </span>
                       )}
-                      {afterparty.notes && (
+                      {envelope.afterparty_notes && (
                         <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-sm px-3 py-1.5 rounded-full">
-                          💡 {afterparty.notes}
+                          💡 {envelope.afterparty_notes}
                         </span>
                       )}
                     </motion.div>
 
-                    {afterparty.description && (
+                    {envelope.afterparty_description && (
                       <motion.div variants={itemVariants} className="bg-white/60 rounded-lg p-3">
-                        <p className="text-purple-700 text-sm">{afterparty.description}</p>
+                        <p className="text-purple-700 text-sm">{envelope.afterparty_description}</p>
                       </motion.div>
                     )}
 
                     {/* Cycling distance */}
-                    {afterparty.cycling_minutes_from_dessert != null && afterparty.cycling_minutes_from_dessert > 0 && (
+                    {cyclingMinutes != null && cyclingMinutes > 0 && (
                       <motion.div variants={itemVariants} className="space-y-1">
                         <p className="text-sm font-medium text-purple-700">🚴 Cykeltid härifrån:</p>
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div className="bg-white/60 rounded p-2 text-center">
                             <p className="text-lg">🏅</p>
-                            <p className="font-bold">{afterparty.cycling_minutes_from_dessert} min</p>
+                            <p className="font-bold">{cyclingMinutes} min</p>
                             <p className="text-gray-500">Nykter</p>
                           </div>
                           <div className="bg-white/60 rounded p-2 text-center">
                             <p className="text-lg">🍷</p>
-                            <p className="font-bold">{Math.round(afterparty.cycling_minutes_from_dessert * 1.5)} min</p>
+                            <p className="font-bold">{Math.round(cyclingMinutes * 1.5)} min</p>
                             <p className="text-gray-500">Lagom</p>
                           </div>
                           <div className="bg-white/60 rounded p-2 text-center">
                             <p className="text-lg">🥴</p>
-                            <p className="font-bold">{Math.round(afterparty.cycling_minutes_from_dessert * 2.5)} min</p>
+                            <p className="font-bold">{Math.round(cyclingMinutes * 2.5)} min</p>
                             <p className="text-gray-500">Efterfest-läge</p>
                           </div>
                         </div>
@@ -341,12 +360,12 @@ export function AfterpartyCard({ afterparty, isPreview = false, className = '' }
                     )}
 
                     {/* Map link */}
-                    {(afterparty.coordinates || afterparty.location) && (
+                    {(coordinates || addressLabel) && (
                       <motion.div variants={itemVariants}>
                         <a
-                          href={afterparty.coordinates
-                            ? `https://maps.google.com/?q=${afterparty.coordinates.lat},${afterparty.coordinates.lng}`
-                            : `https://maps.google.com/?q=${encodeURIComponent(afterparty.location!)}`
+                          href={coordinates
+                            ? `https://maps.google.com/?q=${coordinates.lat},${coordinates.lng}`
+                            : `https://maps.google.com/?q=${encodeURIComponent(addressLabel!)}`
                           }
                           target="_blank"
                           rel="noopener noreferrer"

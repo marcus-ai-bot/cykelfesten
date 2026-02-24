@@ -6,8 +6,8 @@ import { requireEventAccess } from '@/lib/auth';
  * Activate Afterparty API
  * 
  * Admin can manually activate the afterparty reveal:
- * - action: 'tease' → Sets afterparty_teasing_at to now (TEASING state)
- * - action: 'reveal' → Sets afterparty_revealed_at to now (REVEALED state)
+ * - action: 'tease' → Sets teasing_at to now (TEASING state)
+ * - action: 'reveal' → Sets teasing_at (if missing) + opened_at to now (OPEN state)
  * - action: 'reset' → Clears both timestamps (back to LOCKED)
  */
 
@@ -39,57 +39,110 @@ export async function POST(request: Request) {
     const supabase = createAdminClient();
     const now = new Date().toISOString();
 
-    let updates: Record<string, string | null> = {};
-
-    switch (action) {
-      case 'tease':
-        updates = { afterparty_teasing_at: now };
-        break;
-      case 'reveal':
-        // Also set teasing if not already set
-        updates = { 
-          afterparty_teasing_at: now,
-          afterparty_revealed_at: now,
-        };
-        break;
-      case 'reset':
-        updates = { 
-          afterparty_teasing_at: null,
-          afterparty_revealed_at: null,
-        };
-        break;
-    }
-
-    const { data: event, error: updateError } = await supabase
+    const { data: event, error: eventError } = await supabase
       .from('events')
-      .update(updates)
+      .select('id, active_match_plan_id')
       .eq('id', event_id)
-      .select('id, afterparty_teasing_at, afterparty_revealed_at')
       .single();
 
-    if (updateError) {
-      return NextResponse.json(
-        { error: 'Kunde inte uppdatera efterfest-status', details: updateError.message },
-        { status: 500 }
-      );
+    if (eventError || !event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    if (!event.active_match_plan_id) {
+      return NextResponse.json({ error: 'No active match plan' }, { status: 400 });
+    }
+
+    const matchPlanId = event.active_match_plan_id;
+    let updatedCount = 0;
+
+    switch (action) {
+      case 'tease': {
+        const { data, error } = await supabase
+          .from('envelopes')
+          .update({ teasing_at: now })
+          .eq('match_plan_id', matchPlanId)
+          .eq('course', 'afterparty')
+          .neq('cancelled', true)
+          .select('id');
+
+        if (error) {
+          return NextResponse.json(
+            { error: 'Kunde inte uppdatera afterparty-kuvert', details: error.message },
+            { status: 500 }
+          );
+        }
+        updatedCount = data?.length ?? 0;
+        break;
+      }
+      case 'reveal': {
+        const { error: teaseError } = await supabase
+          .from('envelopes')
+          .update({ teasing_at: now })
+          .eq('match_plan_id', matchPlanId)
+          .eq('course', 'afterparty')
+          .is('teasing_at', null)
+          .neq('cancelled', true);
+
+        if (teaseError) {
+          return NextResponse.json(
+            { error: 'Kunde inte uppdatera afterparty-kuvert', details: teaseError.message },
+            { status: 500 }
+          );
+        }
+
+        const { data, error } = await supabase
+          .from('envelopes')
+          .update({ opened_at: now })
+          .eq('match_plan_id', matchPlanId)
+          .eq('course', 'afterparty')
+          .neq('cancelled', true)
+          .select('id');
+
+        if (error) {
+          return NextResponse.json(
+            { error: 'Kunde inte uppdatera afterparty-kuvert', details: error.message },
+            { status: 500 }
+          );
+        }
+        updatedCount = data?.length ?? 0;
+        break;
+      }
+      case 'reset': {
+        const { data, error } = await supabase
+          .from('envelopes')
+          .update({ teasing_at: null, opened_at: null })
+          .eq('match_plan_id', matchPlanId)
+          .eq('course', 'afterparty')
+          .neq('cancelled', true)
+          .select('id');
+
+        if (error) {
+          return NextResponse.json(
+            { error: 'Kunde inte uppdatera afterparty-kuvert', details: error.message },
+            { status: 500 }
+          );
+        }
+        updatedCount = data?.length ?? 0;
+        break;
+      }
     }
 
     // Log the activation
     await supabase.from('event_log').insert({
       event_id,
+      match_plan_id: matchPlanId,
       action: `afterparty_${action}`,
       details: {
         manual_activation: true,
-        afterparty_teasing_at: event?.afterparty_teasing_at,
-        afterparty_revealed_at: event?.afterparty_revealed_at,
+        envelopes_updated: updatedCount,
       },
     });
 
     return NextResponse.json({
       success: true,
       action,
-      afterparty_teasing_at: event?.afterparty_teasing_at,
-      afterparty_revealed_at: event?.afterparty_revealed_at,
+      updated: updatedCount,
     });
 
   } catch (error) {

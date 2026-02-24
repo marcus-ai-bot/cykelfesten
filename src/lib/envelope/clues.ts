@@ -9,7 +9,7 @@
  * - Prevents "I already heard that clue at my previous stop" spoilers
  */
 
-import type { Course, CourseClues } from '@/types/database';
+import type { Course, MealCourse, CourseClues } from '@/types/database';
 import { funFactsToStrings } from '@/lib/fun-facts';
 
 export interface FunFactsInput {
@@ -141,7 +141,7 @@ export function generateFallbackClues(context: FallbackClueContext): string[] {
 export function getCluesForCourse(
   allFacts: string[],
   allocation: AllocatedClues,
-  course: Course,
+  course: MealCourse,
   fallbackContext?: FallbackClueContext
 ): string[] {
   const indices = allocation[course];

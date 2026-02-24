@@ -14,9 +14,9 @@
  * - Jämn fördelning
  */
 
-import type { Assignment, Couple, Course, StepBInput, StepBOutput, MatchingWarning, CoursePairing, Envelope } from '@/types/database';
+import type { Assignment, Couple, MealCourse, StepBInput, StepBOutput, MatchingWarning, CoursePairing, Envelope } from '@/types/database';
 
-const COURSES: Course[] = ['starter', 'main', 'dessert'];
+const COURSES: MealCourse[] = ['starter', 'main', 'dessert'];
 
 interface HostSlot {
   coupleId: string;

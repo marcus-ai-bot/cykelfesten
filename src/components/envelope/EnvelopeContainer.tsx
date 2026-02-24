@@ -126,10 +126,13 @@ export function EnvelopeContainer({
     return null;
   }
 
+  const mealCourses = data.courses.filter(course => course.type !== 'afterparty');
+  const afterpartyEnvelope = data.courses.find(course => course.type === 'afterparty');
+
   return (
     <div className="space-y-4">
       {/* Envelopes */}
-      {data.courses.map((course) => (
+      {mealCourses.map((course) => (
         <LiveEnvelope
           key={course.type}
           course={course}
@@ -138,9 +141,9 @@ export function EnvelopeContainer({
       ))}
 
       {/* Afterparty card — 4th card */}
-      {data.afterparty && (
+      {afterpartyEnvelope && (
         <AfterpartyCard
-          afterparty={data.afterparty}
+          envelope={afterpartyEnvelope}
           isPreview={!!simulateTime}
         />
       )}

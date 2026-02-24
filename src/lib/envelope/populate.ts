@@ -90,12 +90,12 @@ export function populateLivingEnvelopeData(input: PopulateInput): PopulateOutput
     
     const allocation = allocateClueIndices(allFacts.length);
     
-    // Create records for each course this host serves
+    // Create records for each meal course this host serves (not afterparty)
     const hostCourses = [...new Set(
       pairings
-        .filter(p => p.host_couple_id === hostId)
+        .filter(p => p.host_couple_id === hostId && p.course !== 'afterparty')
         .map(p => p.course)
-    )];
+    )] as Array<'starter' | 'main' | 'dessert'>;
     
     for (const course of hostCourses) {
       courseClues.push({

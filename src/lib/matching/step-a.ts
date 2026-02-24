@@ -11,9 +11,9 @@
  * - Respektera rättpreferenser
  */
 
-import type { Couple, Course, StepAInput, StepAOutput } from '@/types/database';
+import type { Couple, MealCourse, StepAInput, StepAOutput } from '@/types/database';
 
-const COURSES: Course[] = ['starter', 'main', 'dessert'];
+const COURSES: MealCourse[] = ['starter', 'main', 'dessert'];
 const DEFAULT_MAX_GUESTS = 10; // Ökat för att hantera ojämna fördelningar
 
 interface CourseStats {
@@ -38,7 +38,7 @@ export function assignCourses(input: StepAInput): StepAOutput {
   const avgPersonsPerCourse = totalPersons / 3;
   
   // Initialize course stats
-  const courseStats: Record<Course, CourseStats> = {
+  const courseStats: Record<MealCourse, CourseStats> = {
     starter: { hosts: 0, totalCapacity: 0, guestPersons: 0, couples: [] },
     main: { hosts: 0, totalCapacity: 0, guestPersons: 0, couples: [] },
     dessert: { hosts: 0, totalCapacity: 0, guestPersons: 0, couples: [] },
@@ -49,7 +49,7 @@ export function assignCourses(input: StepAInput): StepAOutput {
   const withoutPreference: Couple[] = [];
   
   for (const couple of activeCouples) {
-    if (couple.course_preference && COURSES.includes(couple.course_preference)) {
+    if (couple.course_preference && (COURSES as readonly string[]).includes(couple.course_preference)) {
       withPreference.push(couple);
     } else {
       withoutPreference.push(couple);
@@ -63,7 +63,7 @@ export function assignCourses(input: StepAInput): StepAOutput {
   let preferenceSatisfied = 0;
   
   for (const couple of withPreference) {
-    const preferred = couple.course_preference as Course;
+    const preferred = couple.course_preference as MealCourse;
     const stats = courseStats[preferred];
     
     // Check if we can add to preferred course

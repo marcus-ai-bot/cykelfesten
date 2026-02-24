@@ -15,6 +15,7 @@ import type {
   Couple, 
   Assignment, 
   Course,
+  MealCourse,
   StepAInput, 
   StepAOutput, 
   StepBInput, 
@@ -100,7 +101,7 @@ export interface RematchInput {
   couples: Couple[];
   assignments: Assignment[];
   blocked_pairs?: [string, string][];
-  frozen_courses: Course[];
+  frozen_courses: MealCourse[];
   match_plan_id: string;
 }
 
@@ -137,6 +138,7 @@ export function setEnvelopeTimes(
     starter: event.starter_time,
     main: event.main_time,
     dessert: event.dessert_time,
+    afterparty: event.afterparty_time ?? '22:00:00',
   };
   
   const eventDate = new Date(event.event_date);
