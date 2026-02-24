@@ -25,6 +25,8 @@ import type {
 
 export { assignCourses } from './step-a';
 export { matchGuestsToHosts } from './step-b';
+export { cascadeChanges } from './cascade';
+export * from './policy';
 
 /**
  * Full matching run - both Step A and Step B
