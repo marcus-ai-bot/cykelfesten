@@ -26,7 +26,7 @@ interface ParticipationState {
   coOrganizers: CoOrganizer[];
 }
 
-export function OrganizerParticipation({ eventId, eventSlug }: { eventId: string; eventSlug?: string }) {
+export function OrganizerParticipation({ eventId, eventSlug, hasMatching }: { eventId: string; eventSlug?: string; hasMatching?: boolean }) {
   const [state, setState] = useState<ParticipationState | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -120,10 +120,13 @@ export function OrganizerParticipation({ eventId, eventSlug }: { eventId: string
     setSaving(true);
     try {
       const res = await fetch(`/api/organizer/events/${eventId}/participate`, { method: 'DELETE' });
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         setError(data.error || 'Kunde inte avregistrera');
         return;
+      }
+      if (data.warning) {
+        setError(data.warning); // Show rematch warning
       }
       setConfirmCancel(false);
       setShowForm(false);
@@ -183,7 +186,9 @@ export function OrganizerParticipation({ eventId, eventSlug }: { eventId: string
               <span className="text-gray-300">|</span>
               {confirmCancel ? (
                 <span className="text-sm space-x-2">
-                  <span className="text-red-600">Säker?</span>
+                  <span className="text-red-600">
+                    {hasMatching ? 'Säker? Matchningen behöver köras om.' : 'Säker?'}
+                  </span>
                   <button onClick={handleCancel} disabled={saving} className="text-red-600 hover:text-red-800 font-medium">
                     {saving ? '...' : 'Ja, avregistrera'}
                   </button>
@@ -218,6 +223,11 @@ export function OrganizerParticipation({ eventId, eventSlug }: { eventId: string
       {!showForm ? (
         <div className="space-y-2">
           <p className="text-sm text-gray-600">Du deltar inte i evenemanget.</p>
+          {hasMatching && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2">
+              ⚠️ Matchningen har redan körts. Du behöver köra om matchningen efter registrering för att inkluderas.
+            </p>
+          )}
           <button
             onClick={() => setShowForm(true)}
             className="text-sm font-medium text-purple-600 hover:text-purple-800"

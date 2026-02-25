@@ -26,7 +26,7 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
     case 'invite':
       return (
         <div className="space-y-6">
-          <OrganizerParticipation eventId={eventId} eventSlug={eventSlug} />
+          <OrganizerParticipation eventId={eventId} eventSlug={eventSlug} hasMatching={hasMatching} />
           {(eventStatus === 'matched' || eventStatus === 'locked') && (
             <InviteLockedBanner eventId={eventId} />
           )}

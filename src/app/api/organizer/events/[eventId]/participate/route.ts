@@ -195,8 +195,116 @@ export async function POST(
 }
 
 /**
+ * PATCH /api/organizer/events/[eventId]/participate
+ * Update organizer's couple data
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ eventId: string }> }
+) {
+  try {
+    const { eventId } = await params;
+    const organizer = await getOrganizer();
+    if (!organizer) {
+      return NextResponse.json({ error: 'Not logged in' }, { status: 401 });
+    }
+    const access = await checkEventAccess(organizer.id, eventId);
+    if (!access.hasAccess) {
+      return NextResponse.json({ error: 'No access' }, { status: 403 });
+    }
+
+    const supabase = createAdminClient();
+    const body = await request.json();
+
+    // Find couple
+    const { data: couple } = await supabase
+      .from('couples')
+      .select('id, event_id')
+      .eq('event_id', eventId)
+      .eq('invited_email', organizer.email.toLowerCase())
+      .eq('cancelled', false)
+      .maybeSingle();
+
+    if (!couple) {
+      return NextResponse.json({ error: 'Du är inte registrerad som deltagare' }, { status: 404 });
+    }
+
+    // Allowed update fields
+    const allowed = [
+      'invited_name', 'invited_phone', 'partner_name', 'partner_email', 'partner_phone',
+      'address', 'address_unit', 'address_notes', 'course_preference',
+      'invited_allergies', 'partner_allergies', 'invited_fun_facts', 'partner_fun_facts',
+      'accessibility_ok', 'accessibility_needs',
+    ];
+
+    const updates: Record<string, any> = {};
+    for (const key of allowed) {
+      if (key in body) updates[key] = body[key];
+    }
+
+    // Handle coordinates
+    if (body.coordinates && typeof body.coordinates.lat === 'number' && typeof body.coordinates.lng === 'number') {
+      updates.coordinates = `(${body.coordinates.lng},${body.coordinates.lat})`;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'Inga fält att uppdatera' }, { status: 400 });
+    }
+
+    const addressChanged = 'address' in updates;
+
+    const { data, error } = await supabase
+      .from('couples')
+      .update(updates)
+      .eq('id', couple.id)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // If address changed after matching, trigger cascade
+    let rematchWarning: string | null = null;
+    if (addressChanged) {
+      const { data: event } = await supabase
+        .from('events')
+        .select('id, active_match_plan_id')
+        .eq('id', eventId)
+        .single();
+
+      if (event?.active_match_plan_id) {
+        try {
+          const { cascadeChanges } = await import('@/lib/matching/cascade');
+          await cascadeChanges({
+            supabase,
+            eventId: event.id,
+            matchPlanId: event.active_match_plan_id,
+            type: 'address_change',
+            coupleId: couple.id,
+            details: {
+              newAddress: data.address,
+              newAddressNotes: data.address_notes ?? null,
+            },
+          });
+        } catch (e) {
+          console.error('Cascade error (non-fatal):', e);
+        }
+        rematchWarning = 'Adress uppdaterad. Kuvert har uppdaterats automatiskt.';
+      }
+    }
+
+    return NextResponse.json({ couple: data, warning: rematchWarning });
+  } catch (err: any) {
+    console.error('PATCH participate error:', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/organizer/events/[eventId]/participate
- * Cancel organizer's participation (sets cancelled=true, does NOT delete)
+ * Before matching: hard delete couple
+ * After matching: soft cancel (cancelled=true) + rematch warning
  */
 export async function DELETE(
   request: NextRequest,
@@ -215,9 +323,10 @@ export async function DELETE(
 
     const supabase = createAdminClient();
 
+    // Find the couple (check both as invited and as partner)
     const { data: couple } = await supabase
       .from('couples')
-      .select('id')
+      .select('id, partner_email')
       .eq('event_id', eventId)
       .eq('invited_email', organizer.email.toLowerCase())
       .eq('cancelled', false)
@@ -227,17 +336,48 @@ export async function DELETE(
       return NextResponse.json({ error: 'Du är inte registrerad som deltagare' }, { status: 404 });
     }
 
-    // Soft-cancel (not delete — preserves history)
-    const { error } = await supabase
-      .from('couples')
-      .update({ cancelled: true })
-      .eq('id', couple.id);
+    // Check if matching has been run
+    const { data: event } = await supabase
+      .from('events')
+      .select('active_match_plan_id')
+      .eq('id', eventId)
+      .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const hasMatching = !!event?.active_match_plan_id;
+
+    if (hasMatching) {
+      // After matching: soft cancel
+      const { error } = await supabase
+        .from('couples')
+        .update({ cancelled: true })
+        .eq('id', couple.id);
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        method: 'cancelled',
+        cancelledCoupleId: couple.id,
+        warning: 'Du har avregistrerats. Matchningen behöver köras om för att hantera ändringen.',
+      });
+    } else {
+      // Before matching: hard delete
+      const { error } = await supabase
+        .from('couples')
+        .delete()
+        .eq('id', couple.id);
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        method: 'deleted',
+      });
     }
-
-    return NextResponse.json({ success: true, cancelledCoupleId: couple.id });
   } catch (err: any) {
     console.error('DELETE participate error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
