@@ -194,23 +194,17 @@ export async function POST(
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
-    // Auto-set guest_session cookie if not already present
-    const cookieStore = await cookies();
-    const existingGuestSession = cookieStore.get('guest_session')?.value;
-    if (!existingGuestSession) {
-      const guestToken = signToken({ email: organizer.email.toLowerCase(), type: 'guest' });
-      const response = NextResponse.json({ couple, guestSessionSet: true });
-      response.cookies.set('guest_session', guestToken, {
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60,
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-      });
-      return response;
-    }
-
-    return NextResponse.json({ couple });
+    // Always set guest_session to organizer's email (overwrite any stale session)
+    const guestToken = signToken({ email: organizer.email.toLowerCase(), type: 'guest' });
+    const response = NextResponse.json({ couple, guestSessionSet: true });
+    response.cookies.set('guest_session', guestToken, {
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60,
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+    });
+    return response;
   } catch (err: any) {
     console.error('POST participate error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
