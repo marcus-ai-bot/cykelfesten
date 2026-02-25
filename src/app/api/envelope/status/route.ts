@@ -302,9 +302,7 @@ export async function GET(request: NextRequest) {
               apartment: hostStreetInfo?.apartment ?? null,
               door_code: hostStreetInfo?.door_code ?? null,
               city: hostStreetInfo?.city ?? '',
-              coordinates: envelope.host_couple?.coordinates 
-                ? { lat: envelope.host_couple.coordinates.y, lng: envelope.host_couple.coordinates.x }
-                : null,
+              coordinates: parsePoint(envelope.host_couple?.coordinates),
             })
           : null,
         next_reveal: getNextReveal(envelope, state, now),
