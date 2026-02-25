@@ -438,8 +438,15 @@ function EnvelopeContent({ course, isOpen, hostSelfMessages, lipsSealedMessages,
 
       {/* Afterparty info moved to dedicated AfterpartyCard component */}
 
-      {/* TEASING message */}
-      {state === 'TEASING' && course.clues.length === 0 && (
+      {/* TEASING message — self-host gets early hint */}
+      {state === 'TEASING' && course.is_self_host && (
+        <motion.div variants={itemVariants} className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
+          <p className="text-3xl mb-2">🏠</p>
+          <p className="text-sm text-green-700 font-medium">Du är värd för denna rätt!</p>
+          <p className="text-xs text-green-600 mt-1">Ledtrådarna handlar om... dig själv 😄</p>
+        </motion.div>
+      )}
+      {state === 'TEASING' && !course.is_self_host && course.clues.length === 0 && (
         <motion.div variants={itemVariants} className="text-center py-4">
           <p className="text-lg">🤫</p>
           <p className="text-gray-600">Nyfiken?</p>

@@ -73,13 +73,14 @@ export async function GET(request: NextRequest) {
 
   const guestEmail = payload.email.toLowerCase().trim();
 
-  // Find couple by email
+  // Find couple by email (including cancelled for friendly message)
   const { data: couple, error: coupleError } = await supabase
     .from('couples')
-    .select('id, invited_name, partner_name')
+    .select('id, invited_name, partner_name, cancelled')
     .eq('event_id', event.id)
-    .eq('cancelled', false)
     .or(`invited_email.eq.${guestEmail},partner_email.eq.${guestEmail}`)
+    .order('cancelled', { ascending: true })
+    .limit(1)
     .single();
 
   if (coupleError || !couple) {
@@ -87,6 +88,19 @@ export async function GET(request: NextRequest) {
       { error: 'Inget kuvert kopplat till din email för detta event.' },
       { status: 404 }
     );
+  }
+
+  if (couple.cancelled) {
+    return NextResponse.json({
+      eventId: event.id,
+      eventName: event.name,
+      cancelled: true,
+      couple: {
+        id: couple.id,
+        invited_name: couple.invited_name,
+        partner_name: couple.partner_name,
+      },
+    });
   }
 
   return NextResponse.json({

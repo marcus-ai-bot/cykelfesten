@@ -27,6 +27,7 @@ export default function LiveEnvelopePage() {
   const [couple, setCouple] = useState<CoupleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
 
   // Support organizer preview: ?coupleId=xxx overrides guest_session lookup
   const previewCoupleId = searchParams.get('coupleId');
@@ -54,6 +55,13 @@ export default function LiveEnvelopePage() {
           return;
         }
 
+        if (data.cancelled) {
+          setCancelled(true);
+          setCouple(data.couple);
+          setLoading(false);
+          return;
+        }
+
         setEventId(data.eventId);
         setCouple(data.couple);
       } catch {
@@ -73,6 +81,31 @@ export default function LiveEnvelopePage() {
             <div className="h-8 bg-amber-200 rounded w-2/3 mx-auto" />
             <div className="h-32 bg-amber-100 rounded-xl" />
             <div className="h-32 bg-amber-100 rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (cancelled) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50 p-4">
+        <div className="max-w-md mx-auto pt-8 text-center">
+          <div className="bg-white rounded-2xl shadow-md p-8 border border-amber-100">
+            <div className="text-4xl mb-4">😢</div>
+            <h2 className="text-xl font-semibold text-amber-900 mb-2">Avbokad</h2>
+            <p className="text-amber-700 mb-2">
+              {couple?.invited_name}{couple?.partner_name ? ` & ${couple.partner_name}` : ''} — er plats har avbokats.
+            </p>
+            <p className="text-amber-600 text-sm mb-6">
+              Kontakta arrangören om du ångrat dig eller om detta är fel.
+            </p>
+            <Link
+              href={`/e/${slug}`}
+              className="inline-block text-amber-600 hover:underline text-sm"
+            >
+              ← Tillbaka till event
+            </Link>
           </div>
         </div>
       </div>
