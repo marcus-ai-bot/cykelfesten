@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { InviteLinkSection } from '@/components/organizer/InviteLinkSection';
 import { InlineGuestList } from '@/components/organizer/InlineGuestList';
+import { OrganizerParticipation } from '@/components/organizer/OrganizerParticipation';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 interface Props {
@@ -25,6 +26,7 @@ export function PhaseContent({ phase, eventId, eventSlug, eventStatus, couplesCo
     case 'invite':
       return (
         <div className="space-y-6">
+          <OrganizerParticipation eventId={eventId} eventSlug={eventSlug} />
           {(eventStatus === 'matched' || eventStatus === 'locked') && (
             <InviteLockedBanner eventId={eventId} />
           )}
