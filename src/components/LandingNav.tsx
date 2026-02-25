@@ -30,7 +30,7 @@ export function LandingNav() {
             onClick={() => setOpen(!open)}
             className="flex items-center gap-1 text-amber-700 hover:text-amber-900 text-sm font-medium transition cursor-pointer"
           >
-            Kom igång
+            Logga in
             <svg
               className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`}
               fill="none"
