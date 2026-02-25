@@ -34,6 +34,7 @@ export function OrganizerParticipation({ eventId, eventSlug, hasMatching }: { ev
   const [selectedCoOrg, setSelectedCoOrg] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   // Form fields
@@ -80,6 +81,24 @@ export function OrganizerParticipation({ eventId, eventSlug, hasMatching }: { ev
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFieldErrors(new Set());
+
+    // Client-side validation with field highlighting
+    const missing = new Set<string>();
+    if (!invitedName.trim()) missing.add('invited_name');
+    if (!partnerName.trim()) missing.add('partner_name');
+    if (!address.trim()) missing.add('address');
+    if (missing.size > 0) {
+      setFieldErrors(missing);
+      const labels = [
+        missing.has('invited_name') && 'ditt namn',
+        missing.has('partner_name') && 'partnerns namn',
+        missing.has('address') && 'adress',
+      ].filter(Boolean);
+      setError(`Fyll i: ${labels.join(', ')}`);
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -298,9 +317,9 @@ export function OrganizerParticipation({ eventId, eventSlug, hasMatching }: { ev
                   <input
                     type="text"
                     value={invitedName}
-                    onChange={e => setInvitedName(e.target.value)}
+                    onChange={e => { setInvitedName(e.target.value); setFieldErrors(prev => { const n = new Set(prev); n.delete('invited_name'); return n; }); }}
                     required
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    className={`w-full border rounded-lg px-3 py-2 text-sm ${fieldErrors.has('invited_name') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
                     placeholder="Förnamn Efternamn"
                   />
                 </div>
@@ -319,10 +338,10 @@ export function OrganizerParticipation({ eventId, eventSlug, hasMatching }: { ev
                   <input
                     type="text"
                     value={partnerName}
-                    onChange={e => setPartnerName(e.target.value)}
+                    onChange={e => { setPartnerName(e.target.value); setFieldErrors(prev => { const n = new Set(prev); n.delete('partner_name'); return n; }); }}
                     required
                     readOnly={partnerMode === 'coorg' && !!selectedCoOrg}
-                    className={`w-full border rounded-lg px-3 py-2 text-sm ${partnerMode === 'coorg' && selectedCoOrg ? 'bg-gray-50' : ''}`}
+                    className={`w-full border rounded-lg px-3 py-2 text-sm ${partnerMode === 'coorg' && selectedCoOrg ? 'bg-gray-50' : ''} ${fieldErrors.has('partner_name') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
                     placeholder="Förnamn Efternamn"
                   />
                 </div>
@@ -359,8 +378,10 @@ export function OrganizerParticipation({ eventId, eventSlug, hasMatching }: { ev
                   onChange={(val, coords) => {
                     setAddress(val);
                     if (coords) setCoordinates(coords);
+                    setFieldErrors(prev => { const n = new Set(prev); n.delete('address'); return n; });
                   }}
                   placeholder="Sök adress..."
+                  className={`w-full px-3 py-2 border rounded-lg text-sm ${fieldErrors.has('address') ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'}`}
                 />
               </div>
 
