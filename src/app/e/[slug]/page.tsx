@@ -13,7 +13,7 @@ export default async function EventPage({ params }: Props) {
   const supabase = await createClient();
   
   const { data: event } = await supabase
-    .from('events')
+    .from('events_public')
     .select('*')
     .eq('slug', slug)
     .single();
