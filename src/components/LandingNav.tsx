@@ -68,16 +68,7 @@ export function LandingNav() {
                 </div>
               </Link>
 
-              <div className="border-t border-amber-100 my-1" />
 
-              <Link
-                href="/login"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 transition"
-              >
-                <span className="text-lg">👤</span>
-                <div className="text-sm font-medium text-amber-700">Logga in</div>
-              </Link>
             </div>
           )}
         </div>
