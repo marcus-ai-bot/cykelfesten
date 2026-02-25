@@ -291,11 +291,13 @@ export function MapView({ eventId, eventName }: { eventId: string; eventName: st
 
   const featureCollection = useMemo((): FeatureCollection<Point> => ({
     type: 'FeatureCollection',
-    features: data.couples.map((c) => ({
-      type: 'Feature',
-      properties: { id: c.id, name: c.name, address: c.address, isHost: c.isHost, isConfirmed: c.isConfirmed },
-      geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
-    })),
+    features: data.couples
+      .filter((c) => c.isConfirmed && !c.isCancelled)
+      .map((c) => ({
+        type: 'Feature',
+        properties: { id: c.id, name: c.name, address: c.address, isHost: c.isHost, isConfirmed: c.isConfirmed },
+        geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+      })),
   }), [data.couples]);
 
   const routeFeatures = useMemo(() => {
