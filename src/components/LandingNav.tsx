@@ -52,7 +52,7 @@ export function LandingNav() {
                 <span className="text-lg">🎉</span>
                 <div>
                   <div className="text-sm font-medium text-amber-900">Arrangör</div>
-                  <div className="text-xs text-amber-600">Skapa ett nytt event</div>
+                  <div className="text-xs text-amber-600">Jag är arrangör</div>
                 </div>
               </Link>
 
