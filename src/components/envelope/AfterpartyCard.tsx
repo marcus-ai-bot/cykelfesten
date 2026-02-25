@@ -3,13 +3,15 @@
 /**
  * AfterpartyCard — Dedicated card for the afterparty in the guest live view.
  * 
- * States:
- *  LOCKED   — Grey card, "Kommer efter desserten"
- *  TEASING  — Active card with time, BYOB info, anticipation
- *  OPEN — Full info: address, door code, map link, cycling distance
+ * States (progressive reveal):
+ *  LOCKED      — Grey card, "Kommer efter desserten"
+ *  TEASING     — Active card, "Efterfesten väntar!", countdown to ZONE
+ *  STREET      — ZONE: Map with ~500m radius circle, countdown to CLOSING_IN
+ *  NUMBER      — CLOSING_IN: Map with ~100m radius circle, countdown to OPEN
+ *  OPEN        — Full info: exact address, door code, map link, cycling distance
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import type { CourseEnvelopeStatus, FullAddressReveal } from '@/types/database';
@@ -18,6 +20,7 @@ interface AfterpartyCardProps {
   envelope: CourseEnvelopeStatus;
   isPreview?: boolean;
   className?: string;
+  onRefresh?: () => void;
 }
 
 // ============================================
@@ -48,14 +51,12 @@ const contentVariants: Variants = {
   hidden: { 
     opacity: 0, 
     y: 20,
+    transition: { duration: 0.2 },
   },
   visible: { 
     opacity: 1, 
     y: 0,
-    transition: { 
-      duration: 0.3,
-      staggerChildren: 0.1,
-    },
+    transition: { duration: 0.3, staggerChildren: 0.08 },
   },
 };
 
@@ -65,45 +66,121 @@ const itemVariants: Variants = {
 };
 
 // ============================================
-// Confetti for reveal
+// Countdown Hook
+// ============================================
+
+function useCountdown(targetIso: string | null | undefined, onZero?: () => void) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (!targetIso) { setRemaining(null); return; }
+    firedRef.current = false;
+
+    const tick = () => {
+      const diff = Math.max(0, Math.floor((new Date(targetIso).getTime() - Date.now()) / 1000));
+      setRemaining(diff);
+      if (diff === 0 && !firedRef.current) {
+        firedRef.current = true;
+        onZero?.();
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [targetIso, onZero]);
+
+  if (remaining == null) return null;
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  return { total: remaining, minutes: m, seconds: s, display: `${m}:${String(s).padStart(2, '0')}` };
+}
+
+// ============================================
+// Zone Map Component (Mapbox Static Image + CSS circle)
+// ============================================
+
+function ZoneMap({ lat, lng, radiusM, color, label }: { lat: number; lng: number; radiusM: number; color: string; label: string }) {
+  // Zoom level based on radius: 500m ≈ zoom 14, 100m ≈ zoom 16
+  const zoom = radiusM >= 400 ? 14 : 16;
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  
+  if (!token || !lat || !lng) return null;
+
+  const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${lng},${lat},${zoom},0/400x250@2x?access_token=${token}`;
+
+  return (
+    <div className="relative rounded-lg overflow-hidden">
+      {/* Map image */}
+      <img 
+        src={mapUrl} 
+        alt="Ungefärlig position"
+        className="w-full h-auto"
+        loading="eager"
+      />
+      {/* Circle overlay centered on map */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div 
+          className="rounded-full border-4 animate-pulse"
+          style={{
+            width: radiusM >= 400 ? '55%' : '50%',
+            height: radiusM >= 400 ? '70%' : '65%',
+            borderColor: color,
+            backgroundColor: `${color}18`,
+            boxShadow: `0 0 20px ${color}40`,
+          }}
+        />
+      </div>
+      {/* Label */}
+      <div className="absolute bottom-2 left-2 right-2">
+        <div 
+          className="text-white text-xs font-medium px-2 py-1 rounded-full text-center backdrop-blur-sm"
+          style={{ backgroundColor: `${color}CC` }}
+        >
+          📍 {label}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// Countdown Display
+// ============================================
+
+function CountdownDisplay({ countdown, label }: { countdown: { display: string; total: number }; label: string }) {
+  const isUrgent = countdown.total < 60;
+  
+  return (
+    <motion.div 
+      variants={itemVariants}
+      className={`text-center py-2 rounded-lg ${isUrgent ? 'bg-orange-50' : 'bg-white/50'}`}
+    >
+      <p className={`text-xs ${isUrgent ? 'text-orange-600' : 'text-purple-500'} mb-1`}>{label}</p>
+      <p className={`font-mono text-2xl font-bold ${isUrgent ? 'text-orange-700 animate-pulse' : 'text-purple-800'}`}>
+        {countdown.display}
+      </p>
+    </motion.div>
+  );
+}
+
+// ============================================
+// Confetti
 // ============================================
 
 function fireAfterpartyConfetti() {
-  const count = 150;
-  const defaults = {
-    origin: { y: 0.7 },
-    zIndex: 1000,
-  };
-
-  // Purple/pink themed confetti
   confetti({
-    ...defaults,
-    particleCount: Math.floor(count * 0.3),
-    spread: 60,
-    startVelocity: 55,
-    colors: ['#A855F7', '#EC4899', '#F472B6'],
-  });
-  confetti({
-    ...defaults,
-    particleCount: Math.floor(count * 0.3),
-    spread: 100,
-    decay: 0.91,
-    scalar: 0.8,
-    colors: ['#A855F7', '#EC4899', '#F472B6', '#FFD700'],
-  });
-  confetti({
-    ...defaults,
-    particleCount: Math.floor(count * 0.2),
-    spread: 120,
-    startVelocity: 25,
-    decay: 0.92,
+    particleCount: 100,
+    spread: 80,
+    origin: { y: 0.6, x: 0.5 },
     scalar: 1.2,
     colors: ['#FFD700', '#F472B6'],
   });
 }
 
 // ============================================
-// Main Component
+// Helpers
 // ============================================
 
 function formatAddress(address: FullAddressReveal | null): string | null {
@@ -115,11 +192,32 @@ function formatAddress(address: FullAddressReveal | null): string | null {
   return base || null;
 }
 
-export function AfterpartyCard({ envelope, isPreview = false, className = '' }: AfterpartyCardProps) {
+// Visual state mapping: calculateState returns STREET/NUMBER, we show ZONE/CLOSING_IN
+type VisualState = 'LOCKED' | 'TEASING' | 'ZONE' | 'CLOSING_IN' | 'OPEN';
+
+function toVisualState(apiState: string): VisualState {
+  switch (apiState) {
+    case 'LOCKED': return 'LOCKED';
+    case 'TEASING': return 'TEASING';
+    // CLUE_1/CLUE_2 shouldn't happen for afterparty (clue fields are null)
+    case 'CLUE_1':
+    case 'CLUE_2':
+    case 'STREET': return 'ZONE';
+    case 'NUMBER': return 'CLOSING_IN';
+    case 'OPEN': return 'OPEN';
+    default: return 'LOCKED';
+  }
+}
+
+// ============================================
+// Main Component
+// ============================================
+
+export function AfterpartyCard({ envelope, isPreview = false, className = '', onRefresh }: AfterpartyCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasConfettiFired, setHasConfettiFired] = useState(false);
-  const state = envelope.state;
-  const isClickable = state !== 'LOCKED';
+  const visualState = toVisualState(envelope.state);
+  const isClickable = visualState !== 'LOCKED';
   const timeLabel = envelope.afterparty_time ? envelope.afterparty_time.slice(0, 5) : null;
   const addressLabel = formatAddress(envelope.full_address ?? null);
   const doorCode = envelope.full_address?.door_code ?? null;
@@ -131,55 +229,83 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '' }: 
     : null;
   const coordinates = envelope.full_address?.coordinates ?? null;
 
+  // Zone/closing data from API
+  const zoneData = (envelope as any).zone as { lat: number; lng: number; radius_m: number } | undefined;
+  const closingData = (envelope as any).closing as { lat: number; lng: number; radius_m: number } | undefined;
+  const nextStepAt = (envelope as any).next_step_at as string | undefined;
+
+  // Countdown timer — triggers refetch when it hits zero
+  const handleCountdownZero = useCallback(() => {
+    // Small delay to let the server catch up
+    setTimeout(() => onRefresh?.(), 1500);
+  }, [onRefresh]);
+
+  const countdown = useCountdown(nextStepAt, handleCountdownZero);
+
   // Fire confetti on OPEN state
   useEffect(() => {
-    if (state === 'OPEN' && !hasConfettiFired && !isPreview) {
+    if (visualState === 'OPEN' && !hasConfettiFired && !isPreview) {
       setIsOpen(true);
       setTimeout(fireAfterpartyConfetti, 300);
       setHasConfettiFired(true);
     }
-  }, [state, hasConfettiFired, isPreview]);
+  }, [visualState, hasConfettiFired, isPreview]);
 
-  // Auto-open for TEASING
+  // Auto-open for active states
   useEffect(() => {
-    if (state === 'TEASING' && !isOpen) {
+    if (visualState !== 'LOCKED' && !isOpen) {
       setIsOpen(true);
     }
-  }, [state]);
+  }, [visualState]);
 
   const handleClick = useCallback(() => {
     if (!isClickable) return;
     setIsOpen(!isOpen);
-    if (!isOpen && state === 'OPEN' && !isPreview) {
+    if (!isOpen && visualState === 'OPEN' && !isPreview) {
       setTimeout(fireAfterpartyConfetti, 300);
     }
-  }, [isClickable, isOpen, state, isPreview]);
+  }, [isClickable, isOpen, visualState, isPreview]);
 
-  // Colors based on state
+  // Colors based on visual state
   const getCardColor = () => {
-    switch (state) {
+    switch (visualState) {
       case 'LOCKED': return 'bg-gray-100 border-gray-200';
       case 'TEASING': return 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300';
+      case 'ZONE': return 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-400';
+      case 'CLOSING_IN': return 'bg-gradient-to-br from-orange-50 to-pink-50 border-orange-400';
       case 'OPEN': return 'bg-gradient-to-br from-purple-100 to-pink-100 border-purple-400';
       default: return 'bg-gray-100 border-gray-200';
     }
   };
 
   const getStateMessage = () => {
-    switch (state) {
+    switch (visualState) {
       case 'LOCKED': return 'Kommer efter desserten';
       case 'TEASING': return 'Kvällen är inte slut! 🎶';
+      case 'ZONE': return 'Någonstans i närheten... 🗺️';
+      case 'CLOSING_IN': return 'Nu närmar vi oss! 🔥';
       case 'OPEN': return 'Nu kör vi! 🥳';
       default: return '';
     }
   };
+
+  const getStateBadge = () => {
+    switch (visualState) {
+      case 'TEASING': return 'Nytt!';
+      case 'ZONE': return '📍 Ledtråd!';
+      case 'CLOSING_IN': return '🔥 Närmare!';
+      default: return null;
+    }
+  };
+
+  const badge = getStateBadge();
 
   return (
     <motion.div
       className={`relative ${className}`}
       variants={cardVariants}
       initial="idle"
-      animate={state === 'TEASING' ? 'pulse' : 'idle'}
+      animate={visualState === 'TEASING' || visualState === 'ZONE' || visualState === 'CLOSING_IN' ? 'pulse' : 'idle'}
       whileHover={isClickable ? 'hover' : undefined}
       whileTap={isClickable ? 'tap' : undefined}
       onClick={handleClick}
@@ -190,14 +316,16 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '' }: 
         ${getCardColor()}
         transition-colors duration-300
       `}>
-        {/* "Nytt!" badge for TEASING */}
-        {state === 'TEASING' && !isOpen && (
+        {/* Badge for active states */}
+        {badge && !isOpen && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full z-10"
+            className={`absolute -top-2 -right-2 text-white text-xs font-bold px-2 py-1 rounded-full z-10 ${
+              visualState === 'CLOSING_IN' ? 'bg-orange-500' : 'bg-purple-500'
+            }`}
           >
-            Nytt!
+            {badge}
           </motion.div>
         )}
 
@@ -206,17 +334,24 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '' }: 
           <div className="flex items-center gap-2">
             <span className="text-2xl">🎉</span>
             <div>
-              <h3 className={`font-semibold ${state === 'LOCKED' ? 'text-gray-500' : 'text-purple-800'}`}>
+              <h3 className={`font-semibold ${visualState === 'LOCKED' ? 'text-gray-500' : 'text-purple-800'}`}>
                 Efterfest
               </h3>
-              <p className={`text-xs ${state === 'LOCKED' ? 'text-gray-400' : 'text-purple-600'}`}>
+              <p className={`text-xs ${visualState === 'LOCKED' ? 'text-gray-400' : 'text-purple-600'}`}>
                 {getStateMessage()}
               </p>
             </div>
           </div>
 
+          {/* Countdown in header when collapsed */}
+          {!isOpen && countdown && countdown.total > 0 && (
+            <span className="font-mono text-sm text-purple-600 bg-purple-100 px-2 py-1 rounded">
+              {countdown.display}
+            </span>
+          )}
+
           {/* Chevron */}
-          {isClickable && (
+          {isClickable && !countdown?.total && (
             <motion.span
               animate={{ rotate: isOpen ? 180 : 0 }}
               transition={{ duration: 0.2 }}
@@ -227,7 +362,7 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '' }: 
           )}
 
           {/* Lock icon for LOCKED */}
-          {state === 'LOCKED' && (
+          {visualState === 'LOCKED' && (
             <span className="text-gray-400 text-lg">🔒</span>
           )}
         </div>
@@ -247,8 +382,8 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '' }: 
                 animate="visible"
                 className="p-4 space-y-3"
               >
-                {/* TEASING content */}
-                {state === 'TEASING' && (
+                {/* ==================== TEASING ==================== */}
+                {visualState === 'TEASING' && (
                   <>
                     <motion.div variants={itemVariants} className="text-center py-2">
                       <p className="text-3xl mb-2">🎶</p>
@@ -278,14 +413,99 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '' }: 
                       </motion.div>
                     )}
 
-                    <motion.div variants={itemVariants} className="text-center text-sm text-purple-500">
-                      📍 Adressen avslöjas snart...
-                    </motion.div>
+                    {/* Countdown to ZONE */}
+                    {countdown && countdown.total > 0 ? (
+                      <CountdownDisplay countdown={countdown} label="Första ledtråden om..." />
+                    ) : (
+                      <motion.div variants={itemVariants} className="text-center text-sm text-purple-500">
+                        📍 Första ledtråden avslöjas snart...
+                      </motion.div>
+                    )}
                   </>
                 )}
 
-                {/* OPEN content */}
-                {state === 'OPEN' && (
+                {/* ==================== ZONE (~500m) ==================== */}
+                {visualState === 'ZONE' && (
+                  <>
+                    <motion.div variants={itemVariants} className="text-center py-1">
+                      <p className="text-blue-800 font-semibold text-lg">Någonstans i det här området!</p>
+                      {timeLabel && (
+                        <p className="text-blue-600 text-sm mt-1">
+                          Efterfesten börjar <span className="font-bold">{timeLabel}</span>
+                        </p>
+                      )}
+                    </motion.div>
+
+                    {/* Zone map */}
+                    {zoneData && (
+                      <motion.div variants={itemVariants}>
+                        <ZoneMap
+                          lat={zoneData.lat}
+                          lng={zoneData.lng}
+                          radiusM={zoneData.radius_m}
+                          color="#3B82F6"
+                          label={`Inom ${zoneData.radius_m} meter härifrån`}
+                        />
+                      </motion.div>
+                    )}
+
+                    {envelope.afterparty_byob && (
+                      <motion.div variants={itemVariants} className="bg-white/60 rounded-lg p-3 text-center">
+                        <p className="text-blue-700 text-sm">🍷 Ta med egen dryck (BYOB)</p>
+                      </motion.div>
+                    )}
+
+                    <motion.div variants={itemVariants} className="text-center text-sm text-blue-600">
+                      🚴 Börja röra dig åt rätt håll!
+                    </motion.div>
+
+                    {/* Countdown to CLOSING_IN */}
+                    {countdown && countdown.total > 0 && (
+                      <CountdownDisplay countdown={countdown} label="Nästa ledtråd om..." />
+                    )}
+                  </>
+                )}
+
+                {/* ==================== CLOSING_IN (~100m) ==================== */}
+                {visualState === 'CLOSING_IN' && (
+                  <>
+                    <motion.div variants={itemVariants} className="text-center py-1">
+                      <p className="text-orange-800 font-semibold text-lg">Alldeles i närheten! 🔥</p>
+                      {timeLabel && (
+                        <p className="text-orange-600 text-sm mt-1">
+                          Bara minuter kvar till <span className="font-bold">{timeLabel}</span>
+                        </p>
+                      )}
+                    </motion.div>
+
+                    {/* Closing map */}
+                    {closingData && (
+                      <motion.div variants={itemVariants}>
+                        <ZoneMap
+                          lat={closingData.lat}
+                          lng={closingData.lng}
+                          radiusM={closingData.radius_m}
+                          color="#F97316"
+                          label={`Inom ${closingData.radius_m} meter!`}
+                        />
+                      </motion.div>
+                    )}
+
+                    {envelope.afterparty_byob && (
+                      <motion.div variants={itemVariants} className="bg-white/60 rounded-lg p-3 text-center">
+                        <p className="text-orange-700 text-sm">🍷 Ta med egen dryck!</p>
+                      </motion.div>
+                    )}
+
+                    {/* Countdown to OPEN */}
+                    {countdown && countdown.total > 0 && (
+                      <CountdownDisplay countdown={countdown} label="Exakt adress om..." />
+                    )}
+                  </>
+                )}
+
+                {/* ==================== OPEN ==================== */}
+                {visualState === 'OPEN' && (
                   <>
                     <motion.div variants={itemVariants} className="text-center py-2">
                       <p className="text-4xl mb-2">🥳</p>

@@ -122,22 +122,43 @@ export async function POST(
 
   const scheduledAt = formatScheduledAt(event.event_date, event.afterparty_time);
 
-  // Auto-timing: teasing 15 min before afterparty_time, reveal at afterparty_time
+  // Progressive reveal timing: -45 teasing, -15 zone, -5 closing, 0 open
   const normalizedTime = event.afterparty_time
     ? (event.afterparty_time.length === 5 ? `${event.afterparty_time}:00` : event.afterparty_time)
     : '22:00:00';
   const tz = getStockholmOffset(event.event_date);
   const [h, m] = normalizedTime.split(':').map(Number);
-  const teasingTotalMin = h * 60 + m - 15;
-  const teasingH = Math.floor(((teasingTotalMin % 1440) + 1440) % 1440 / 60);
-  const teasingM = ((teasingTotalMin % 60) + 60) % 60;
-  const teasingAt = `${event.event_date}T${String(teasingH).padStart(2, '0')}:${String(teasingM).padStart(2, '0')}:00${tz}`;
+  const baseMin = h * 60 + m;
+
+  function minToTs(totalMin: number): string {
+    const wrapped = ((totalMin % 1440) + 1440) % 1440;
+    const hh = Math.floor(wrapped / 60);
+    const mm = wrapped % 60;
+    return `${event!.event_date}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00${tz}`;
+  }
+
+  const teasingAt = minToTs(baseMin - 45);
+  const streetAt = minToTs(baseMin - 15);
+  const numberAt = minToTs(baseMin - 5);
+
+  function randomOffset(lat: number, lng: number, minM: number, maxM: number) {
+    const angle = Math.random() * 2 * Math.PI;
+    const distance = minM + Math.random() * (maxM - minM);
+    const dLat = (distance * Math.cos(angle)) / 111320;
+    const dLng = (distance * Math.sin(angle)) / (111320 * Math.cos(lat * Math.PI / 180));
+    return { lat: lat + dLat, lng: lng + dLng };
+  }
 
   const envelopesToUpsert = activeCouples.map(couple => {
     const hostCoords = dessertHostCoords.get(couple.id);
     const cyclingDistanceKm = hostCoords && afterpartyCoords
       ? calculateDistanceKm(hostCoords, afterpartyCoords)
       : null;
+
+    // Zone: offset 100-300m, radius 500m (always inside circle)
+    const zone = afterpartyCoords ? randomOffset(afterpartyCoords.lat, afterpartyCoords.lng, 100, 300) : null;
+    // Closing: offset 0-80m, radius 100m (offset < radius, never lies)
+    const closing = afterpartyCoords ? randomOffset(afterpartyCoords.lat, afterpartyCoords.lng, 0, 80) : null;
 
     return {
       match_plan_id: matchPlanId,
@@ -149,11 +170,17 @@ export async function POST(
       teasing_at: teasingAt,
       clue_1_at: null,
       clue_2_at: null,
-      street_at: null,
-      number_at: null,
+      street_at: streetAt,
+      number_at: numberAt,
       opened_at: scheduledAt,
       scheduled_at: scheduledAt,
       cycling_distance_km: cyclingDistanceKm,
+      zone_lat: zone?.lat ?? null,
+      zone_lng: zone?.lng ?? null,
+      zone_radius_m: zone ? 500 : null,
+      closing_lat: closing?.lat ?? null,
+      closing_lng: closing?.lng ?? null,
+      closing_radius_m: closing ? 100 : null,
     };
   });
 

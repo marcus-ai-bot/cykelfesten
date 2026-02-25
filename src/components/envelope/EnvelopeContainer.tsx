@@ -145,6 +145,7 @@ export function EnvelopeContainer({
         <AfterpartyCard
           envelope={afterpartyEnvelope}
           isPreview={!!simulateTime}
+          onRefresh={fetchStatus}
         />
       )}
 

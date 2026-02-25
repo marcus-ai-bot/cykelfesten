@@ -338,6 +338,31 @@ export async function GET(request: NextRequest) {
         if (courseStatus.state === 'OPEN') {
           courseStatus.afterparty_hosts = event.afterparty_hosts;
         }
+        // Progressive zone reveal (STREET = ZONE ~500m, NUMBER = CLOSING_IN ~100m)
+        if ((state === 'STREET' || state === 'NUMBER' || state === 'OPEN') &&
+            envelope.zone_lat != null && envelope.zone_lng != null && envelope.zone_radius_m != null) {
+          courseStatus.zone = {
+            lat: envelope.zone_lat,
+            lng: envelope.zone_lng,
+            radius_m: envelope.zone_radius_m,
+          };
+        }
+        if ((state === 'NUMBER' || state === 'OPEN') &&
+            envelope.closing_lat != null && envelope.closing_lng != null && envelope.closing_radius_m != null) {
+          courseStatus.closing = {
+            lat: envelope.closing_lat,
+            lng: envelope.closing_lng,
+            radius_m: envelope.closing_radius_m,
+          };
+        }
+        // Next step timestamp for countdown timer
+        const nextTimestamp = state === 'TEASING' ? envelope.street_at
+          : state === 'STREET' ? envelope.number_at
+          : state === 'NUMBER' ? envelope.opened_at
+          : null;
+        if (nextTimestamp) {
+          courseStatus.next_step_at = nextTimestamp;
+        }
       }
       
       courses.push(courseStatus);

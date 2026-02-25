@@ -266,6 +266,13 @@ export interface LiveEnvelope extends Envelope {
   street_at: string | null;
   number_at: string | null;
   cycling_minutes: number | null;
+  // Afterparty zone reveal fields
+  zone_lat: number | null;
+  zone_lng: number | null;
+  zone_radius_m: number | null;
+  closing_lat: number | null;
+  closing_lng: number | null;
+  closing_radius_m: number | null;
 }
 
 // API Response Types for /api/envelope/status
@@ -317,6 +324,10 @@ export interface CourseEnvelopeStatus {
   afterparty_notes?: string | null;
   afterparty_description?: string | null;
   afterparty_hosts?: string | null;
+  // Progressive zone reveal for afterparty
+  zone?: { lat: number; lng: number; radius_m: number } | null;
+  closing?: { lat: number; lng: number; radius_m: number } | null;
+  next_step_at?: string | null;
 }
 
 export interface CustomMessage {
