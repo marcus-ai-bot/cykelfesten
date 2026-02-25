@@ -39,8 +39,21 @@ export default function PreviewHubPage() {
   }, [eventId]);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+  // Determine Stockholm UTC offset for event date (CET +01:00 or CEST +02:00)
+  const stockholmOffset = (() => {
+    if (!eventDate) return '+02:00'; // fallback CEST
+    const probe = new Date(`${eventDate}T12:00:00Z`);
+    const utcH = probe.getUTCHours();
+    const sthStr = probe.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm', hour: 'numeric', hour12: false });
+    const sthH = parseInt(sthStr);
+    const off = sthH - utcH;
+    const sign = off >= 0 ? '+' : '-';
+    return `${sign}${String(Math.abs(off)).padStart(2, '0')}:00`;
+  })();
+
   const simulateTimeParam = previewTime && eventDate
-    ? `&simulateTime=${eventDate}T${previewTime}:00`
+    ? `&simulateTime=${eventDate}T${previewTime}:00${stockholmOffset}`
     : '';
 
   const previews = [
