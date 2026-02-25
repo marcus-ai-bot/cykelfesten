@@ -46,8 +46,20 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const eventId = searchParams.get('eventId');
   
-  // Get coupleId from signed token (preferred) or legacy params
-  const access = getAccessFromParams(searchParams);
+  // Check organizer first (needed for access control decisions below)
+  const organizer = await getOrganizer();
+  const isOrganizerPreview = !!organizer;
+
+  // Get coupleId from signed token (preferred) or raw param (organizer-only)
+  let access = getAccessFromParams(searchParams);
+
+  // Raw coupleId param without signed token requires organizer auth
+  const rawCoupleId = searchParams.get('coupleId');
+  const hasSignedToken = !!searchParams.get('token');
+  if (access && rawCoupleId && !hasSignedToken && !isOrganizerPreview) {
+    // Block raw coupleId for non-organizers (security: prevents guessing UUIDs)
+    access = null;
+  }
   
   if (!eventId || !access) {
     return NextResponse.json(
@@ -60,8 +72,6 @@ export async function GET(request: NextRequest) {
   
   // Allow organizers to simulate time for preview
   const simulateTime = searchParams.get('simulateTime');
-  const organizer = await getOrganizer();
-  const isOrganizerPreview = !!organizer;
   const now = (simulateTime && organizer) ? new Date(simulateTime) : new Date();
   
   // Use admin client for organizer preview (bypasses RLS), regular client for guests
