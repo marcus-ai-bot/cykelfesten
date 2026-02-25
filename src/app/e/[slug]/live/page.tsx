@@ -28,11 +28,17 @@ export default function LiveEnvelopePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Support organizer preview: ?coupleId=xxx overrides guest_session lookup
+  const previewCoupleId = searchParams.get('coupleId');
+
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/guest/couple?slug=${encodeURIComponent(slug)}`);
+        const url = previewCoupleId
+          ? `/api/guest/couple?slug=${encodeURIComponent(slug)}&coupleId=${encodeURIComponent(previewCoupleId)}`
+          : `/api/guest/couple?slug=${encodeURIComponent(slug)}`;
+        const res = await fetch(url);
 
         if (res.status === 401) {
           // Not logged in — redirect to guest portal
@@ -57,7 +63,7 @@ export default function LiveEnvelopePage() {
     }
 
     load();
-  }, [slug]);
+  }, [slug, previewCoupleId]);
 
   if (loading) {
     return (
