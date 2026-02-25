@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
 interface CoupleData {
@@ -29,13 +28,13 @@ export default function PartnerPage() {
   const router = useRouter();
   const slug = params.slug as string;
   const token = searchParams.get('token');
-  
+
   const [couple, setCouple] = useState<CoupleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [form, setForm] = useState({
     partner_allergies: '',
     partner_address: '',
@@ -52,9 +51,7 @@ export default function PartnerPage() {
       unknownFact: '',
     },
   });
-  
-  const supabase = createClient();
-  
+
   useEffect(() => {
     if (token) {
       loadCoupleByToken();
@@ -63,64 +60,67 @@ export default function PartnerPage() {
       setLoading(false);
     }
   }, [token]);
-  
+
   async function loadCoupleByToken() {
-    const { data, error: fetchError } = await supabase
-      .from('couples')
-      .select('*, events(name, event_date)')
-      .eq('partner_invite_token', token)
-      .single();
-    
-    if (fetchError || !data) {
+    try {
+      const res = await fetch(`/api/guest/partner-register?token=${encodeURIComponent(token as string)}`);
+      const data = await res.json();
+
+      if (!res.ok || !data?.couple) {
+        setError(data?.error || 'Ogiltig eller utgången länk. Be din partner skicka en ny inbjudan.');
+        setLoading(false);
+        return;
+      }
+
+      const coupleData = data.couple as CoupleData;
+      setCouple(coupleData);
+
+      // Pre-fill form
+      setForm({
+        partner_allergies: coupleData.partner_allergies?.join(', ') || '',
+        partner_address: coupleData.partner_address || '',
+        partner_instagram: coupleData.partner_instagram || '',
+        partner_birth_year: coupleData.partner_birth_year?.toString() || '',
+        fun_facts: {
+          musicDecade: (coupleData.partner_fun_facts as any)?.musicDecade || '',
+          pet: (coupleData.partner_fun_facts as any)?.pet?.type || (coupleData.partner_fun_facts as any)?.pet || '',
+          talent: (coupleData.partner_fun_facts as any)?.talent || '',
+          firstJob: (coupleData.partner_fun_facts as any)?.firstJob || '',
+          dreamDestination: (coupleData.partner_fun_facts as any)?.dreamDestination || '',
+          instruments: Array.isArray((coupleData.partner_fun_facts as any)?.instruments)
+            ? (coupleData.partner_fun_facts as any).instruments.join(', ')
+            : (coupleData.partner_fun_facts as any)?.instruments || '',
+          sport: (coupleData.partner_fun_facts as any)?.sport || '',
+          unknownFact: (coupleData.partner_fun_facts as any)?.unknownFact || '',
+        },
+      });
+
+      setLoading(false);
+    } catch (err) {
       setError('Ogiltig eller utgången länk. Be din partner skicka en ny inbjudan.');
       setLoading(false);
-      return;
     }
-    
-    setCouple(data as CoupleData);
-    
-    // Pre-fill form
-    setForm({
-      partner_allergies: data.partner_allergies?.join(', ') || '',
-      partner_address: data.partner_address || '',
-      partner_instagram: data.partner_instagram || '',
-      partner_birth_year: data.partner_birth_year?.toString() || '',
-      fun_facts: {
-        musicDecade: (data.partner_fun_facts as any)?.musicDecade || '',
-        pet: (data.partner_fun_facts as any)?.pet?.type || (data.partner_fun_facts as any)?.pet || '',
-        talent: (data.partner_fun_facts as any)?.talent || '',
-        firstJob: (data.partner_fun_facts as any)?.firstJob || '',
-        dreamDestination: (data.partner_fun_facts as any)?.dreamDestination || '',
-        instruments: Array.isArray((data.partner_fun_facts as any)?.instruments) 
-          ? (data.partner_fun_facts as any).instruments.join(', ') 
-          : (data.partner_fun_facts as any)?.instruments || '',
-        sport: (data.partner_fun_facts as any)?.sport || '',
-        unknownFact: (data.partner_fun_facts as any)?.unknownFact || '',
-      },
-    });
-    
-    setLoading(false);
   }
-  
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
   };
-  
+
   const handleFunFactChange = (field: string, value: string) => {
     setForm(prev => ({
       ...prev,
       fun_facts: { ...prev.fun_facts, [field]: value },
     }));
   };
-  
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!couple) return;
-    
+    if (!couple || !token) return;
+
     setSaving(true);
     setError(null);
-    
+
     try {
       // Build fun facts
       const funFacts: Record<string, unknown> = {};
@@ -132,30 +132,34 @@ export default function PartnerPage() {
       if (form.fun_facts.instruments) funFacts.instruments = form.fun_facts.instruments.split(',').map(s => s.trim()).filter(Boolean);
       if (form.fun_facts.sport) funFacts.sport = form.fun_facts.sport;
       if (form.fun_facts.unknownFact) funFacts.unknownFact = form.fun_facts.unknownFact;
-      
-      const { error: updateError } = await supabase
-        .from('couples')
-        .update({
+
+      const res = await fetch('/api/guest/partner-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
           partner_allergies: form.partner_allergies.split(',').map(s => s.trim()).filter(Boolean),
           partner_address: form.partner_address || null,
           partner_instagram: form.partner_instagram || null,
           partner_birth_year: form.partner_birth_year ? parseInt(form.partner_birth_year) : null,
           partner_fun_facts: Object.keys(funFacts).length > 0 ? funFacts : null,
-        })
-        .eq('id', couple.id);
-      
-      if (updateError) throw updateError;
-      
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data?.error || 'Kunde inte spara. Försök igen.');
+      }
+
       setSaved(true);
       setTimeout(() => router.replace(`/e/${slug}/my`), 2000);
-      
     } catch (err) {
       setError('Kunde inte spara. Försök igen.');
     } finally {
       setSaving(false);
     }
   }
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-purple-50 to-indigo-100 flex items-center justify-center">
@@ -163,7 +167,7 @@ export default function PartnerPage() {
       </div>
     );
   }
-  
+
   if (error && !couple) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-purple-50 to-indigo-100 flex items-center justify-center p-4">
@@ -178,7 +182,7 @@ export default function PartnerPage() {
       </div>
     );
   }
-  
+
   if (saved) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-purple-50 to-indigo-100 flex items-center justify-center p-4">
@@ -190,9 +194,9 @@ export default function PartnerPage() {
       </div>
     );
   }
-  
+
   if (!couple) return null;
-  
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-purple-50 to-indigo-100 py-8">
       <div className="max-w-xl mx-auto px-4">
@@ -212,13 +216,13 @@ export default function PartnerPage() {
             })}
           </p>
         </div>
-        
+
         {error && (
           <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg mb-6">
             {error}
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Värdadress (read-only) */}
           <div className="bg-white rounded-xl p-6 shadow">
@@ -232,7 +236,7 @@ export default function PartnerPage() {
               {couple.address}
             </div>
           </div>
-          
+
           {/* Din hemadress (om annan) */}
           <div className="bg-white rounded-xl p-6 shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">
@@ -250,7 +254,7 @@ export default function PartnerPage() {
               placeholder="Lämna tomt om samma som värdadressen"
             />
           </div>
-          
+
           {/* Allergier */}
           <div className="bg-white rounded-xl p-6 shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -265,7 +269,7 @@ export default function PartnerPage() {
               placeholder="nötter, laktos (separera med komma)"
             />
           </div>
-          
+
           {/* Instagram */}
           <div className="bg-white rounded-xl p-6 shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -280,7 +284,7 @@ export default function PartnerPage() {
               placeholder="@dittanvändarnamn"
             />
           </div>
-          
+
           {/* Mystery Profile */}
           <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 shadow border border-purple-100">
             <h2 className="text-lg font-semibold text-purple-900 mb-2">
@@ -292,7 +296,7 @@ export default function PartnerPage() {
             <p className="text-purple-500 text-xs mb-4">
               🔒 Helt frivilligt • 🗑️ Raderas dagen efter festen
             </p>
-            
+
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -309,7 +313,7 @@ export default function PartnerPage() {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-purple-700 mb-1">Bästa musikdecenniet</label>
                   <select
@@ -328,7 +332,7 @@ export default function PartnerPage() {
                   </select>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-purple-700 mb-1">Husdjur</label>
@@ -340,7 +344,7 @@ export default function PartnerPage() {
                     placeholder="katt, hund..."
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-purple-700 mb-1">Hemligt talent</label>
                   <input
@@ -352,7 +356,7 @@ export default function PartnerPage() {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-purple-700 mb-1">Första jobbet</label>
@@ -364,7 +368,7 @@ export default function PartnerPage() {
                     placeholder="tidningsbud..."
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-purple-700 mb-1">Drömresmål</label>
                   <input
@@ -376,7 +380,7 @@ export default function PartnerPage() {
                   />
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-purple-700 mb-1">Något okänt om mig</label>
                 <input
@@ -389,7 +393,7 @@ export default function PartnerPage() {
               </div>
             </div>
           </div>
-          
+
           {/* Submit */}
           <button
             type="submit"
@@ -399,7 +403,7 @@ export default function PartnerPage() {
             {saving ? 'Sparar...' : '✨ Spara min profil'}
           </button>
         </form>
-        
+
         <div className="mt-6 text-center">
           <Link href={`/e/${slug}`} className="text-purple-500 hover:text-purple-600 text-sm">
             ← Tillbaka till eventet
