@@ -126,7 +126,7 @@ export async function GET(request: Request, context: RouteContext) {
           personCount: c.person_count ?? (c.partner_name ? 2 : 1),
           allergies,
         });
-      } else {
+      } else if (c.confirmed && !c.cancelled) {
         missingCoords.push({ id: c.id, name, address: c.address });
       }
     });
