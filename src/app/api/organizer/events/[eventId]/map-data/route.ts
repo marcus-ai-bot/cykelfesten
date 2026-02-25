@@ -95,6 +95,7 @@ export async function GET(request: Request, context: RouteContext) {
       .from('couples')
       .select('id, invited_name, partner_name, address, coordinates, role, confirmed, person_count, invited_allergies, partner_allergies')
       .eq('event_id', eventId)
+      .eq('cancelled', false)
       .order('invited_name');
 
     if (error) {

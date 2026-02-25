@@ -59,7 +59,8 @@ export async function POST(request: Request) {
       .from('couples')
       .select('*')
       .eq('event_id', event_id)
-      .eq('cancelled', false);
+      .eq('cancelled', false)
+      .eq('confirmed', true);
     
     if (couplesError) {
       return NextResponse.json(

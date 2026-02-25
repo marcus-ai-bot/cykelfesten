@@ -86,7 +86,8 @@ export async function POST(request: NextRequest) {
       .from('couples')
       .select('id, invited_name, partner_name, address, coordinates')
       .eq('event_id', event_id)
-      .eq('cancelled', false);
+      .eq('cancelled', false)
+      .eq('confirmed', true);
 
     if (error) throw error;
     if (!couples || couples.length === 0) {
