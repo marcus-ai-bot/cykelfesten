@@ -322,14 +322,23 @@ export async function POST(request: Request) {
       const afterpartyCoords = parsePoint(event.afterparty_coordinates);
       const afterpartyTime = event.afterparty_time ?? '23:00:00';
       const normalizedTime = afterpartyTime.length === 5 ? `${afterpartyTime}:00` : afterpartyTime;
-      const scheduledAt = `${event.event_date}T${normalizedTime}`;
+
+      // Determine Stockholm UTC offset (CET +01:00 or CEST +02:00) for event date
+      const probeUtc = new Date(`${event.event_date}T12:00:00Z`);
+      const stockholmStr = probeUtc.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm', hour: 'numeric', hour12: false });
+      const stockholmHour = parseInt(stockholmStr);
+      const offsetHours = stockholmHour - probeUtc.getUTCHours();
+      const tzSign = offsetHours >= 0 ? '+' : '-';
+      const tzOffset = `${tzSign}${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+
+      const scheduledAt = `${event.event_date}T${normalizedTime}${tzOffset}`;
 
       // Calculate teasing_at: 15 min before afterparty_time
       const [h, m] = normalizedTime.split(':').map(Number);
       const teasingTotalMin = h * 60 + m - 15;
       const teasingH = Math.floor(((teasingTotalMin % 1440) + 1440) % 1440 / 60);
       const teasingM = ((teasingTotalMin % 60) + 60) % 60;
-      const teasingAt = `${event.event_date}T${String(teasingH).padStart(2, '0')}:${String(teasingM).padStart(2, '0')}:00`;
+      const teasingAt = `${event.event_date}T${String(teasingH).padStart(2, '0')}:${String(teasingM).padStart(2, '0')}:00${tzOffset}`;
 
       // Get dessert host coordinates for cycling distance calculation
       const dessertPairings = matchResult.stepB.course_pairings.filter(p => p.course === 'dessert');

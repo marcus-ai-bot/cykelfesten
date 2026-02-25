@@ -7,11 +7,21 @@ interface RouteContext {
   params: Promise<{ eventId: string }>;
 }
 
+function getStockholmOffset(eventDate: string): string {
+  const probeUtc = new Date(`${eventDate}T12:00:00Z`);
+  const stockholmStr = probeUtc.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm', hour: 'numeric', hour12: false });
+  const stockholmHour = parseInt(stockholmStr);
+  const offsetHours = stockholmHour - probeUtc.getUTCHours();
+  const sign = offsetHours >= 0 ? '+' : '-';
+  return `${sign}${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+}
+
 function formatScheduledAt(eventDate: string, afterpartyTime: string | null): string {
   const normalized = afterpartyTime
     ? afterpartyTime.length === 5 ? `${afterpartyTime}:00` : afterpartyTime
     : '22:00:00';
-  return `${eventDate}T${normalized}`;
+  const tz = getStockholmOffset(eventDate);
+  return `${eventDate}T${normalized}${tz}`;
 }
 
 function calculateDistanceKm(from: Coordinates, to: Coordinates): number {
@@ -116,11 +126,12 @@ export async function POST(
   const normalizedTime = event.afterparty_time
     ? (event.afterparty_time.length === 5 ? `${event.afterparty_time}:00` : event.afterparty_time)
     : '22:00:00';
+  const tz = getStockholmOffset(event.event_date);
   const [h, m] = normalizedTime.split(':').map(Number);
   const teasingTotalMin = h * 60 + m - 15;
   const teasingH = Math.floor(((teasingTotalMin % 1440) + 1440) % 1440 / 60);
   const teasingM = ((teasingTotalMin % 60) + 60) % 60;
-  const teasingAt = `${event.event_date}T${String(teasingH).padStart(2, '0')}:${String(teasingM).padStart(2, '0')}:00`;
+  const teasingAt = `${event.event_date}T${String(teasingH).padStart(2, '0')}:${String(teasingM).padStart(2, '0')}:00${tz}`;
 
   const envelopesToUpsert = activeCouples.map(couple => {
     const hostCoords = dessertHostCoords.get(couple.id);
