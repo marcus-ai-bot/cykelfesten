@@ -8,6 +8,7 @@ export interface MapCouple {
   lng: number;
   isHost: boolean;
   isConfirmed: boolean;
+  isCancelled: boolean;
   personCount: number;
   allergies: string[];
 }

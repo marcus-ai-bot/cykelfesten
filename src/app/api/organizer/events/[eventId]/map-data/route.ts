@@ -93,9 +93,8 @@ export async function GET(request: Request, context: RouteContext) {
 
     const { data: couples, error } = await supabase
       .from('couples')
-      .select('id, invited_name, partner_name, address, coordinates, role, confirmed, person_count, invited_allergies, partner_allergies')
+      .select('id, invited_name, partner_name, address, coordinates, role, confirmed, cancelled, person_count, invited_allergies, partner_allergies')
       .eq('event_id', eventId)
-      .eq('cancelled', false)
       .order('invited_name');
 
     if (error) {
@@ -105,7 +104,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     const withCoords: Array<{
       id: string; name: string; address: string; lat: number; lng: number;
-      isHost: boolean; isConfirmed: boolean; personCount: number;
+      isHost: boolean; isConfirmed: boolean; isCancelled: boolean; personCount: number;
       allergies: string[];
     }> = [];
     const missingCoords: Array<{ id: string; name: string; address: string }> = [];
@@ -123,6 +122,7 @@ export async function GET(request: Request, context: RouteContext) {
           lat: coords.lat, lng: coords.lng,
           isHost: c.role === 'host',
           isConfirmed: !!c.confirmed,
+          isCancelled: !!c.cancelled,
           personCount: c.person_count ?? (c.partner_name ? 2 : 1),
           allergies,
         });
