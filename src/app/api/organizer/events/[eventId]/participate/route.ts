@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
+import { signToken } from '@/lib/tokens';
+import { cookies } from 'next/headers';
 
 /**
  * GET /api/organizer/events/[eventId]/participate
@@ -185,6 +187,22 @@ export async function POST(
       }
       console.error('Insert couple error:', insertError);
       return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    // Auto-set guest_session cookie if not already present
+    const cookieStore = await cookies();
+    const existingGuestSession = cookieStore.get('guest_session')?.value;
+    if (!existingGuestSession) {
+      const guestToken = signToken({ email: organizer.email.toLowerCase(), type: 'guest' });
+      const response = NextResponse.json({ couple, guestSessionSet: true });
+      response.cookies.set('guest_session', guestToken, {
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+      });
+      return response;
     }
 
     return NextResponse.json({ couple });
