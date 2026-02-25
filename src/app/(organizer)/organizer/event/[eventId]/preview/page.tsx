@@ -144,7 +144,7 @@ export default function PreviewHubPage() {
         {/* Preview cards */}
         <div className="grid gap-4">
           {previews.map((p) => {
-            const disabled = p.requiresCouple && !selectedCoupleId;
+            const disabled = (p.requiresCouple && !selectedCoupleId) || (p.href.includes(`/e/`) && !slug);
             if (disabled) {
               return (
                 <div key={p.title} className="bg-gray-50 rounded-xl p-5 opacity-50 cursor-not-allowed">
