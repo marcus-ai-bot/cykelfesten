@@ -315,6 +315,79 @@ export async function POST(request: Request) {
       })
       .eq('id', matchPlan.id);
     
+    // === AFTERPARTY ENVELOPES ===
+    // Auto-create afterparty envelopes if event has afterparty location
+    let afterpartyCount = 0;
+    if (event.afterparty_location && event.afterparty_coordinates) {
+      const afterpartyCoords = parsePoint(event.afterparty_coordinates);
+      const afterpartyTime = event.afterparty_time ?? '23:00:00';
+      const normalizedTime = afterpartyTime.length === 5 ? `${afterpartyTime}:00` : afterpartyTime;
+      const scheduledAt = `${event.event_date}T${normalizedTime}`;
+
+      // Calculate teasing_at: 15 min before afterparty_time
+      const [h, m] = normalizedTime.split(':').map(Number);
+      const teasingTotalMin = h * 60 + m - 15;
+      const teasingH = Math.floor(((teasingTotalMin % 1440) + 1440) % 1440 / 60);
+      const teasingM = ((teasingTotalMin % 60) + 60) % 60;
+      const teasingAt = `${event.event_date}T${String(teasingH).padStart(2, '0')}:${String(teasingM).padStart(2, '0')}:00`;
+
+      // Get dessert host coordinates for cycling distance calculation
+      const dessertPairings = matchResult.stepB.course_pairings.filter(p => p.course === 'dessert');
+      const dessertHostCoords = new Map<string, CoordPair>();
+      for (const pairing of dessertPairings) {
+        const hostCoords = coupleCoords.get(pairing.host_couple_id);
+        if (pairing.guest_couple_id && hostCoords) {
+          dessertHostCoords.set(pairing.guest_couple_id, hostCoords);
+        }
+      }
+
+      const afterpartyEnvelopes = (couples as Couple[]).map(couple => {
+        // Calculate cycling distance from dessert host to afterparty
+        let cyclingDistanceKm: number | null = null;
+        if (afterpartyCoords) {
+          const fromCoords = dessertHostCoords.get(couple.id) ?? coupleCoords.get(couple.id);
+          if (fromCoords) {
+            // Haversine for afterparty (no need for Mapbox routing here)
+            const R = 6371;
+            const dLat = (afterpartyCoords.lat - fromCoords[1]) * Math.PI / 180;
+            const dLng = (afterpartyCoords.lng - fromCoords[0]) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(fromCoords[1] * Math.PI / 180) * Math.cos(afterpartyCoords.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+            cyclingDistanceKm = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
+          }
+        }
+
+        return {
+          match_plan_id: matchPlan.id,
+          couple_id: couple.id,
+          course: 'afterparty' as const,
+          host_couple_id: null,
+          destination_address: event.afterparty_location,
+          destination_notes: event.afterparty_door_code ?? null,
+          teasing_at: teasingAt,
+          clue_1_at: null,
+          clue_2_at: null,
+          street_at: null,
+          number_at: null,
+          opened_at: scheduledAt,
+          scheduled_at: scheduledAt,
+          cycling_distance_km: cyclingDistanceKm,
+          current_state: 'LOCKED',
+        };
+      });
+
+      if (afterpartyEnvelopes.length > 0) {
+        const { error: afterpartyError } = await supabase
+          .from('envelopes')
+          .upsert(afterpartyEnvelopes, { onConflict: 'match_plan_id,couple_id,course' });
+
+        if (afterpartyError) {
+          console.error('Afterparty envelope error:', afterpartyError);
+        } else {
+          afterpartyCount = afterpartyEnvelopes.length;
+        }
+      }
+    }
+
     // Set this as the active match plan + auto-lock invite phase
     await supabase
       .from('events')
@@ -347,6 +420,7 @@ export async function POST(request: Request) {
         forced_assignments: matchResult.stepB.stats.forced_assignments,
         pairings_created: matchResult.stepB.course_pairings.length,
         envelopes_created: envelopesWithTimes.length,
+        afterparty_envelopes: afterpartyCount,
         // Living Envelope stats
         clues_allocated: populateResult.courseClues.length,
         street_infos_created: populateResult.streetInfos.length,

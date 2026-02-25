@@ -179,6 +179,7 @@ function TiderTab({ eventId }: { eventId: string }) {
     { label: 'Förrätt', icon: '🥗', field: 'starter_time', value: event?.starter_time },
     { label: 'Huvudrätt', icon: '🍖', field: 'main_time', value: event?.main_time },
     { label: 'Dessert', icon: '🍰', field: 'dessert_time', value: event?.dessert_time },
+    { label: 'Efterfest', icon: '🎉', field: 'afterparty_time', value: event?.afterparty_time },
   ];
 
   return (

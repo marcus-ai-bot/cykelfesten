@@ -112,6 +112,16 @@ export async function POST(
 
   const scheduledAt = formatScheduledAt(event.event_date, event.afterparty_time);
 
+  // Auto-timing: teasing 15 min before afterparty_time, reveal at afterparty_time
+  const normalizedTime = event.afterparty_time
+    ? (event.afterparty_time.length === 5 ? `${event.afterparty_time}:00` : event.afterparty_time)
+    : '22:00:00';
+  const [h, m] = normalizedTime.split(':').map(Number);
+  const teasingTotalMin = h * 60 + m - 15;
+  const teasingH = Math.floor(((teasingTotalMin % 1440) + 1440) % 1440 / 60);
+  const teasingM = ((teasingTotalMin % 60) + 60) % 60;
+  const teasingAt = `${event.event_date}T${String(teasingH).padStart(2, '0')}:${String(teasingM).padStart(2, '0')}:00`;
+
   const envelopesToUpsert = activeCouples.map(couple => {
     const hostCoords = dessertHostCoords.get(couple.id);
     const cyclingDistanceKm = hostCoords && afterpartyCoords
@@ -125,12 +135,12 @@ export async function POST(
       host_couple_id: null,
       destination_address: event.afterparty_location,
       destination_notes: event.afterparty_door_code,
-      teasing_at: null,
+      teasing_at: teasingAt,
       clue_1_at: null,
       clue_2_at: null,
       street_at: null,
       number_at: null,
-      opened_at: null,
+      opened_at: scheduledAt,
       scheduled_at: scheduledAt,
       cycling_distance_km: cyclingDistanceKm,
     };
