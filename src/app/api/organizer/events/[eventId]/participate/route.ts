@@ -96,9 +96,14 @@ export async function POST(
 
     // Validate required fields
     const { invited_name, partner_name, partner_email, address, coordinates } = body;
-    if (!invited_name || !partner_name || !address) {
+    const missing = [
+      !invited_name && 'ditt namn',
+      !partner_name && 'partnerns namn',
+      !address && 'adress',
+    ].filter(Boolean);
+    if (missing.length > 0) {
       return NextResponse.json(
-        { error: 'Namn, partnerns namn och adress krävs' },
+        { error: `Fyll i: ${missing.join(', ')}` },
         { status: 400 }
       );
     }

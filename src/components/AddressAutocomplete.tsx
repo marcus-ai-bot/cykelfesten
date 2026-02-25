@@ -175,7 +175,7 @@ export default function AddressAutocomplete({
         required={required}
         placeholder={placeholder}
         autoComplete="off"
-        className={className}
+        className={className || 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500'}
         role="combobox"
         aria-expanded={isOpen}
         aria-autocomplete="list"
