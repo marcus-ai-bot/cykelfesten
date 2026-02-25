@@ -75,6 +75,7 @@ export async function POST(request: Request) {
         .from('envelopes')
         .select('id, scheduled_at, teasing_at, clue_1_at, clue_2_at, street_at, number_at, opened_at, activated_at')
         .eq('match_plan_id', event.active_match_plan_id)
+        .neq('course', 'afterparty')
         .is('activated_at', null);
 
       if (envelopes?.length) {
