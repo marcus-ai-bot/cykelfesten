@@ -53,7 +53,7 @@ export default function PreviewHubPage() {
   })();
 
   const simulateTimeParam = previewTime && eventDate
-    ? `&simulateTime=${eventDate}T${previewTime}:00${stockholmOffset}`
+    ? `&simulateTime=${encodeURIComponent(`${eventDate}T${previewTime}:00${stockholmOffset}`)}`
     : '';
 
   const previews = [
