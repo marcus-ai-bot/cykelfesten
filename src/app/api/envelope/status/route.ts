@@ -16,6 +16,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
 import { getOrganizer } from '@/lib/auth';
 import { funFactsToStrings, countFunFacts } from '@/lib/fun-facts';
+import { parsePoint } from '@/lib/geo';
 import type { 
   EnvelopeStatusResponse, 
   CourseEnvelopeStatus, 
@@ -370,20 +371,6 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper functions
-
-function parsePoint(point: unknown): { lat: number; lng: number } | null {
-  if (!point) return null;
-  if (typeof point === 'string') {
-    const match = point.match(/\(([^,]+),([^)]+)\)/);
-    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-  }
-  if (typeof point === 'object' && point !== null) {
-    const p = point as Record<string, unknown>;
-    if (p.lat != null && p.lng != null) return { lat: Number(p.lat), lng: Number(p.lng) };
-    if (p.x != null && p.y != null) return { lat: Number(p.y), lng: Number(p.x) };
-  }
-  return null;
-}
 
 function calculateState(envelope: EnvelopeWithHost, now: Date): EnvelopeState {
   // Check states in reverse order (most advanced first)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { requireEventAccess } from '@/lib/auth';
+import { parsePoint } from '@/lib/geo';
 
 interface Coordinates {
   lat: number;
@@ -8,18 +9,6 @@ interface Coordinates {
 }
 
 // Parse PostgREST point format "(lng,lat)" to {lat, lng}
-function parsePoint(point: unknown): Coordinates | null {
-  if (!point) return null;
-  if (typeof point === 'string') {
-    const match = point.match(/\(([^,]+),([^)]+)\)/);
-    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-  }
-  if (typeof point === 'object' && point !== null) {
-    const p = point as Record<string, number>;
-    if (p.lat != null && p.lng != null) return { lat: p.lat, lng: p.lng };
-  }
-  return null;
-}
 
 function haversineKm(a: Coordinates, b: Coordinates): number {
   const R = 6371;

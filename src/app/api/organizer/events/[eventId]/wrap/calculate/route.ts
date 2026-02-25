@@ -2,24 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
 import { countFunFacts } from '@/lib/fun-facts';
+import { parsePoint } from '@/lib/geo';
 
 // 228 Mapbox requests in batches of 10 = ~25 seconds needed
 export const maxDuration = 60;
 
 type Coord = { lat: number; lng: number };
-
-function parsePoint(point: unknown): Coord | null {
-  if (!point) return null;
-  if (typeof point === 'string') {
-    const m = point.match(/\(([^,]+),([^)]+)\)/);
-    if (m) return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
-  }
-  if (typeof point === 'object' && point !== null) {
-    const p = point as Record<string, number>;
-    if (p.lat != null && p.lng != null) return { lat: p.lat, lng: p.lng };
-  }
-  return null;
-}
 
 function haversineMeters(a: Coord, b: Coord): number {
   const R = 6371000;

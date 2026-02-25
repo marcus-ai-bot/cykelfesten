@@ -2,19 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { geocodeAddressDetailed } from '@/lib/geocode';
 import { requireEventAccess } from '@/lib/auth';
+import { parsePoint } from '@/lib/geo';
 
 // POST /api/admin/geocode-addresses
 // Geocodes all addresses for couples in an event that don't have coordinates yet
 // Uses Mapbox v6 (rooftop accuracy) with Nominatim fallback
-
-function parsePoint(point: unknown): { lat: number; lng: number } | undefined {
-  if (!point) return undefined;
-  if (typeof point === 'string') {
-    const m = point.match(/\(([^,]+),([^)]+)\)/);
-    if (m) return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
-  }
-  return undefined;
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +31,7 @@ export async function POST(request: NextRequest) {
       .eq('id', eventId)
       .single();
 
-    const proximity = event?.coordinates ? parsePoint(event.coordinates) : undefined;
+    const proximity = parsePoint(event?.coordinates) ?? undefined;
     const city = event?.location || undefined;
     
     // Get couples without coordinates

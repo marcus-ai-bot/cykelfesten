@@ -2,22 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { requireEventAccess } from '@/lib/auth';
 import { calculateEnvelopeTimes, parseCourseSchedules, type CourseTimingOffsets } from '@/lib/envelope/timing';
+import { parsePoint } from '@/lib/geo';
 
 type CoordPair = [number, number];
-
-function parsePoint(point: unknown): CoordPair | null {
-  if (!point) return null;
-  if (typeof point === 'string') {
-    const match = point.match(/\(([^,]+),([^)]+)\)/);
-    if (match) return [parseFloat(match[1]), parseFloat(match[2])];
-  }
-  if (typeof point === 'object' && point !== null) {
-    const p = point as Record<string, number>;
-    if (p.lng != null && p.lat != null) return [p.lng, p.lat];
-    if (p.x != null && p.y != null) return [p.x, p.y];
-  }
-  return null;
-}
 
 async function getCyclingDistanceKm(fromCoords: CoordPair, toCoords: CoordPair): Promise<number | null> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -106,8 +93,8 @@ export async function POST(request: NextRequest) {
 
     const coupleCoords = new Map<string, CoordPair>();
     for (const couple of couples ?? []) {
-      const coords = parsePoint(couple.coordinates);
-      if (coords) coupleCoords.set(couple.id, coords);
+      const parsed = parsePoint(couple.coordinates);
+      if (parsed) coupleCoords.set(couple.id, [parsed.lng, parsed.lat]);
     }
 
     // Recalculate and update each envelope (batch updates)

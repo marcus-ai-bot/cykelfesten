@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
-import { calculateHaversineDistance, type Coordinates } from '@/lib/geo';
+import { parsePoint, calculateHaversineDistance, type Coordinates } from '@/lib/geo';
 
 interface RouteContext {
   params: Promise<{ eventId: string }>;
-}
-
-function parsePoint(point: unknown): Coordinates | null {
-  if (!point) return null;
-  if (typeof point === 'string') {
-    const match = point.match(/\(([^,]+),([^)]+)\)/);
-    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-  }
-  if (typeof point === 'object' && point !== null) {
-    const p = point as Record<string, unknown>;
-    if (p.lat != null && p.lng != null) return { lat: Number(p.lat), lng: Number(p.lng) };
-  }
-  return null;
 }
 
 function formatScheduledAt(eventDate: string, afterpartyTime: string | null): string {

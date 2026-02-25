@@ -6,21 +6,10 @@ import {
   parseCourseSchedules,
   type CourseTimingOffsets,
 } from '@/lib/envelope/timing';
-import { getCyclingDistance, type Coordinates } from '@/lib/geo';
+import { parsePoint, getCyclingDistance, type Coordinates } from '@/lib/geo';
 import { cascadeChanges } from '@/lib/matching/cascade';
 import { checkCapacityWarning } from '@/lib/matching/policy';
 import type { Course } from '@/types/database';
-
-function parsePoint(point: unknown): Coordinates | null {
-  if (!point || typeof point !== 'string') return null;
-  // PostGIS POINT format: "POINT(lng lat)" or "(lng,lat)"
-  const match = String(point).match(/\(?\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)?/);
-  if (!match) return null;
-  const lng = parseFloat(match[1]);
-  const lat = parseFloat(match[2]);
-  if (isNaN(lng) || isNaN(lat)) return null;
-  return { lat, lng };
-}
 
 /**
  * POST /api/organizer/events/[eventId]/reassign

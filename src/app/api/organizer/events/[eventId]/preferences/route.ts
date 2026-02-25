@@ -1,25 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getOrganizer, checkEventAccess } from '@/lib/auth';
-import { getCyclingDistance, type Coordinates } from '@/lib/geo';
+import { parsePoint, getCyclingDistance, type Coordinates } from '@/lib/geo';
 
 interface RouteContext {
   params: Promise<{ eventId: string }>;
 }
 
 // Parse PostgREST point format "(lng,lat)" to {lat, lng}
-function parsePoint(point: unknown): Coordinates | null {
-  if (!point) return null;
-  if (typeof point === 'string') {
-    const match = point.match(/\(([^,]+),([^)]+)\)/);
-    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-  }
-  if (typeof point === 'object' && point !== null) {
-    const p = point as any;
-    if (p.lat != null && p.lng != null) return { lat: p.lat, lng: p.lng };
-  }
-  return null;
-}
 
 // GET /api/organizer/events/[eventId]/preferences?coupleId=xxx
 // Returns all preferences for a specific couple, plus all other couples in the event

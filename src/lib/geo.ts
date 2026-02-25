@@ -1,10 +1,34 @@
 /**
- * Geo utilities for distance calculations
+ * Geo utilities for distance calculations and coordinate parsing
  */
 
 export interface Coordinates {
   lat: number;
   lng: number;
+}
+
+/**
+ * Parse coordinates from various formats:
+ * - PostGIS string: "(lng,lat)"
+ * - Object: { lat, lng }
+ * - Object: { x, y } (PostGIS JSON, x=lng, y=lat)
+ * Returns null if input is falsy or unparseable.
+ */
+export function parsePoint(point: unknown): Coordinates | null {
+  if (!point) return null;
+
+  if (typeof point === 'string') {
+    const match = point.match(/\(([^,]+),([^)]+)\)/);
+    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+  }
+
+  if (typeof point === 'object' && point !== null) {
+    const p = point as Record<string, unknown>;
+    if (p.lat != null && p.lng != null) return { lat: Number(p.lat), lng: Number(p.lng) };
+    if (p.x != null && p.y != null) return { lat: Number(p.y), lng: Number(p.x) };
+  }
+
+  return null;
 }
 
 export interface CyclingDistance {
