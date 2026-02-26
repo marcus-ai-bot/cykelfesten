@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
 interface CoupleData {
@@ -28,18 +27,13 @@ interface CoupleData {
 
 export default function ProfilePage() {
   const params = useParams();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const slug = params.slug as string;
-  const emailParam = searchParams.get('email');
   
   const [couple, setCouple] = useState<CoupleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [allCouples, setAllCouples] = useState<any[]>([]);
-  const [selectingCouple, setSelectingCouple] = useState(false);
   
   const [form, setForm] = useState({
     invited_name: '',
@@ -63,55 +57,31 @@ export default function ProfilePage() {
     },
   });
   
-  const supabase = createClient();
-  
   useEffect(() => {
     loadData();
-  }, [slug, emailParam]);
+  }, [slug]);
   
   async function loadData() {
-    // Get event
-    const { data: eventData } = await supabase
-      .from('events')
-      .select('id, name, slug')
-      .eq('slug', slug)
-      .single();
-    
-    if (!eventData) {
-      setError('Event hittades inte');
+    try {
+      const res = await fetch(`/api/guest/profile?slug=${encodeURIComponent(slug)}`);
+      if (res.status === 401) {
+        setError('Du behöver logga in för att redigera din profil.');
+        setLoading(false);
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Kunde inte ladda profilen');
+        setLoading(false);
+        return;
+      }
+      const { event: eventData, couple: coupleData } = await res.json();
+      loadCoupleData(coupleData, eventData);
       setLoading(false);
-      return;
-    }
-    
-    // Get all couples for selection
-    const { data: couplesData } = await supabase
-      .from('couples')
-      .select('*')
-      .eq('event_id', eventData.id)
-      .eq('cancelled', false)
-      .order('invited_name');
-    
-    setAllCouples(couplesData || []);
-    
-    // Find couple by email
-    let selectedCouple = null;
-    if (emailParam && couplesData) {
-      selectedCouple = couplesData.find((c: any) =>
-        c.invited_email?.toLowerCase().includes(emailParam.toLowerCase())
-      );
-    }
-    
-    if (!selectedCouple && couplesData?.length) {
-      setSelectingCouple(true);
+    } catch {
+      setError('Kunde inte ladda profilen');
       setLoading(false);
-      return;
     }
-    
-    if (selectedCouple) {
-      loadCoupleData(selectedCouple, eventData);
-    }
-    
-    setLoading(false);
   }
   
   function loadCoupleData(data: any, eventData: any) {
@@ -140,17 +110,6 @@ export default function ProfilePage() {
         unknownFact: ff.unknownFact || '',
       },
     });
-  }
-  
-  async function selectCouple(c: any) {
-    const { data: eventData } = await supabase
-      .from('events')
-      .select('id, name, slug')
-      .eq('slug', slug)
-      .single();
-    
-    loadCoupleData(c, eventData);
-    setSelectingCouple(false);
   }
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -184,23 +143,18 @@ export default function ProfilePage() {
       if (form.fun_facts.sport) funFacts.sport = form.fun_facts.sport;
       if (form.fun_facts.unknownFact) funFacts.unknownFact = form.fun_facts.unknownFact;
       
-      const { error: updateError } = await supabase
-        .from('couples')
-        .update({
-          invited_name: form.invited_name,
-          invited_email: form.invited_email,
-          invited_phone: form.invited_phone || null,
+      const res = await fetch(`/api/guest/profile?slug=${encodeURIComponent(slug)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           invited_allergies: form.invited_allergies.split(',').map(s => s.trim()).filter(Boolean),
           invited_birth_year: form.invited_birth_year ? parseInt(form.invited_birth_year) : null,
           invited_fun_facts: Object.keys(funFacts).length > 0 ? funFacts : null,
-          instagram_handle: form.instagram_handle || null,
           address: form.address,
-          address_notes: form.address_notes || null,
-          course_preference: form.course_preference || null,
-        })
-        .eq('id', couple.id);
+        }),
+      });
       
-      if (updateError) throw updateError;
+      if (!res.ok) throw new Error('Save failed');
       
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -217,38 +171,6 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 flex items-center justify-center">
         <div className="text-amber-600">Laddar...</div>
       </div>
-    );
-  }
-  
-  // Couple selector
-  if (selectingCouple) {
-    return (
-      <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 py-12">
-        <div className="max-w-md mx-auto px-4">
-          <h1 className="text-2xl font-bold text-amber-900 text-center mb-2">
-            ✏️ Redigera profil
-          </h1>
-          <p className="text-amber-600 text-center mb-6 text-sm">
-            Välj vem du är
-          </p>
-          
-          <div className="space-y-2">
-            {allCouples.map(c => (
-              <button
-                key={c.id}
-                onClick={() => selectCouple(c)}
-                className="w-full bg-white hover:bg-amber-50 p-4 rounded-xl shadow text-left transition-colors"
-              >
-                <div className="font-medium text-amber-900">
-                  {c.invited_name}
-                  {c.partner_name && ` & ${c.partner_name}`}
-                </div>
-                <div className="text-sm text-amber-600">{c.address}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </main>
     );
   }
   
@@ -541,12 +463,7 @@ export default function ProfilePage() {
           <Link href={`/e/${slug}/host`} className="text-amber-500 hover:text-amber-600 text-sm">
             🏠 Värdvy
           </Link>
-          <button
-            onClick={() => setSelectingCouple(true)}
-            className="text-amber-500 hover:text-amber-600 text-sm"
-          >
-            🔄 Byt person
-          </button>
+
         </div>
       </div>
     </main>

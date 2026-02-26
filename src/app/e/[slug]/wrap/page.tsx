@@ -76,10 +76,9 @@ export default function WrapPage() {
   const searchParams = useSearchParams();
   const slug = params.slug as string;
   
-  // Support both signed token (preferred) and legacy coupleId+person params
   const token = searchParams.get('token');
-  const coupleId = searchParams.get('coupleId');
-  const personType = searchParams.get('person') || 'invited'; // 'invited' or 'partner'
+  const coupleId = searchParams.get('coupleId'); // Used for tracking only
+  const personType = searchParams.get('person') || 'invited';
   
   const [data, setData] = useState<WrapData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -137,8 +136,7 @@ export default function WrapPage() {
   }, [currentSlide, isPlaying, hasStarted, slides.length]);
   
   async function loadData() {
-    // Need either token or coupleId
-    if (!token && !coupleId) {
+    if (!token) {
       setLoading(false);
       return;
     }
@@ -149,12 +147,11 @@ export default function WrapPage() {
       apiUrl.searchParams.set('eventSlug', slug);
       
       if (token) {
-        // Preferred: signed token
         apiUrl.searchParams.set('token', token);
-      } else if (coupleId) {
-        // Legacy: raw coupleId (still supported during migration)
-        apiUrl.searchParams.set('coupleId', coupleId);
-        apiUrl.searchParams.set('person', personType);
+      } else {
+        // No token — cannot load data
+        setLoading(false);
+        return;
       }
       
       const response = await fetch(apiUrl.toString());

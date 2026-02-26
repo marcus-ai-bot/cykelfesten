@@ -62,7 +62,7 @@ export default function AfterpartyPage() {
   
   async function loadEvent() {
     const { data } = await supabase
-      .from('events')
+      .from('events_public')
       .select('*')
       .eq('slug', slug)
       .single();

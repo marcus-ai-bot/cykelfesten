@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { countFunFacts, normaliseFunFacts } from '@/lib/fun-facts';
 
@@ -92,136 +91,53 @@ interface HostData {
 
 export default function HostPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const slug = params.slug as string;
-  const emailParam = searchParams.get('email');
   
   const [event, setEvent] = useState<any>(null);
   const [hostData, setHostData] = useState<HostData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [allCouples, setAllCouples] = useState<any[]>([]);
-  const [selectingHost, setSelectingHost] = useState(false);
-  
-  const supabase = createClient();
   
   useEffect(() => {
     loadData();
-  }, [slug, emailParam]);
+  }, [slug]);
   
   async function loadData() {
-    // Get event
-    const { data: eventData } = await supabase
-      .from('events')
-      .select('*')
-      .eq('slug', slug)
-      .single();
-    
-    if (!eventData) {
+    try {
+      const res = await fetch(`/api/guest/host-data?slug=${encodeURIComponent(slug)}`);
+      if (!res.ok) {
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      setEvent(data.event);
+      
+      if (data.hostData) {
+        setHostData({
+          couple_id: data.couple.id,
+          name: data.couple.partner_name 
+            ? `${data.couple.invited_name} & ${data.couple.partner_name}`
+            : data.couple.invited_name,
+          course: data.hostData.course,
+          guests: (data.hostData.guests || []).map((g: any) => ({
+            couple_id: g.id,
+            invited_name: g.invited_name,
+            partner_name: g.partner_name,
+            person_count: g.person_count,
+            invited_allergies: g.invited_allergies,
+            invited_allergy_notes: g.invited_allergy_notes,
+            partner_allergies: g.partner_allergies,
+            partner_allergy_notes: g.partner_allergy_notes,
+            invited_birth_year: g.invited_birth_year,
+            partner_birth_year: g.partner_birth_year,
+            invited_fun_facts: g.invited_fun_facts,
+            partner_fun_facts: g.partner_fun_facts,
+          })),
+        });
+      }
       setLoading(false);
-      return;
-    }
-    setEvent(eventData);
-    
-    // Get all couples for selection
-    const { data: couplesData } = await supabase
-      .from('couples')
-      .select('id, invited_name, partner_name, invited_email')
-      .eq('event_id', eventData.id)
-      .eq('cancelled', false)
-      .order('invited_name');
-    
-    setAllCouples(couplesData || []);
-    
-    // Find host by email
-    let selectedCouple = null;
-    if (emailParam && couplesData) {
-      selectedCouple = couplesData.find((c: any) => 
-        c.invited_email?.toLowerCase().includes(emailParam.toLowerCase())
-      );
-    }
-    
-    if (!selectedCouple && couplesData?.length) {
-      setSelectingHost(true);
+    } catch {
       setLoading(false);
-      return;
     }
-    
-    if (selectedCouple) {
-      await loadHostData(selectedCouple.id, eventData.id, selectedCouple);
-    }
-    
-    setLoading(false);
-  }
-  
-  async function loadHostData(coupleId: string, eventId: string, couple: any) {
-    // Get assignment
-    const { data: assignment } = await supabase
-      .from('assignments')
-      .select('course')
-      .eq('couple_id', coupleId)
-      .single();
-    
-    if (!assignment) {
-      setHostData(null);
-      return;
-    }
-    
-    // Get active match plan
-    const { data: event } = await supabase
-      .from('events')
-      .select('active_match_plan_id')
-      .eq('id', eventId)
-      .single();
-    
-    if (!event?.active_match_plan_id) {
-      setHostData(null);
-      return;
-    }
-    
-    // Get guests for this host
-    const { data: pairings } = await supabase
-      .from('course_pairings')
-      .select('guest_couple_id')
-      .eq('match_plan_id', event.active_match_plan_id)
-      .eq('host_couple_id', coupleId)
-      .eq('course', assignment.course);
-    
-    const guestIds = pairings?.map(p => p.guest_couple_id) || [];
-    
-    // Get guest details with allergies and fun facts
-    const { data: guests } = await supabase
-      .from('couples')
-      .select('id, invited_name, partner_name, person_count, invited_allergies, invited_allergy_notes, partner_allergies, partner_allergy_notes, invited_birth_year, partner_birth_year, invited_fun_facts, partner_fun_facts')
-      .in('id', guestIds);
-    
-    setHostData({
-      couple_id: coupleId,
-      name: couple.partner_name 
-        ? `${couple.invited_name} & ${couple.partner_name}`
-        : couple.invited_name,
-      course: assignment.course,
-      guests: (guests || []).map(g => ({
-        couple_id: g.id,
-        invited_name: g.invited_name,
-        partner_name: g.partner_name,
-        person_count: g.person_count,
-        invited_allergies: g.invited_allergies,
-        invited_allergy_notes: g.invited_allergy_notes,
-        partner_allergies: g.partner_allergies,
-        partner_allergy_notes: g.partner_allergy_notes,
-        invited_birth_year: g.invited_birth_year,
-        partner_birth_year: g.partner_birth_year,
-        invited_fun_facts: g.invited_fun_facts,
-        partner_fun_facts: g.partner_fun_facts,
-      })),
-    });
-  }
-  
-  async function selectHost(couple: any) {
-    setSelectingHost(false);
-    setLoading(true);
-    await loadHostData(couple.id, event.id, couple);
-    setLoading(false);
   }
   
   if (loading) {
@@ -237,37 +153,6 @@ export default function HostPage() {
       <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 flex items-center justify-center">
         <div className="text-red-600">Event hittades inte</div>
       </div>
-    );
-  }
-  
-  // Host selector
-  if (selectingHost) {
-    return (
-      <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 py-12">
-        <div className="max-w-md mx-auto px-4">
-          <h1 className="text-2xl font-bold text-amber-900 text-center mb-2">
-            🏠 Värdvy
-          </h1>
-          <p className="text-amber-600 text-center mb-6 text-sm">
-            Välj vem du är för att se dina gästers allergier
-          </p>
-          
-          <div className="space-y-2">
-            {allCouples.map(c => (
-              <button
-                key={c.id}
-                onClick={() => selectHost(c)}
-                className="w-full bg-white hover:bg-amber-50 p-4 rounded-xl shadow text-left transition-colors"
-              >
-                <div className="font-medium text-amber-900">
-                  {c.invited_name}
-                  {c.partner_name && ` & ${c.partner_name}`}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </main>
     );
   }
   
@@ -448,12 +333,6 @@ export default function HostPage() {
           >
             ← Mina kuvert
           </Link>
-          <button
-            onClick={() => setSelectingHost(true)}
-            className="flex-1 py-3 bg-amber-100 text-amber-700 text-center rounded-xl hover:bg-amber-200"
-          >
-            Byt värd
-          </button>
         </div>
       </div>
     </main>

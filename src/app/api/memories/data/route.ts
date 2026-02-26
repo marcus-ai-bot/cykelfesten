@@ -8,13 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 interface HostMessage {
   host_names: string;
@@ -48,6 +43,7 @@ interface MemoriesData {
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const eventSlug = searchParams.get('eventSlug');
+  const supabase = createAdminClient();
   
   // Validate token
   const access = getAccessFromParams(searchParams);

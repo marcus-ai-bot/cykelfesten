@@ -8,16 +8,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
 import { getMusicDecade } from '@/lib/fun-facts';
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 interface WrapStats {
   total_distance_km: number;
@@ -67,7 +60,7 @@ export async function GET(request: NextRequest) {
   }
   
   const { coupleId, personType } = access;
-  const supabase = getSupabase();
+  const supabase = createAdminClient();
   
   try {
     // 1. Get couple and event data

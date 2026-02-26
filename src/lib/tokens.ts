@@ -156,11 +156,8 @@ export function verifyCoupleToken(token: string): TokenPayload | null {
 }
 
 /**
- * Get coupleId and personType from either:
- * 1. Signed token (preferred)
- * 2. Raw coupleId + person param (legacy, for backward compat during migration)
- * 
- * Returns null if neither works
+ * Get coupleId and personType from signed token.
+ * Returns null if token is missing or invalid.
  */
 export function getAccessFromParams(
   searchParams: URLSearchParams
@@ -175,24 +172,6 @@ export function getAccessFromParams(
         personType: payload.personType,
       };
     }
-  }
-  
-  // Fall back to raw params (legacy support)
-  // TODO: Remove this legacy fallback after migration/preview flow is fully token-based
-  const coupleId = searchParams.get('coupleId');
-  const person = searchParams.get('person');
-  
-  if (coupleId) {
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(coupleId)) {
-      return null;
-    }
-    
-    return {
-      coupleId,
-      personType: person === 'partner' ? 'partner' : 'invited',
-    };
   }
   
   return null;

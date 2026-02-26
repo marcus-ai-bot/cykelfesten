@@ -7,16 +7,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
 import { AWARDS, type Award } from '@/lib/awards/calculate';
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 const DEFAULT_ENABLED_AWARDS = [
   'longest_distance', 'shortest_distance', 'average_distance',
@@ -52,7 +45,7 @@ export async function GET(request: NextRequest) {
   }
   
   const { coupleId, personType } = access;
-  const supabase = getSupabase();
+  const supabase = createAdminClient();
   
   try {
     // Get couple with event

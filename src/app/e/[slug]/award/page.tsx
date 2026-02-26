@@ -46,10 +46,7 @@ export default function AwardPage() {
   const searchParams = useSearchParams();
   const slug = params.slug as string;
   
-  // Support both signed token (preferred) and legacy coupleId+person params
   const token = searchParams.get('token');
-  const coupleId = searchParams.get('coupleId');
-  const personType = searchParams.get('person') || 'invited'; // 'invited' or 'partner'
   
   const [data, setData] = useState<AwardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,11 +57,10 @@ export default function AwardPage() {
   
   useEffect(() => {
     loadData();
-  }, [slug, token, coupleId, personType]);
+  }, [slug, token]);
   
   async function loadData() {
-    // Need either token or coupleId
-    if (!token && !coupleId) {
+    if (!token) {
       setLoading(false);
       return;
     }
@@ -74,12 +70,7 @@ export default function AwardPage() {
       const apiUrl = new URL('/api/award/data', window.location.origin);
       apiUrl.searchParams.set('eventSlug', slug);
       
-      if (token) {
-        apiUrl.searchParams.set('token', token);
-      } else if (coupleId) {
-        apiUrl.searchParams.set('coupleId', coupleId);
-        apiUrl.searchParams.set('person', personType);
-      }
+      apiUrl.searchParams.set('token', token);
       
       const response = await fetch(apiUrl.toString());
       
