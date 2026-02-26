@@ -90,7 +90,7 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
     <div className="bg-white rounded-2xl shadow-sm p-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-gray-900">👥 Arrangörsteam</h2>
-        {accepted.length < 5 && (
+        {organizers.length < 5 && (
           <button
             onClick={() => setShowInviteForm(!showInviteForm)}
             className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
@@ -211,9 +211,9 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
         ))}
       </div>
       
-      {accepted.length < 5 && (
+      {organizers.length < 5 && (
         <p className="text-sm text-gray-500 mt-4">
-          Du kan bjuda in upp till {5 - accepted.length} fler medarrangörer.
+          Du kan bjuda in upp till {5 - organizers.length} fler medarrangörer.
         </p>
       )}
     </div>

@@ -16,8 +16,7 @@ export default async function AcceptInvitePage({ params }: Props) {
     .from('event_organizers')
     .select(`
       *,
-      event:events(id, name, event_date, city),
-      inviter:organizers!event_organizers_organizer_id_fkey(name)
+      event:events(id, name, event_date, city)
     `)
     .eq('invite_token', token)
     .is('removed_at', null)

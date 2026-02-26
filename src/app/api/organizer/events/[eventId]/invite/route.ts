@@ -97,13 +97,23 @@ export async function POST(
     // Create or update invite
     const inviteToken = crypto.randomUUID();
     
-    if (existingInvite) {
-      // Reactivate removed invite or resend pending invite with new token
+    if (existingInvite && existingInvite.removed_at) {
+      // Reactivate removed invite — reset everything
       await supabase
         .from('event_organizers')
         .update({
           removed_at: null,
           accepted_at: null,
+          invited_at: new Date().toISOString(),
+          invite_token: inviteToken,
+        })
+        .eq('event_id', eventId)
+        .eq('organizer_id', invitee.id);
+    } else if (existingInvite) {
+      // Pending invite — resend with new token, preserve accepted_at
+      await supabase
+        .from('event_organizers')
+        .update({
           invited_at: new Date().toISOString(),
           invite_token: inviteToken,
         })

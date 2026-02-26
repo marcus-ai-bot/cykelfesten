@@ -37,6 +37,21 @@ export async function POST(request: NextRequest) {
     // This handles the case where someone was invited by email alias
     // but logs in with their real email (creates a different organizer record)
     if (invite.organizer_id !== organizer.id) {
+      // Check if logged-in organizer already has a row for this event
+      const { data: existingRow } = await supabase
+        .from('event_organizers')
+        .select('id')
+        .eq('event_id', invite.event_id)
+        .eq('organizer_id', organizer.id)
+        .is('removed_at', null)
+        .maybeSingle();
+
+      if (existingRow) {
+        return NextResponse.json({ 
+          error: 'Du är redan arrangör för detta event' 
+        }, { status: 400 });
+      }
+
       // Update the invite to point to the logged-in organizer
       const { error: relinkError } = await supabase
         .from('event_organizers')
