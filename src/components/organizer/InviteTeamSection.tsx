@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Organizer {
   organizer_id: string;
   role: 'founder' | 'co-organizer';
   accepted_at: string | null;
+  last_active_at?: string | null;
   organizer: {
     id: string;
     name: string | null;
@@ -20,7 +22,22 @@ interface Props {
   currentOrganizerId: string;
 }
 
+function relativeTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Aldrig inloggad';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Aktiv idag';
+  if (diffDays === 1) return 'Aktiv igår';
+  if (diffDays < 7) return `Aktiv ${diffDays} dagar sedan`;
+  if (diffDays < 30) return `Aktiv ${Math.floor(diffDays / 7)} veckor sedan`;
+  return `Aktiv ${Math.floor(diffDays / 30)} månader sedan`;
+}
+
 export function InviteTeamSection({ eventId, organizers, isFounder, currentOrganizerId }: Props) {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -28,7 +45,9 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<Organizer | null>(null);
-  // Track removed organizer IDs so they disappear from UI immediately
+  const [confirmTransfer, setConfirmTransfer] = useState<Organizer | null>(null);
+  const [transferStep, setTransferStep] = useState<1 | 2>(1);
+  const [transferring, setTransferring] = useState(false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   
   async function handleInvite(e: React.FormEvent) {
@@ -42,13 +61,8 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      
       const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || 'Något gick fel');
-      }
-      
+      if (!res.ok) throw new Error(data.error || 'Något gick fel');
       setMessage({ type: 'success', text: `Inbjudan skickad till ${email}` });
       setInviteLink(data.invite_url);
       setEmail('');
@@ -111,15 +125,50 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
     }
   }
 
+  async function handleTransfer(o: Organizer) {
+    if (transferStep === 1) {
+      setTransferStep(2);
+      return;
+    }
+    setTransferring(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/team/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetOrganizerId: o.organizer_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Något gick fel');
+      setMessage({ type: 'success', text: `Grundarskapet har överförts till ${o.organizer.name || o.organizer.email}` });
+      setConfirmTransfer(null);
+      setTransferStep(1);
+      // Reload to reflect new roles
+      router.refresh();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setTransferring(false);
+    }
+  }
+
   const visibleOrganizers = organizers.filter(o => !removedIds.has(o.organizer_id));
   const accepted = visibleOrganizers.filter(o => o.accepted_at);
   const pending = visibleOrganizers.filter(o => !o.accepted_at);
 
   const canRemove = (o: Organizer) => {
-    if (o.organizer.id === currentOrganizerId) return false; // Can't remove yourself
-    if (o.role === 'founder') return false; // Can't remove founder
-    if (o.accepted_at && !isFounder) return false; // Only founder removes accepted
-    return true; // Pending can be revoked by anyone
+    if (o.organizer.id === currentOrganizerId) return false;
+    if (o.role === 'founder') return false;
+    if (o.accepted_at && !isFounder) return false;
+    return true;
+  };
+
+  const canTransfer = (o: Organizer) => {
+    if (!isFounder) return false;
+    if (o.organizer.id === currentOrganizerId) return false;
+    if (o.role === 'founder') return false;
+    if (!o.accepted_at) return false;
+    return true;
   };
   
   return (
@@ -157,7 +206,7 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
             </button>
           </form>
           
-          {message && !confirmRemove && (
+          {message && !confirmRemove && !confirmTransfer && (
             <div className={`mt-3 p-3 rounded-lg text-sm ${
               message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
             }`}>
@@ -215,8 +264,61 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
         </div>
       )}
 
-      {/* Status message (outside invite form) */}
-      {message && !showInviteForm && !confirmRemove && (
+      {/* Confirm Transfer Dialog */}
+      {confirmTransfer && (
+        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          {transferStep === 1 ? (
+            <>
+              <p className="text-sm text-amber-800 mb-3">
+                Överför grundarskapet till <strong>{confirmTransfer.organizer.name || confirmTransfer.organizer.email}</strong>?
+                Du blir medarrangör.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleTransfer(confirmTransfer)}
+                  className="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700"
+                >
+                  Ja, överför
+                </button>
+                <button
+                  onClick={() => { setConfirmTransfer(null); setTransferStep(1); }}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
+                >
+                  Avbryt
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-amber-800 mb-1 font-semibold">
+                Är du helt säker?
+              </p>
+              <p className="text-sm text-amber-700 mb-3">
+                {confirmTransfer.organizer.name || confirmTransfer.organizer.email} blir ny grundare.
+                Bara hen kan överföra tillbaka.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleTransfer(confirmTransfer)}
+                  disabled={transferring}
+                  className="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {transferring ? 'Överför...' : 'Ja, jag är säker'}
+                </button>
+                <button
+                  onClick={() => { setConfirmTransfer(null); setTransferStep(1); }}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
+                >
+                  Avbryt
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Status message (outside dialogs) */}
+      {message && !showInviteForm && !confirmRemove && !confirmTransfer && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${
           message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
         }`}>
@@ -236,22 +338,40 @@ export function InviteTeamSection({ eventId, organizers, isFounder, currentOrgan
                 {(o.organizer.name || o.organizer.email)[0].toUpperCase()}
               </div>
               <div>
-                <div className="font-medium text-gray-900">
-                  {o.organizer.name || o.organizer.email}
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">
+                    {o.organizer.name || o.organizer.email}
+                  </span>
                   {o.organizer.id === currentOrganizerId && (
-                    <span className="text-gray-400 text-sm ml-2">(du)</span>
+                    <span className="text-gray-400 text-xs">(du)</span>
+                  )}
+                  {o.role === 'founder' ? (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                      Grundare
+                    </span>
+                  ) : (
+                    <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">
+                      Medarrangör
+                    </span>
                   )}
                 </div>
-                {o.organizer.name && (
-                  <div className="text-sm text-gray-500">{o.organizer.email}</div>
-                )}
+                <div className="text-sm text-gray-500">
+                  {o.organizer.name ? o.organizer.email : null}
+                </div>
+                <div className="text-xs text-gray-400">
+                  {relativeTime(o.last_active_at)}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {o.role === 'founder' && (
-                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
-                  Grundare
-                </span>
+            <div className="flex items-center gap-1">
+              {canTransfer(o) && (
+                <button
+                  onClick={() => { setConfirmTransfer(o); setTransferStep(1); }}
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-full transition-colors"
+                  title="Gör till grundare"
+                >
+                  👑
+                </button>
               )}
               {canRemove(o) && (
                 <button

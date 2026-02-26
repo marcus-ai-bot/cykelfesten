@@ -34,6 +34,31 @@ export default async function TeamPage({ params }: Props) {
     .is('removed_at', null)
     .order('role', { ascending: true });
 
+  // Fetch last active session per organizer
+  const organizerIds = (organizers || []).map(o => o.organizer_id);
+  let lastActiveMap: Record<string, string> = {};
+
+  if (organizerIds.length > 0) {
+    const { data: sessions } = await supabase
+      .from('organizer_sessions')
+      .select('organizer_id, last_used_at')
+      .in('organizer_id', organizerIds)
+      .order('last_used_at', { ascending: false });
+
+    // Keep only the most recent per organizer
+    for (const s of sessions || []) {
+      if (s.last_used_at && !lastActiveMap[s.organizer_id]) {
+        lastActiveMap[s.organizer_id] = s.last_used_at;
+      }
+    }
+  }
+
+  // Merge last_active_at into organizers
+  const enrichedOrganizers = (organizers || []).map(o => ({
+    ...o,
+    last_active_at: lastActiveMap[o.organizer_id] || null,
+  }));
+
   return (
     <div className="min-h-screen bg-gray-50">
       <SubPageHeader eventId={eventId} title="👥 Arrangörsteam" parentView="invite" />
@@ -43,7 +68,7 @@ export default async function TeamPage({ params }: Props) {
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <InviteTeamSection
             eventId={eventId}
-            organizers={organizers || []}
+            organizers={enrichedOrganizers}
             isFounder={access.role === 'founder'}
             currentOrganizerId={organizer.id}
           />
