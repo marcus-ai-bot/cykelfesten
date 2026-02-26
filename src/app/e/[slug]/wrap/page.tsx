@@ -809,7 +809,9 @@ export default function WrapPage() {
               transition={{ delay: 1.2 }}
               onClick={(e) => {
                 e.stopPropagation();
-                window.location.href = `/e/${slug}/award?coupleId=${coupleId}&person=${personType}`;
+                window.location.href = token 
+                  ? `/e/${slug}/award?token=${encodeURIComponent(token)}`
+                  : `/e/${slug}/award`;
               }}
               className="text-xl underline hover:text-white transition-colors"
             >

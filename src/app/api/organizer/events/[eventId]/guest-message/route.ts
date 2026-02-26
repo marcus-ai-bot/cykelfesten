@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/server';
 import { Resend } from 'resend';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const fromEmail = process.env.RESEND_FROM || 'Cykelfesten <noreply@molt.isaksson.cc>';
@@ -21,6 +16,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ eve
   if (!['all', 'starter', 'main', 'dessert'].includes(audience)) {
     return NextResponse.json({ error: 'Ogiltig mottagare' }, { status: 400 });
   }
+
+  const supabase = createAdminClient();
 
   // Get event info
   const { data: event, error: eventError } = await supabase

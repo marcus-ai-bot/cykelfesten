@@ -8,13 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/server';
 import { verifyCoupleToken } from '@/lib/tokens';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 interface RecapSubmission {
   last_guest_left: string;
@@ -49,6 +44,7 @@ export async function POST(request: NextRequest) {
     }
     
     const { coupleId } = payload;
+    const supabase = createAdminClient();
     
     // Verify couple belongs to this event
     const { data: couple, error: coupleError } = await supabase
