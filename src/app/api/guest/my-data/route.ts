@@ -76,10 +76,18 @@ export async function GET(request: NextRequest) {
   const hostEnvelope = envelopes.find(e => e.host_couple_id === couple.id);
   const assignment = hostEnvelope ? hostEnvelope.course : null;
 
+  // Get organizer contact email
+  const { data: eventFull } = await supabase
+    .from('events')
+    .select('organizer_email')
+    .eq('id', event.id)
+    .single();
+
   return NextResponse.json({
     event,
     couple,
     envelopes,
     assignment,
+    organizerEmail: eventFull?.organizer_email ?? null,
   });
 }

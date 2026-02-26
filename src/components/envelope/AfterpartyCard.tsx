@@ -236,8 +236,9 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '', on
 
   // Countdown timer — triggers refetch when it hits zero
   const handleCountdownZero = useCallback(() => {
-    // Small delay to let the server catch up
-    setTimeout(() => onRefresh?.(), 1500);
+    // Quick refresh, then retry if state hasn't changed
+    setTimeout(() => onRefresh?.(), 500);
+    setTimeout(() => onRefresh?.(), 3000);
   }, [onRefresh]);
 
   const countdown = useCountdown(nextStepAt, handleCountdownZero);
@@ -315,6 +316,8 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '', on
         relative overflow-hidden rounded-xl border-2 
         ${getCardColor()}
         transition-colors duration-300
+        ${visualState === 'ZONE' ? 'shadow-lg shadow-blue-200/50' : ''}
+        ${visualState === 'CLOSING_IN' ? 'shadow-xl shadow-orange-300/60 animate-pulse' : ''}
       `}>
         {/* Badge for active states */}
         {badge && !isOpen && (
@@ -456,7 +459,7 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '', on
                     )}
 
                     <motion.div variants={itemVariants} className="text-center text-sm text-blue-600">
-                      🚴 Börja röra dig åt rätt håll!
+                      🚴 Ca {zoneData ? Math.max(1, Math.round(zoneData.radius_m / 250)) + '-' + Math.max(2, Math.round(zoneData.radius_m / 150)) : '2-4'} min cykel härifrån — börja röra dig!
                     </motion.div>
 
                     {/* Countdown to CLOSING_IN */}
@@ -496,6 +499,10 @@ export function AfterpartyCard({ envelope, isPreview = false, className = '', on
                         <p className="text-orange-700 text-sm">🍷 Ta med egen dryck!</p>
                       </motion.div>
                     )}
+
+                    <motion.div variants={itemVariants} className="text-center text-sm text-orange-600">
+                      🚴 Mindre än 1 min cykel — du är nära!
+                    </motion.div>
 
                     {/* Countdown to OPEN */}
                     {countdown && countdown.total > 0 && (

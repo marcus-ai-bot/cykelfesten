@@ -50,6 +50,7 @@ export default function MyPage() {
   const [dropoutSuccess, setDropoutSuccess] = useState(false);
   const [invitingPartner, setInvitingPartner] = useState(false);
   const [partnerInviteUrl, setPartnerInviteUrl] = useState<string | null>(null);
+  const [organizerEmail, setOrganizerEmail] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -73,6 +74,7 @@ export default function MyPage() {
       setCouple(data.couple);
       setEnvelopes(data.envelopes || []);
       setAssignment(data.assignment || null);
+      setOrganizerEmail(data.organizerEmail || null);
     } catch (err) {
       setError('Kunde inte hämta data');
     } finally {
@@ -302,6 +304,27 @@ export default function MyPage() {
           </button>
         </div>
 
+        {/* Post-event links */}
+        {event?.event_date && new Date(event.event_date) < new Date() && (
+          <div className="mt-6 pt-4 border-t border-amber-200 space-y-2">
+            <p className="text-center text-amber-700 font-medium text-sm">🎉 Tack för en fantastisk kväll!</p>
+            <div className="flex justify-center gap-3">
+              <Link
+                href={`/e/${slug}/wrap?token=${encodeURIComponent(typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') || '' : '')}`}
+                className="bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                🎬 Din Wrap
+              </Link>
+              <Link
+                href={`/e/${slug}/memories?token=${encodeURIComponent(typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') || '' : '')}`}
+                className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                📸 Minnen
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="mt-4 flex justify-center gap-4 flex-wrap">
           <Link
@@ -316,6 +339,14 @@ export default function MyPage() {
           >
             🏠 Värdvy
           </Link>
+          {organizerEmail && (
+            <a
+              href={`mailto:${organizerEmail}?subject=${encodeURIComponent(event?.name || 'Cykelfesten')}`}
+              className="text-amber-500 hover:text-amber-600 text-sm"
+            >
+              ✉️ Kontakta arrangören
+            </a>
+          )}
           <Link
             href={`/e/${slug}`}
             className="text-amber-500 hover:text-amber-600 text-sm"
