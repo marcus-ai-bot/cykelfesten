@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getAccessFromParams } from '@/lib/tokens';
-import { getOrganizer } from '@/lib/auth';
+import { getOrganizer, checkEventAccess } from '@/lib/auth';
 import { funFactsToStrings, countFunFacts } from '@/lib/fun-facts';
 import { parsePoint } from '@/lib/geo';
 import type { 
@@ -61,6 +61,14 @@ export async function GET(request: NextRequest) {
     access = null;
   }
   
+  // Organizer preview: allow raw coupleId if authenticated organizer with event access
+  if (!access && rawCoupleId && isOrganizerPreview && eventId) {
+    const eventAccess = await checkEventAccess(organizer!.id, eventId);
+    if (eventAccess.hasAccess) {
+      access = { coupleId: rawCoupleId, personType: 'invited' as const };
+    }
+  }
+
   if (!eventId || !access) {
     return NextResponse.json(
       { error: 'Kunde inte identifiera deltagare. Välj ditt par först.' },
