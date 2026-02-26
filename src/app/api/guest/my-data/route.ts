@@ -83,11 +83,32 @@ export async function GET(request: NextRequest) {
     .eq('id', event.id)
     .single();
 
+  // Check if this guest is also an organizer for this event
+  let isOrganizer = false;
+  const { data: orgRecord } = await supabase
+    .from('organizers')
+    .select('id')
+    .eq('email', guestEmail)
+    .maybeSingle();
+
+  if (orgRecord) {
+    const { data: eo } = await supabase
+      .from('event_organizers')
+      .select('id')
+      .eq('event_id', event.id)
+      .eq('organizer_id', orgRecord.id)
+      .is('removed_at', null)
+      .not('accepted_at', 'is', null)
+      .maybeSingle();
+    isOrganizer = !!eo;
+  }
+
   return NextResponse.json({
     event,
     couple,
     envelopes,
     assignment,
     organizerEmail: eventFull?.organizer_email ?? null,
+    isOrganizer,
   });
 }

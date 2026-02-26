@@ -51,6 +51,7 @@ export default function MyPage() {
   const [invitingPartner, setInvitingPartner] = useState(false);
   const [partnerInviteUrl, setPartnerInviteUrl] = useState<string | null>(null);
   const [organizerEmail, setOrganizerEmail] = useState<string | null>(null);
+  const [isOrganizer, setIsOrganizer] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -75,6 +76,7 @@ export default function MyPage() {
       setEnvelopes(data.envelopes || []);
       setAssignment(data.assignment || null);
       setOrganizerEmail(data.organizerEmail || null);
+      setIsOrganizer(data.isOrganizer || false);
     } catch (err) {
       setError('Kunde inte hämta data');
     } finally {
@@ -194,6 +196,22 @@ export default function MyPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-100 py-8">
       <div className="max-w-md mx-auto px-4">
+        {/* Organizer Banner */}
+        {isOrganizer && (
+          <Link
+            href="/organizer"
+            className="block bg-indigo-600 text-white rounded-xl p-4 mb-6 shadow-lg hover:bg-indigo-700 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold">👑 Du är medarrangör</p>
+                <p className="text-indigo-200 text-sm">Gå till admin →</p>
+              </div>
+              <span className="text-2xl">→</span>
+            </div>
+          </Link>
+        )}
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-amber-900 mb-1">

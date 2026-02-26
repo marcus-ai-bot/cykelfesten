@@ -53,6 +53,32 @@ export default function CoupleDetailPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showSplitWizard, setShowSplitWizard] = useState(false);
+  const [promoting, setPromoting] = useState<string | null>(null);
+  const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null);
+  const [promotedEmails, setPromotedEmails] = useState<Set<string>>(new Set());
+
+  async function handlePromote(personEmail: string, personName: string) {
+    if (!confirm(`Gör ${personName} (${personEmail}) till medarrangör?\nParet fortsätter delta som gäster.`)) return;
+    setPromoting(personEmail);
+    setError('');
+    try {
+      const res = await fetch(`/api/organizer/events/${eventId}/promote-guest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: personEmail, name: personName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Något gick fel');
+      setPromotedEmails(prev => new Set(prev).add(personEmail.toLowerCase()));
+      setPromoteSuccess(`${personName} är nu medarrangör!`);
+      setTimeout(() => setPromoteSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setPromoting(null);
+    }
+  }
+
   useEffect(() => {
     fetch(`/api/organizer/couples/${coupleId}`)
       .then(r => r.json())
@@ -172,6 +198,7 @@ export default function CoupleDetailPage() {
 
         {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4">{error}</div>}
         {success && <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-4">{success}</div>}
+        {promoteSuccess && <div className="bg-indigo-50 text-indigo-700 p-3 rounded-lg mb-4">👑 {promoteSuccess}</div>}
 
         {/* Matching Preferences */}
         <div className="mb-4">
@@ -201,6 +228,22 @@ export default function CoupleDetailPage() {
           <SelectField label="Djurallergi" field="invited_pet_allergy" form={form} setForm={setForm} editing={editing}
             options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
           <FunFactsField field="invited_fun_facts" form={form} setForm={setForm} editing={editing} />
+          {couple.invited_email && !promotedEmails.has(couple.invited_email.toLowerCase()) && !editing && (
+            <div className="pt-2 border-t border-gray-100">
+              <button
+                onClick={() => handlePromote(couple.invited_email!, couple.invited_name)}
+                disabled={promoting === couple.invited_email}
+                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+              >
+                {promoting === couple.invited_email ? 'Befordrar...' : '👤→👑 Gör till medarrangör'}
+              </button>
+            </div>
+          )}
+          {couple.invited_email && promotedEmails.has(couple.invited_email.toLowerCase()) && (
+            <div className="pt-2 border-t border-gray-100">
+              <span className="text-sm text-green-600">✅ Medarrangör</span>
+            </div>
+          )}
         </Section>
 
         {/* Partner */}
@@ -213,6 +256,22 @@ export default function CoupleDetailPage() {
             <SelectField label="Djurallergi" field="partner_pet_allergy" form={form} setForm={setForm} editing={editing}
               options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
             <FunFactsField field="partner_fun_facts" form={form} setForm={setForm} editing={editing} />
+            {couple.partner_email && !promotedEmails.has(couple.partner_email.toLowerCase()) && !editing && (
+              <div className="pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => handlePromote(couple.partner_email!, couple.partner_name!)}
+                  disabled={promoting === couple.partner_email}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                >
+                  {promoting === couple.partner_email ? 'Befordrar...' : '👤→👑 Gör till medarrangör'}
+                </button>
+              </div>
+            )}
+            {couple.partner_email && promotedEmails.has(couple.partner_email.toLowerCase()) && (
+              <div className="pt-2 border-t border-gray-100">
+                <span className="text-sm text-green-600">✅ Medarrangör</span>
+              </div>
+            )}
           </Section>
         )}
 
