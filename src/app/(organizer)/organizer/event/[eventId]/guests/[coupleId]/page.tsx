@@ -56,6 +56,23 @@ export default function CoupleDetailPage() {
   const [promoting, setPromoting] = useState<string | null>(null);
   const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null);
   const [promotedEmails, setPromotedEmails] = useState<Set<string>>(new Set());
+  const [existingOrganizerEmails, setExistingOrganizerEmails] = useState<Set<string>>(new Set());
+
+  // Fetch existing organizer emails for this event
+  useEffect(() => {
+    fetch(`/api/organizer/events/${eventId}/team/emails`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.emails) setExistingOrganizerEmails(new Set(data.emails.map((e: string) => e.toLowerCase())));
+      })
+      .catch(() => {});
+  }, [eventId]);
+
+  const isAlreadyOrganizer = (email: string | null) => {
+    if (!email) return false;
+    const lower = email.toLowerCase();
+    return existingOrganizerEmails.has(lower) || promotedEmails.has(lower);
+  };
 
   async function handlePromote(personEmail: string, personName: string) {
     if (!confirm(`Gör ${personName} (${personEmail}) till medarrangör?\nParet fortsätter delta som gäster.`)) return;
@@ -228,20 +245,19 @@ export default function CoupleDetailPage() {
           <SelectField label="Djurallergi" field="invited_pet_allergy" form={form} setForm={setForm} editing={editing}
             options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
           <FunFactsField field="invited_fun_facts" form={form} setForm={setForm} editing={editing} />
-          {couple.invited_email && !promotedEmails.has(couple.invited_email.toLowerCase()) && !editing && (
+          {couple.invited_email && !editing && (
             <div className="pt-2 border-t border-gray-100">
-              <button
-                onClick={() => handlePromote(couple.invited_email!, couple.invited_name)}
-                disabled={promoting === couple.invited_email}
-                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
-              >
-                {promoting === couple.invited_email ? 'Befordrar...' : '👤→👑 Gör till medarrangör'}
-              </button>
-            </div>
-          )}
-          {couple.invited_email && promotedEmails.has(couple.invited_email.toLowerCase()) && (
-            <div className="pt-2 border-t border-gray-100">
-              <span className="text-sm text-green-600">✅ Medarrangör</span>
+              {isAlreadyOrganizer(couple.invited_email) ? (
+                <span className="text-sm text-green-600">✅ Medarrangör</span>
+              ) : (
+                <button
+                  onClick={() => handlePromote(couple.invited_email!, couple.invited_name)}
+                  disabled={promoting === couple.invited_email}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                >
+                  {promoting === couple.invited_email ? 'Befordrar...' : '👤→👑 Gör till medarrangör'}
+                </button>
+              )}
             </div>
           )}
         </Section>
@@ -256,20 +272,19 @@ export default function CoupleDetailPage() {
             <SelectField label="Djurallergi" field="partner_pet_allergy" form={form} setForm={setForm} editing={editing}
               options={[['none', 'Ingen'], ['cat', 'Katt'], ['dog', 'Hund'], ['both', 'Katt & hund']]} />
             <FunFactsField field="partner_fun_facts" form={form} setForm={setForm} editing={editing} />
-            {couple.partner_email && !promotedEmails.has(couple.partner_email.toLowerCase()) && !editing && (
+            {couple.partner_email && !editing && (
               <div className="pt-2 border-t border-gray-100">
-                <button
-                  onClick={() => handlePromote(couple.partner_email!, couple.partner_name!)}
-                  disabled={promoting === couple.partner_email}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
-                >
-                  {promoting === couple.partner_email ? 'Befordrar...' : '👤→👑 Gör till medarrangör'}
-                </button>
-              </div>
-            )}
-            {couple.partner_email && promotedEmails.has(couple.partner_email.toLowerCase()) && (
-              <div className="pt-2 border-t border-gray-100">
-                <span className="text-sm text-green-600">✅ Medarrangör</span>
+                {isAlreadyOrganizer(couple.partner_email) ? (
+                  <span className="text-sm text-green-600">✅ Medarrangör</span>
+                ) : (
+                  <button
+                    onClick={() => handlePromote(couple.partner_email!, couple.partner_name!)}
+                    disabled={promoting === couple.partner_email}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                  >
+                    {promoting === couple.partner_email ? 'Befordrar...' : '👤→👑 Gör till medarrangör'}
+                  </button>
+                )}
               </div>
             )}
           </Section>
