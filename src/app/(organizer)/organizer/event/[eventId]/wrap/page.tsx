@@ -273,14 +273,12 @@ function WrapPage() {
             </div>
 
             {previewPerson && eventSlug && (
-              <div className="bg-white rounded-lg border overflow-hidden" style={{ height: '700px' }}>
-                <iframe
-                  key={previewPerson}
-                  src={`/e/${eventSlug}/wrap?coupleId=${previewPerson.split(':')[0]}&person=${previewPerson.split(':')[1]}`}
-                  className="w-full h-full border-0"
-                  title="Wrap Preview"
-                />
-              </div>
+              <WrapPreviewIframe
+                eventId={eventId}
+                eventSlug={eventSlug}
+                coupleId={previewPerson.split(':')[0]}
+                person={previewPerson.split(':')[1] as 'invited' | 'partner'}
+              />
             )}
 
             {!previewPerson && (
@@ -428,6 +426,52 @@ function Stat({ label, value, sub }: { label: string; value: string | number; su
       <p className="text-sm text-gray-500">{label}</p>
       <p className="text-xl font-bold">{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function WrapPreviewIframe({ eventId, eventSlug, coupleId, person }: {
+  eventId: string; eventSlug: string; coupleId: string; person: 'invited' | 'partner';
+}) {
+  const [token, setToken] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setToken(null);
+    setError(false);
+    fetch(`/api/organizer/events/${eventId}/wrap/preview-token?coupleId=${coupleId}&person=${person}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.token) setToken(data.token);
+        else setError(true);
+      })
+      .catch(() => setError(true));
+  }, [eventId, coupleId, person]);
+
+  if (error) {
+    return (
+      <div className="bg-red-50 rounded-lg border p-8 text-center text-red-600">
+        Kunde inte generera preview-token
+      </div>
+    );
+  }
+
+  if (!token) {
+    return (
+      <div className="bg-gray-50 rounded-lg border p-8 text-center text-gray-500">
+        Laddar preview...
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border overflow-hidden" style={{ height: '700px' }}>
+      <iframe
+        key={`${coupleId}:${person}`}
+        src={`/e/${eventSlug}/wrap?token=${encodeURIComponent(token)}`}
+        className="w-full h-full border-0"
+        title="Wrap Preview"
+      />
     </div>
   );
 }
