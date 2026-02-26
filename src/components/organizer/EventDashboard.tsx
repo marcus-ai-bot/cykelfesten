@@ -33,13 +33,15 @@ export function EventDashboard({
     return 'invite';
   }, [eventStatus, isPast, isToday]);
 
-  const [activeView, setActiveView] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const v = new URLSearchParams(window.location.search).get('view');
-      if (v && VIEW_KEYS.includes(v)) return v;
+  const [activeView, setActiveView] = useState(defaultView);
+
+  // Sync from URL on mount (SSR can't read window.location)
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('view');
+    if (v && VIEW_KEYS.includes(v) && v !== activeView) {
+      setActiveView(v);
     }
-    return defaultView;
-  });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // URL sync
   function changeView(view: string) {
